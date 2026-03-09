@@ -10,10 +10,9 @@ _install_claude_code() {
   [[ -d "$claude_dir" ]] || _die "~/.claude not found — is Claude Code installed?"
   [[ -f "$PROVIDER_DIR/.claude-plugin/plugin.json" ]] || _die ".claude-plugin/plugin.json not found"
 
-  # Create skills symlink if missing
-  if [[ ! -e "$PROVIDER_DIR/skills" ]]; then
-    ln -s ../../skills "$PROVIDER_DIR/skills"
-  fi
+  # Copy skills (real directory required — Claude Code doesn't follow symlinks)
+  rm -rf "$PROVIDER_DIR/skills"
+  cp -R "$ALMANAC_HOME/skills" "$PROVIDER_DIR/skills"
 
   # Read version
   local version

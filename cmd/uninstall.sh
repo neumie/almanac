@@ -31,6 +31,9 @@ with open('$settings_file', 'w') as f:
 "
   fi
 
+  # Clean up copied skills
+  rm -rf "$ALMANAC_HOME/providers/claude-code/skills"
+
   _success "Uninstalled almanac from Claude Code"
   _info "Restart Claude Code to take effect"
 }
