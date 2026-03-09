@@ -1,0 +1,9 @@
+{
+  "hooks": [
+    {
+      "event": "SessionStart",
+      "command": "./session-start",
+      "description": "Runs on session start to initialize almanac context"
+    }
+  ]
+}

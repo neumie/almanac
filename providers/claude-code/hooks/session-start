@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# session-start — Runs on SessionStart to initialize almanac context
+
+set -euo pipefail
+
+ALMANAC_ROOT="${ALMANAC_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}"
+
+echo "almanac: initialized (root: $ALMANAC_ROOT)"
