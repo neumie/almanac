@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# almanac — provider-agnostic agent toolkit CLI
+
+set -euo pipefail
+
+# Resolve ALMANAC_HOME (handles symlinks)
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [ -h "$SCRIPT_PATH" ]; do
+  SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+  SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+  [[ $SCRIPT_PATH != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+export ALMANAC_HOME="$(cd -P "$SCRIPT_DIR/.." && pwd)"
+
+source "$ALMANAC_HOME/lib/core.sh"
+
+COMMAND="${1:-}"
+[[ -n "$COMMAND" ]] && shift
+
+case "$COMMAND" in
+  install|uninstall|update|list|help)
+    source "$ALMANAC_HOME/cmd/${COMMAND}.sh"
+    ;;
+  "")
+    source "$ALMANAC_HOME/cmd/help.sh"
+    ;;
+  *)
+    _error "Unknown command: $COMMAND"
+    source "$ALMANAC_HOME/cmd/help.sh"
+    exit 1
+    ;;
+esac

@@ -1,8 +1,0 @@
-{
-  "name": "almanac",
-  "display_name": "Almanac",
-  "description": "Provider-agnostic agent toolkit — skills, prompts, and patterns for LLM coding agents",
-  "version": "0.1.0",
-  "author": "neumie",
-  "tags": ["skills", "prompts", "patterns", "toolkit", "agent"]
-}
