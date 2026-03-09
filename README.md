@@ -1,55 +1,111 @@
 # Almanac
 
-Provider-agnostic agent toolkit — skills, prompts, and patterns for LLM coding agents.
+Personal agent toolkit — curated skills, prompts, and patterns for LLM coding agents.
 
-## Quick Start
+Skills follow the [Agent Skills Open Standard](https://agentskills.io/specification) and work across Claude Code, OpenCode, Cursor, Codex, and 25+ compatible agents.
 
-### Claude Code
+## Install
+
 ```bash
-# Install as a plugin
-claude plugin add /path/to/almanac/providers/claude-code
+# One-time setup
+bash install.sh
+
+# Then pick your provider
+almanac install claude-code
 ```
 
-### OpenCode
+Other providers:
 ```bash
-ln -s /path/to/almanac/skills ~/.config/opencode/skills/almanac
+# OpenCode
+ln -s ~/.almanac/skills ~/.config/opencode/skills/almanac
+
+# Cursor
+ln -s ~/.almanac/skills ~/.cursor/skills/almanac
+
+# Codex
+ln -s ~/.almanac/skills ~/.agents/skills/almanac
 ```
 
-### Cursor
-```bash
-ln -s /path/to/almanac/skills ~/.cursor/skills/almanac
+## Skills
+
+| Skill | What it does |
+|-------|-------------|
+| **tdd** | Red-green-refactor cycle, vertical slice approach, behavior-focused testing |
+| **debugging** | Hypothesis-driven root cause analysis and regression prevention |
+| **code-review** | Structured review: correctness, security, performance, maintainability |
+| **planning** | Architecture decisions, task breakdown, trade-off analysis |
+| **frontend-design** | Distinctive production-grade web interfaces, anti-generic-AI aesthetics |
+| **mcp-builder** | Build MCP servers with proper tool design in TypeScript or Python |
+| **webapp-testing** | Test web apps with Playwright — visual inspection, e2e validation |
+| **skill-creator** | Create and validate skills against the Agent Skills Open Standard |
+| **git-workflow** | Clean commits, branching strategy, safe history management |
+| **refactoring** | Safe code restructuring: identify smells, apply patterns, preserve behavior |
+
+## Prompts & Patterns
+
+**Prompts** — reusable templates referenced by skills or used directly:
+`architect`, `commit-message`, `code-review-checklist`, `task-breakdown`
+
+**Patterns** — reference docs for agent workflows:
+`progressive-disclosure`, `hypothesis-driven-debugging`, `agent-safety`, `vertical-slice`
+
+## CLI
+
+```
+almanac install <provider>   Install for a provider
+almanac uninstall <provider> Remove from a provider
+almanac list                 List available providers
+almanac update               Update almanac (git pull)
+almanac sync                 Check adapted skills for upstream changes
+almanac help                 Show help
 ```
 
-### Codex
-```bash
-ln -s /path/to/almanac/skills ~/.agents/skills/almanac
+### Upstream Sync
+
+Four skills are adapted from [anthropics/skills](https://github.com/anthropics/skills) and track their upstream source. Run `almanac sync` to check for updates:
+
+```
+$ almanac sync
+✓ frontend-design: up to date
+✓ mcp-builder: up to date
+⚠ skill-creator: upstream changed (adapted 2026-03-09)
 ```
 
 ## Structure
 
 ```
 almanac/
-├── skills/          # Open standard — works on all providers
-├── prompts/         # Prompt templates (plain markdown)
-├── patterns/        # Agent patterns & reference docs
-├── providers/       # Provider-specific adapters
-│   ├── claude-code/ # Full plugin (agents, commands, hooks)
-│   ├── opencode/    # Setup instructions
-│   ├── cursor/      # Setup instructions
-│   └── codex/       # Setup instructions
-├── lib/             # Shared utilities
-├── tests/           # Validation scripts
-└── docs/            # Architecture & contributing guides
+├── skills/              # Agent Skills Open Standard (SKILL.md)
+│   ├── tdd/
+│   ├── debugging/
+│   ├── code-review/
+│   ├── planning/
+│   ├── frontend-design/
+│   ├── mcp-builder/     # + references/
+│   ├── webapp-testing/  # + scripts/
+│   ├── skill-creator/   # + references/
+│   ├── git-workflow/
+│   └── refactoring/
+├── prompts/             # Reusable prompt templates
+├── patterns/            # Reference docs & agent patterns
+├── providers/           # Provider-specific adapters
+│   ├── claude-code/     # Full plugin (hooks, skills symlink)
+│   ├── opencode/
+│   ├── cursor/
+│   └── codex/
+├── lib/                 # Shared shell utilities
+├── tests/               # Structure + skill validation
+├── cmd/                 # CLI commands
+├── bin/                 # CLI entry point
+└── docs/                # Architecture & contributing
 ```
 
-## Key Insight
+## Testing
 
-Skills (`SKILL.md` with YAML frontmatter) are the only true open standard — they work across Claude Code, OpenCode, Cursor, and Codex via native discovery. Everything else (agents, commands, hooks) is provider-specific and lives under `providers/`.
-
-## Docs
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Contributing](docs/CONTRIBUTING.md)
+```bash
+bash tests/test-structure.sh   # Verify all files exist
+bash tests/test-skills.sh      # Validate skills against spec
+```
 
 ## License
 

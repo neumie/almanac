@@ -1,33 +1,50 @@
 # Architecture
 
-Almanac uses a two-layer architecture: a provider-agnostic core and provider-specific adapters.
+Two-layer design: provider-agnostic core + provider-specific adapters.
 
 ## Layer 1: Core (provider-agnostic)
 
 ### `skills/`
-The only true open standard. Each skill is a directory containing a `SKILL.md` file with YAML frontmatter (`name` + `description`) and markdown instructions. Skills are natively discovered by Claude Code, OpenCode, Cursor, and Codex.
+The open standard. Each skill is a directory with a `SKILL.md` file following the [Agent Skills Open Standard](https://agentskills.io/specification). Skills are natively discovered by Claude Code, OpenCode, Cursor, Codex, and 25+ compatible agents.
+
+Skills use progressive disclosure:
+1. **Metadata** (~100 tokens) — name + description, loaded at startup
+2. **Instructions** (<5000 tokens) — SKILL.md body, loaded on activation
+3. **Resources** (on demand) — scripts/, references/, assets/
+
+Some skills are adapted from [anthropics/skills](https://github.com/anthropics/skills) and track their upstream via `metadata.upstream-sha` in frontmatter. Run `almanac sync` to check for updates.
 
 ### `prompts/`
-Reusable prompt templates. Plain markdown. Not auto-discovered — used manually or referenced by skills.
+Reusable prompt templates. Plain markdown. Not auto-discovered — referenced manually or by skills. Contains role definitions, checklists, and task templates.
 
 ### `patterns/`
-Reference documentation, architectural patterns, and agent interaction guidelines. Plain markdown.
+Reference documentation and architectural patterns. Plain markdown. Contains agent workflow patterns, debugging methodology, safety guardrails.
 
 ## Layer 2: Adapters (provider-specific)
 
-Each provider gets its own directory under `providers/` with the wiring needed to connect the core to that tool's plugin/discovery system.
-
 ### `providers/claude-code/`
-Local plugin adapter with `.claude-plugin/plugin.json` metadata, a `skills` symlink to the shared core, plus provider-local agents, commands, and hooks.
-
-```bash
-almanac install claude-code
-almanac uninstall claude-code
-```
+Full local plugin:
+- `.claude-plugin/plugin.json` — plugin manifest
+- `skills/` — symlink to shared `../../skills`
+- `hooks/hooks.json` — lifecycle hooks (SessionStart, Stop)
+- `agents/`, `commands/` — extensible directories
 
 ### `providers/{opencode,cursor,codex}/`
-Setup stubs with instructions for symlinking skills into each provider's discovery path.
+Setup stubs with symlink instructions for each provider's skill discovery path.
+
+## CLI (`bin/almanac`)
+
+Dispatcher pattern: `bin/almanac` resolves `ALMANAC_HOME`, sources `lib/core.sh`, routes to `cmd/<command>.sh`. Commands: install, uninstall, list, update, sync, help.
+
+## Validation (`lib/almanac-core.sh`)
+
+`almanac_validate_skill()` checks against the Agent Skills Open Standard:
+- Name format (regex, length, no consecutive hyphens, matches directory)
+- Description presence and length
+- Frontmatter size
+- Optional field constraints (compatibility length)
+- Line count recommendation
 
 ## Key Principle
 
-Skills are shared. Everything else is provider-local. This means adding a new skill automatically makes it available across all providers, while provider-specific features (agents, commands, hooks) stay isolated.
+Skills are shared across all providers. Everything else (hooks, commands, agents) is provider-local. Adding a skill makes it available everywhere. Provider-specific features stay isolated.

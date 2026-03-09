@@ -1,9 +1,25 @@
 {
-  "hooks": [
-    {
-      "event": "SessionStart",
-      "command": "./session-start",
-      "description": "Runs on session start to initialize almanac context"
-    }
-  ]
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./hooks/session-start"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./hooks/session-stop",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
 }

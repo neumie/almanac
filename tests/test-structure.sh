@@ -40,6 +40,33 @@ check "skills/example/SKILL.md"
 check "prompts/README.md"
 check "patterns/README.md"
 
+# Skills
+check "skills/tdd/SKILL.md"
+check "skills/debugging/SKILL.md"
+check "skills/code-review/SKILL.md"
+check "skills/planning/SKILL.md"
+check "skills/frontend-design/SKILL.md"
+check "skills/mcp-builder/SKILL.md"
+check "skills/mcp-builder/references/"
+check "skills/webapp-testing/SKILL.md"
+check "skills/webapp-testing/scripts/"
+check "skills/skill-creator/SKILL.md"
+check "skills/skill-creator/references/"
+check "skills/git-workflow/SKILL.md"
+check "skills/refactoring/SKILL.md"
+
+# Prompts
+check "prompts/architect.md"
+check "prompts/commit-message.md"
+check "prompts/code-review-checklist.md"
+check "prompts/task-breakdown.md"
+
+# Patterns
+check "patterns/progressive-disclosure.md"
+check "patterns/hypothesis-driven-debugging.md"
+check "patterns/agent-safety.md"
+check "patterns/vertical-slice.md"
+
 # CLI
 check "bin/almanac"
 check "cmd/install.sh"
@@ -47,14 +74,16 @@ check "cmd/uninstall.sh"
 check "cmd/update.sh"
 check "cmd/list.sh"
 check "cmd/help.sh"
+check "cmd/sync.sh"
 check "install.sh"
 
 # Claude Code adapter
 check "providers/claude-code/.claude-plugin/plugin.json"
 check "providers/claude-code/agents/.gitkeep"
-check "providers/claude-code/commands/.gitkeep"
+check "providers/claude-code/commands/review.md"
+check "providers/claude-code/commands/plan.md"
+check "providers/claude-code/commands/commit.md"
 check "providers/claude-code/hooks/hooks.json"
-check "providers/claude-code/hooks/run-hook.cmd"
 check "providers/claude-code/hooks/session-start"
 
 # Provider stubs

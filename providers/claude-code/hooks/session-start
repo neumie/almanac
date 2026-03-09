@@ -5,4 +5,10 @@ set -euo pipefail
 
 ALMANAC_ROOT="${ALMANAC_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}"
 
-echo "almanac: initialized (root: $ALMANAC_ROOT)"
+# Count available skills
+skill_count=0
+for dir in "$ALMANAC_ROOT"/skills/*/; do
+  [ -f "$dir/SKILL.md" ] && skill_count=$((skill_count + 1))
+done
+
+echo "almanac: $skill_count skills loaded"
