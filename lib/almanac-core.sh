@@ -7,9 +7,12 @@ almanac_root() {
 }
 
 # Check if a skill directory has a valid SKILL.md
+# Validates against the Agent Skills Open Standard (agentskills.io/specification)
 almanac_validate_skill() {
   local skill_dir="$1"
   local skill_file="$skill_dir/SKILL.md"
+  local errors=0
+  local warnings=0
 
   if [ ! -f "$skill_file" ]; then
     echo "FAIL: missing SKILL.md in $skill_dir" >&2
@@ -24,21 +27,96 @@ almanac_validate_skill() {
     return 1
   fi
 
-  # Check for required fields (extract between first and second ---)
+  # Extract frontmatter (content between first and second ---)
   local frontmatter
   frontmatter=$(awk 'BEGIN{f=0} /^---$/{f++; next} f==1{print} f>=2{exit}' "$skill_file")
 
-  if ! echo "$frontmatter" | grep -q '^name:'; then
+  # --- Required: name field ---
+  local name
+  name=$(echo "$frontmatter" | grep '^name:' | head -1 | sed 's/^name:[[:space:]]*//')
+  if [ -z "$name" ]; then
     echo "FAIL: SKILL.md in $skill_dir missing 'name' field" >&2
-    return 1
+    errors=$((errors + 1))
+  else
+    # Name format: 1-64 chars, lowercase alphanumeric + hyphens, no leading/trailing/consecutive hyphens
+    local name_len=${#name}
+    if [ "$name_len" -gt 64 ]; then
+      echo "FAIL: name '$name' exceeds 64 characters ($name_len)" >&2
+      errors=$((errors + 1))
+    fi
+    if ! echo "$name" | grep -qE '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'; then
+      echo "FAIL: name '$name' invalid format (must be lowercase alphanumeric + hyphens)" >&2
+      errors=$((errors + 1))
+    fi
+    if echo "$name" | grep -q '\-\-'; then
+      echo "FAIL: name '$name' contains consecutive hyphens" >&2
+      errors=$((errors + 1))
+    fi
+    # Name must match directory name
+    local dir_name
+    dir_name=$(basename "$skill_dir")
+    if [ "$name" != "$dir_name" ]; then
+      echo "FAIL: name '$name' does not match directory '$dir_name'" >&2
+      errors=$((errors + 1))
+    fi
   fi
 
-  if ! echo "$frontmatter" | grep -q '^description:'; then
+  # --- Required: description field ---
+  # Description may span multiple lines (YAML multiline), extract the full value
+  local description
+  description=$(echo "$frontmatter" | awk '
+    /^description:/ {
+      sub(/^description:[[:space:]]*/, "")
+      desc = $0
+      next
+    }
+    desc != "" && /^[[:space:]]/ {
+      sub(/^[[:space:]]+/, " ")
+      desc = desc $0
+      next
+    }
+    desc != "" && /^[a-z]/ { exit }
+    END { print desc }
+  ')
+  if [ -z "$description" ]; then
     echo "FAIL: SKILL.md in $skill_dir missing 'description' field" >&2
-    return 1
+    errors=$((errors + 1))
+  else
+    local desc_len=${#description}
+    if [ "$desc_len" -gt 1024 ]; then
+      echo "FAIL: description exceeds 1024 characters ($desc_len)" >&2
+      errors=$((errors + 1))
+    fi
   fi
 
-  return 0
+  # --- Frontmatter size check ---
+  local fm_size
+  fm_size=$(echo "$frontmatter" | wc -c | tr -d ' ')
+  if [ "$fm_size" -gt 1024 ]; then
+    echo "WARN: frontmatter exceeds 1024 characters ($fm_size)" >&2
+    warnings=$((warnings + 1))
+  fi
+
+  # --- Optional: compatibility length ---
+  local compat
+  compat=$(echo "$frontmatter" | grep '^compatibility:' | head -1 | sed 's/^compatibility:[[:space:]]*//')
+  if [ -n "$compat" ]; then
+    local compat_len=${#compat}
+    if [ "$compat_len" -gt 500 ]; then
+      echo "WARN: compatibility exceeds 500 characters ($compat_len)" >&2
+      warnings=$((warnings + 1))
+    fi
+  fi
+
+  # --- Line count recommendation ---
+  local line_count
+  line_count=$(wc -l < "$skill_file" | tr -d ' ')
+  if [ "$line_count" -gt 500 ]; then
+    echo "WARN: SKILL.md has $line_count lines (recommended: under 500)" >&2
+    warnings=$((warnings + 1))
+  fi
+
+  [ "$errors" -eq 0 ] && return 0 || return 1
 }
 
 # List all skill directories
