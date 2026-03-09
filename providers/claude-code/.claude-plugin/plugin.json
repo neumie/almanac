@@ -2,8 +2,7 @@
   "name": "almanac",
   "description": "Personal agent toolkit — skills, prompts, and patterns",
   "version": "0.1.0",
-  "skills": "../../skills/",
-  "agents": "./agents/",
-  "commands": "./commands/",
-  "hooks": "./hooks/hooks.json"
+  "author": {
+    "name": "neumie"
+  }
 }

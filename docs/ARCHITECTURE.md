@@ -18,7 +18,12 @@ Reference documentation, architectural patterns, and agent interaction guideline
 Each provider gets its own directory under `providers/` with the wiring needed to connect the core to that tool's plugin/discovery system.
 
 ### `providers/claude-code/`
-Full plugin adapter: `plugin.json` manifest that points `skills` to `../../skills/` (the shared core), plus provider-local agents, commands, and hooks.
+Local plugin adapter with `.claude-plugin/plugin.json` metadata, a `skills` symlink to the shared core, plus provider-local agents, commands, and hooks.
+
+```bash
+almanac install claude-code
+almanac uninstall claude-code
+```
 
 ### `providers/{opencode,cursor,codex}/`
 Setup stubs with instructions for symlinking skills into each provider's discovery path.
