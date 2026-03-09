@@ -25,3 +25,31 @@ almanac_providers() {
     [[ -d "$dir" ]] && basename "$dir"
   done
 }
+
+# Check if a provider is installed (return 0 = yes, 1 = no)
+_is_installed() {
+  local provider="$1"
+  case "$provider" in
+    claude-code)
+      local plugins_file="$HOME/.claude/plugins/installed_plugins.json"
+      [[ -f "$plugins_file" ]] && python3 -c "
+import json, sys
+with open('$plugins_file') as f:
+    data = json.load(f)
+sys.exit(0 if 'almanac@local' in data.get('plugins', {}) else 1)
+" 2>/dev/null
+      ;;
+    opencode)
+      [[ -e "$HOME/.config/opencode/skills/almanac" ]]
+      ;;
+    cursor)
+      [[ -e "$HOME/.cursor/skills/almanac" ]]
+      ;;
+    codex)
+      [[ -e "$HOME/.agents/skills/almanac" ]]
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}

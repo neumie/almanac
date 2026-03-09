@@ -3,5 +3,9 @@
 
 echo "Available providers:"
 for provider in $(almanac_providers); do
-  echo "  $provider"
+  if _is_installed "$provider"; then
+    echo -e "  ${_GREEN}$provider${_RESET}  (installed)"
+  else
+    echo "  $provider"
+  fi
 done
