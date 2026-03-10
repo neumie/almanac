@@ -20,13 +20,13 @@ _install_claude_code() {
   local shell_rc="$HOME/.zshrc"
   [[ -f "$shell_rc" ]] || shell_rc="$HOME/.bashrc"
 
-  if [[ -f "$shell_rc" ]] && ! grep -q 'almanac' "$shell_rc"; then
+  if [[ -f "$shell_rc" ]] && grep -q 'plugin-dir.*almanac' "$shell_rc" 2>/dev/null; then
+    _info "Alias already in $shell_rc"
+  elif [[ -f "$shell_rc" ]]; then
     echo "" >> "$shell_rc"
     echo "# Almanac — load skills into Claude Code" >> "$shell_rc"
     echo "$alias_line" >> "$shell_rc"
     _info "Added alias to $shell_rc"
-  elif grep -q 'almanac' "$shell_rc" 2>/dev/null; then
-    _info "Alias already in $shell_rc"
   fi
 
   _success "Installed almanac for Claude Code"

@@ -10,17 +10,17 @@ _uninstall_claude_code() {
 
   # Remove alias from shell rc
   for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
-    if [[ -f "$rc" ]] && grep -q 'almanac' "$rc"; then
-      # Remove almanac lines
+    if [[ -f "$rc" ]] && grep -q 'plugin-dir.*almanac' "$rc"; then
+      # Remove almanac alias lines
       python3 -c "
 lines = open('$rc').readlines()
 out = []
 skip_next = False
 for line in lines:
-    if '# Almanac' in line:
+    if '# Almanac' in line and 'Claude Code' in line:
         skip_next = True
         continue
-    if skip_next and 'almanac' in line:
+    if skip_next and 'plugin-dir' in line:
         skip_next = False
         continue
     skip_next = False
