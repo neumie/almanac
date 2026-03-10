@@ -2,47 +2,31 @@
 # install.sh — Install almanac for a specific provider
 
 _install_claude_code() {
-  local settings_file="$HOME/.claude/settings.json"
-  local hook_script="$ALMANAC_HOME/providers/claude-code/hooks/session-start"
+  local plugin_dir="$ALMANAC_HOME/providers/claude-code"
+  local skills_link="$plugin_dir/skills"
 
   [[ -d "$HOME/.claude" ]] || _die "~/.claude not found — is Claude Code installed?"
-  [[ -x "$hook_script" ]] || chmod +x "$hook_script"
 
-  # Add SessionStart hook to settings.json
-  [[ -f "$settings_file" ]] || echo '{}' > "$settings_file"
+  # 1. Symlink skills into the plugin directory
+  if [[ -L "$skills_link" ]]; then
+    rm "$skills_link"
+  elif [[ -d "$skills_link" ]]; then
+    rm -rf "$skills_link"
+  fi
+  ln -s "$ALMANAC_HOME/skills" "$skills_link"
 
-  python3 -c "
-import json
-
-with open('$settings_file', 'r') as f:
-    data = json.load(f)
-
-hooks = data.setdefault('hooks', {})
-session_hooks = hooks.setdefault('SessionStart', [])
-
-# Check if almanac hook already exists
-already_installed = any(
-    'almanac' in hh.get('command', '')
-    for h in session_hooks if isinstance(h, dict)
-    for hh in h.get('hooks', [])
-)
-
-if not already_installed:
-    session_hooks.append({
-        'hooks': [{
-            'type': 'command',
-            'command': '$hook_script'
-        }]
-    })
-
-with open('$settings_file', 'w') as f:
-    json.dump(data, f, indent=2)
-    f.write('\n')
-"
+  # 2. Create shell wrapper that loads almanac as a local plugin
+  local wrapper="$HOME/.local/bin/claude-almanac"
+  mkdir -p "$(dirname "$wrapper")"
+  cat > "$wrapper" <<WRAPPER
+#!/usr/bin/env bash
+exec claude --plugin-dir "$plugin_dir" "\$@"
+WRAPPER
+  chmod +x "$wrapper"
 
   _success "Installed almanac for Claude Code"
-  _info "Hook added to ~/.claude/settings.json"
-  _info "Restart Claude Code to activate"
+  _info "Use 'claude-almanac' to start Claude Code with almanac skills"
+  _info "Or: claude --plugin-dir $plugin_dir"
 }
 
 _install_symlink() {

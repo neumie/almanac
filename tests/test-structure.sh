@@ -78,6 +78,7 @@ check "cmd/sync.sh"
 check "install.sh"
 
 # Claude Code adapter
+check "providers/claude-code/.claude-plugin/plugin.json"
 check "providers/claude-code/agents/.gitkeep"
 check "providers/claude-code/commands/review.md"
 check "providers/claude-code/commands/plan.md"

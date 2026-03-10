@@ -2,8 +2,18 @@
 # uninstall.sh — Remove almanac from a specific provider
 
 _uninstall_claude_code() {
-  local settings_file="$HOME/.claude/settings.json"
+  local plugin_dir="$ALMANAC_HOME/providers/claude-code"
+  local skills_link="$plugin_dir/skills"
+  local wrapper="$HOME/.local/bin/claude-almanac"
 
+  # Remove skills symlink
+  [[ -L "$skills_link" ]] && rm "$skills_link"
+
+  # Remove shell wrapper
+  [[ -f "$wrapper" ]] && rm "$wrapper"
+
+  # Remove almanac hook from settings.json if present
+  local settings_file="$HOME/.claude/settings.json"
   if [[ -f "$settings_file" ]]; then
     python3 -c "
 import json
@@ -21,24 +31,18 @@ hooks['SessionStart'] = [
 ]
 
 # Clean up empty arrays
-if not hooks['SessionStart']:
-    del hooks['SessionStart']
+if not hooks.get('SessionStart'):
+    hooks.pop('SessionStart', None)
 if not hooks:
-    del data['hooks']
+    data.pop('hooks', None)
 
 with open('$settings_file', 'w') as f:
     json.dump(data, f, indent=2)
     f.write('\n')
-"
+" 2>/dev/null
   fi
 
-  # Clean up any leftover plugin/marketplace artifacts
-  local plugins_dir="$HOME/.claude/plugins"
-  rm -rf "$plugins_dir/cache/almanac" 2>/dev/null || true
-  rm -rf "$plugins_dir/marketplaces/almanac" 2>/dev/null || true
-
   _success "Uninstalled almanac from Claude Code"
-  _info "Restart Claude Code to take effect"
 }
 
 # --- main ---
