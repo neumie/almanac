@@ -4,6 +4,11 @@
 _install_claude_code() {
   local plugin_dir="$ALMANAC_HOME/providers/claude-code"
   local skills_link="$plugin_dir/skills"
+  local plugins_dir="$HOME/.claude/plugins"
+  local cache_dir="$plugins_dir/cache/claude-plugins-official/almanac/0.1.0"
+  local plugins_file="$plugins_dir/installed_plugins.json"
+  local settings_file="$HOME/.claude/settings.json"
+  local plugin_key="almanac@claude-plugins-official"
 
   [[ -d "$HOME/.claude" ]] || _die "~/.claude not found — is Claude Code installed?"
 
@@ -15,18 +20,53 @@ _install_claude_code() {
   fi
   ln -s "$ALMANAC_HOME/skills" "$skills_link"
 
-  # 2. Create shell wrapper that loads almanac as a local plugin
-  local wrapper="$HOME/.local/bin/claude-almanac"
-  mkdir -p "$(dirname "$wrapper")"
-  cat > "$wrapper" <<WRAPPER
-#!/usr/bin/env bash
-exec claude --plugin-dir "$plugin_dir" "\$@"
-WRAPPER
-  chmod +x "$wrapper"
+  # 2. Symlink plugin into the Claude Code cache
+  mkdir -p "$(dirname "$cache_dir")"
+  if [[ -L "$cache_dir" ]]; then
+    rm "$cache_dir"
+  elif [[ -d "$cache_dir" ]]; then
+    rm -rf "$cache_dir"
+  fi
+  ln -s "$plugin_dir" "$cache_dir"
+
+  # 3. Register in installed_plugins.json
+  [[ -f "$plugins_file" ]] || echo '{"version":2,"plugins":{}}' > "$plugins_file"
+
+  local now
+  now=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+
+  python3 -c "
+import json
+with open('$plugins_file', 'r') as f:
+    data = json.load(f)
+data['plugins']['$plugin_key'] = [{
+    'scope': 'user',
+    'installPath': '$cache_dir',
+    'version': '0.1.0',
+    'installedAt': '$now',
+    'lastUpdated': '$now'
+}]
+with open('$plugins_file', 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+"
+
+  # 4. Enable in settings.json
+  [[ -f "$settings_file" ]] || echo '{}' > "$settings_file"
+
+  python3 -c "
+import json
+with open('$settings_file', 'r') as f:
+    data = json.load(f)
+ep = data.setdefault('enabledPlugins', {})
+ep['$plugin_key'] = True
+with open('$settings_file', 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+"
 
   _success "Installed almanac for Claude Code"
-  _info "Use 'claude-almanac' to start Claude Code with almanac skills"
-  _info "Or: claude --plugin-dir $plugin_dir"
+  _info "Restart Claude Code to activate"
 }
 
 _install_symlink() {
