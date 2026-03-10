@@ -8,10 +8,35 @@ _uninstall_claude_code() {
   # Remove skills symlink
   [[ -L "$skills_link" ]] && rm "$skills_link"
 
-  # Remove alias from shell rc
+  # Remove plugin from registry
+  local installed_plugins="$HOME/.claude/plugins/installed_plugins.json"
+  local settings="$HOME/.claude/settings.json"
+
+  if [[ -f "$installed_plugins" ]]; then
+    python3 -c "
+import json
+path = '$installed_plugins'
+data = json.load(open(path))
+data.get('plugins', {}).pop('almanac@local', None)
+json.dump(data, open(path, 'w'), indent=2)
+"
+    _info "Removed from installed_plugins.json"
+  fi
+
+  if [[ -f "$settings" ]]; then
+    python3 -c "
+import json
+path = '$settings'
+data = json.load(open(path))
+data.get('enabledPlugins', {}).pop('almanac@local', None)
+json.dump(data, open(path, 'w'), indent=2)
+"
+    _info "Removed from settings.json"
+  fi
+
+  # Clean up legacy alias from shell rc (if present from older installs)
   for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
     if [[ -f "$rc" ]] && grep -q 'plugin-dir.*almanac' "$rc"; then
-      # Remove almanac alias lines
       python3 -c "
 lines = open('$rc').readlines()
 out = []
@@ -25,18 +50,16 @@ for line in lines:
         continue
     skip_next = False
     out.append(line)
-# Remove trailing blank lines we may have added
 while out and out[-1].strip() == '':
     out.pop()
 out.append('\n')
 open('$rc', 'w').write(''.join(out))
 "
-      _info "Removed alias from $rc"
+      _info "Removed legacy alias from $rc"
     fi
   done
 
   _success "Uninstalled almanac from Claude Code"
-  _info "Run: source ~/.zshrc (or restart your shell)"
 }
 
 # --- main ---
