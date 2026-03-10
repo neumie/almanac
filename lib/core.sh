@@ -31,7 +31,7 @@ _is_installed() {
   local provider="$1"
   case "$provider" in
     claude-code)
-      [[ -L "$HOME/.claude/plugins/cache/claude-plugins-official/almanac/0.1.0" ]]
+      [[ -L "$ALMANAC_HOME/providers/claude-code/skills" ]]
       ;;
     opencode)
       [[ -e "$HOME/.config/opencode/skills/almanac" ]]

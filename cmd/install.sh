@@ -4,37 +4,10 @@
 _install_claude_code() {
   local plugin_dir="$ALMANAC_HOME/providers/claude-code"
   local skills_link="$plugin_dir/skills"
-  local plugins_dir="$HOME/.claude/plugins"
-  local cache_dir="$plugins_dir/cache/claude-plugins-official/almanac/0.1.0"
-  local plugins_file="$plugins_dir/installed_plugins.json"
-  local settings_file="$HOME/.claude/settings.json"
-  local plugin_key="almanac@claude-plugins-official"
-
-  local manifest="$plugins_dir/marketplaces/claude-plugins-official/.claude-plugin/marketplace.json"
 
   [[ -d "$HOME/.claude" ]] || _die "~/.claude not found — is Claude Code installed?"
-  [[ -f "$manifest" ]] || _die "Official marketplace not found — install a plugin from Claude Code first"
 
-  # 1. Add almanac to the local marketplace manifest
-  python3 -c "
-import json
-with open('$manifest', 'r') as f:
-    data = json.load(f)
-if not any(p.get('name') == 'almanac' for p in data.get('plugins', [])):
-    data['plugins'].append({
-        'name': 'almanac',
-        'description': 'Personal agent toolkit — skills, prompts, and patterns',
-        'version': '0.1.0',
-        'author': {'name': 'neumie'},
-        'source': './plugins/almanac',
-        'category': 'development'
-    })
-    with open('$manifest', 'w') as f:
-        json.dump(data, f, indent=2)
-        f.write('\n')
-"
-
-  # 2. Symlink skills into the plugin directory (so they're in the plugin dir)
+  # 1. Symlink skills into the plugin directory
   if [[ -L "$skills_link" ]]; then
     rm "$skills_link"
   elif [[ -d "$skills_link" ]]; then
@@ -42,53 +15,23 @@ if not any(p.get('name') == 'almanac' for p in data.get('plugins', [])):
   fi
   ln -s "$ALMANAC_HOME/skills" "$skills_link"
 
-  # 2. Symlink plugin into the Claude Code cache
-  mkdir -p "$(dirname "$cache_dir")"
-  if [[ -L "$cache_dir" ]]; then
-    rm "$cache_dir"
-  elif [[ -d "$cache_dir" ]]; then
-    rm -rf "$cache_dir"
+  # 2. Add shell alias to load almanac as a plugin
+  local alias_line="alias claude='claude --plugin-dir \"$plugin_dir\"'"
+  local shell_rc="$HOME/.zshrc"
+  [[ -f "$shell_rc" ]] || shell_rc="$HOME/.bashrc"
+
+  if [[ -f "$shell_rc" ]] && ! grep -q 'almanac' "$shell_rc"; then
+    echo "" >> "$shell_rc"
+    echo "# Almanac — load skills into Claude Code" >> "$shell_rc"
+    echo "$alias_line" >> "$shell_rc"
+    _info "Added alias to $shell_rc"
+  elif grep -q 'almanac' "$shell_rc" 2>/dev/null; then
+    _info "Alias already in $shell_rc"
   fi
-  ln -s "$plugin_dir" "$cache_dir"
-
-  # 3. Register in installed_plugins.json
-  [[ -f "$plugins_file" ]] || echo '{"version":2,"plugins":{}}' > "$plugins_file"
-
-  local now
-  now=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
-
-  python3 -c "
-import json
-with open('$plugins_file', 'r') as f:
-    data = json.load(f)
-data['plugins']['$plugin_key'] = [{
-    'scope': 'user',
-    'installPath': '$cache_dir',
-    'version': '0.1.0',
-    'installedAt': '$now',
-    'lastUpdated': '$now'
-}]
-with open('$plugins_file', 'w') as f:
-    json.dump(data, f, indent=2)
-    f.write('\n')
-"
-
-  # 4. Enable in settings.json
-  [[ -f "$settings_file" ]] || echo '{}' > "$settings_file"
-
-  python3 -c "
-import json
-with open('$settings_file', 'r') as f:
-    data = json.load(f)
-ep = data.setdefault('enabledPlugins', {})
-ep['$plugin_key'] = True
-with open('$settings_file', 'w') as f:
-    json.dump(data, f, indent=2)
-    f.write('\n')
-"
 
   _success "Installed almanac for Claude Code"
-  _info "Restart Claude Code to activate"
+  _info "Run: source $shell_rc"
+  _info "Then start claude as usual — almanac skills are loaded automatically"
 }
 
 _install_symlink() {
