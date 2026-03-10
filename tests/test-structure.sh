@@ -77,18 +77,12 @@ check "cmd/help.sh"
 check "cmd/sync.sh"
 check "install.sh"
 
-# Marketplace manifest
-check ".claude-plugin/marketplace.json"
-
 # Claude Code adapter
-check "providers/claude-code/.claude-plugin/plugin.json"
 check "providers/claude-code/agents/.gitkeep"
 check "providers/claude-code/commands/review.md"
 check "providers/claude-code/commands/plan.md"
 check "providers/claude-code/commands/commit.md"
-check "providers/claude-code/hooks/hooks.json"
 check "providers/claude-code/hooks/session-start"
-check "providers/claude-code/skills/"
 
 # Provider stubs
 check "providers/opencode/README.md"

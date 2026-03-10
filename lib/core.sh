@@ -31,13 +31,18 @@ _is_installed() {
   local provider="$1"
   case "$provider" in
     claude-code)
-      local plugins_file="$HOME/.claude/plugins/installed_plugins.json"
-      [[ -f "$plugins_file" ]] && python3 -c "
+      local settings_file="$HOME/.claude/settings.json"
+      [[ -f "$settings_file" ]] && python3 -c "
 import json, sys
-with open('$plugins_file') as f:
+with open('$settings_file') as f:
     data = json.load(f)
-plugins = data.get('plugins', {})
-sys.exit(0 if any(k.startswith('almanac@') for k in plugins) else 1)
+hooks = data.get('hooks', {}).get('SessionStart', [])
+found = any(
+    'almanac' in hh.get('command', '')
+    for h in hooks if isinstance(h, dict)
+    for hh in h.get('hooks', [])
+)
+sys.exit(0 if found else 1)
 " 2>/dev/null
       ;;
     opencode)
