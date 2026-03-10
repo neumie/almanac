@@ -1,9 +1,42 @@
 #!/usr/bin/env bash
-# session-start — Runs on SessionStart to output almanac skill catalog
+# session-start — Auto-sync skill symlinks on SessionStart
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 ALMANAC_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+
+COMMANDS_DIR="$HOME/.claude/commands/almanac"
+
+# Only sync if already installed
+if [[ -d "$COMMANDS_DIR" ]]; then
+  added=0
+  removed=0
+
+  # Add symlinks for new skills
+  for dir in "$ALMANAC_ROOT"/skills/*/; do
+    [ -f "$dir/SKILL.md" ] || continue
+    name=$(basename "$dir")
+    target="$COMMANDS_DIR/$name.md"
+    if [[ ! -e "$target" && ! -L "$target" ]]; then
+      ln -s "$dir/SKILL.md" "$target"
+      added=$((added + 1))
+    fi
+  done
+
+  # Remove dangling symlinks (deleted skills)
+  for link in "$COMMANDS_DIR"/*.md; do
+    [ -L "$link" ] || continue
+    [[ -e "$link" ]] || { rm "$link"; removed=$((removed + 1)); }
+  done
+
+  # Report only if changes were made
+  if [[ $added -gt 0 || $removed -gt 0 ]]; then
+    msg="almanac: synced"
+    [[ $added -gt 0 ]] && msg="$msg, added $added"
+    [[ $removed -gt 0 ]] && msg="$msg, removed $removed"
+    echo "$msg"
+  fi
+fi
 
 echo "Success"

@@ -26,6 +26,12 @@ _install_claude_code() {
     count=$((count + 1))
   done
 
+  # Clean up dangling symlinks (from deleted skills)
+  for link in "$commands_dir"/*.md; do
+    [[ -L "$link" ]] || continue
+    [[ -e "$link" ]] || rm "$link"
+  done
+
   _success "Installed $count skills into ~/.claude/commands/almanac/"
   _info "Skills appear as almanac:<name> — start claude as usual"
 }
