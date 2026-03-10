@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
-# session-start — Runs on SessionStart to initialize almanac context
+# session-start — Runs on SessionStart to output almanac skill catalog
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 ALMANAC_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
-# Count available skills
-skill_count=0
-for dir in "$ALMANAC_ROOT"/skills/*/; do
-  [ -f "$dir/SKILL.md" ] && skill_count=$((skill_count + 1))
-done
+echo "The following almanac skills are available. Use the Skill tool to invoke them:"
+echo ""
 
-echo "almanac: $skill_count skills loaded"
+for dir in "$ALMANAC_ROOT"/skills/*/; do
+  [ -f "$dir/SKILL.md" ] || continue
+  name=$(basename "$dir")
+  # Extract description from YAML frontmatter
+  desc=$(awk '/^---$/{n++; next} n==1 && /^description:/{sub(/^description: */, ""); print; exit}' "$dir/SKILL.md")
+  echo "- $name: $desc"
+done
