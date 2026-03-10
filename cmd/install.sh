@@ -10,9 +10,31 @@ _install_claude_code() {
   local settings_file="$HOME/.claude/settings.json"
   local plugin_key="almanac@claude-plugins-official"
 
-  [[ -d "$HOME/.claude" ]] || _die "~/.claude not found — is Claude Code installed?"
+  local manifest="$plugins_dir/marketplaces/claude-plugins-official/.claude-plugin/marketplace.json"
 
-  # 1. Symlink skills into the plugin directory
+  [[ -d "$HOME/.claude" ]] || _die "~/.claude not found — is Claude Code installed?"
+  [[ -f "$manifest" ]] || _die "Official marketplace not found — install a plugin from Claude Code first"
+
+  # 1. Add almanac to the local marketplace manifest
+  python3 -c "
+import json
+with open('$manifest', 'r') as f:
+    data = json.load(f)
+if not any(p.get('name') == 'almanac' for p in data.get('plugins', [])):
+    data['plugins'].append({
+        'name': 'almanac',
+        'description': 'Personal agent toolkit — skills, prompts, and patterns',
+        'version': '0.1.0',
+        'author': {'name': 'neumie'},
+        'source': './plugins/almanac',
+        'category': 'development'
+    })
+    with open('$manifest', 'w') as f:
+        json.dump(data, f, indent=2)
+        f.write('\n')
+"
+
+  # 2. Symlink skills into the plugin directory (so they're in the plugin dir)
   if [[ -L "$skills_link" ]]; then
     rm "$skills_link"
   elif [[ -d "$skills_link" ]]; then
