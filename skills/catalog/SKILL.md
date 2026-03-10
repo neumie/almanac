@@ -1,0 +1,48 @@
+---
+name: catalog
+description: Use when the user asks what skills are available, needs help choosing a workflow, or wants to understand the toolkit. Lists all skills organized by workflow phase with guidance on combining them.
+---
+
+# Skill Catalog
+
+## By Workflow Phase
+
+### Plan
+- **planning** — Architecture decisions, task breakdown, trade-off analysis. Use before jumping into any multi-step coding task.
+- **catalog** — This skill. Lists available skills and when to use them.
+
+### Build
+- **tdd** — Red-green-refactor cycle with vertical slice methodology. Use when building features or fixing bugs test-first.
+- **frontend-design** — Distinctive production-grade web interfaces. Use when creating or improving any web UI.
+- **mcp-builder** — Build MCP servers in TypeScript or Python. Use when integrating external APIs as tools for LLMs.
+- **skill-creator** — Create and validate skills against the Agent Skills Open Standard. Use when building new skills.
+
+### Test
+- **debugging** — Hypothesis-driven root cause analysis. Use when encountering errors, test failures, or unexpected behavior.
+- **webapp-testing** — Test web apps with Playwright. Use for visual inspection, interaction testing, and e2e validation.
+
+### Review
+- **code-review** — Structured review: correctness, security, performance, maintainability. Use when reviewing PRs or diffs.
+- **refactoring** — Safe code restructuring without changing external behavior. Use when cleaning up or simplifying code.
+
+### Ship
+- **git-workflow** — Clean commits, branching strategy, safe history management. Use when working with git beyond simple status checks.
+
+## Combining Skills
+
+Common combinations:
+- **New feature**: planning -> tdd -> code-review -> git-workflow
+- **Bug fix**: debugging -> tdd (write regression test) -> git-workflow
+- **UI work**: planning -> frontend-design -> webapp-testing -> code-review
+- **New integration**: planning -> mcp-builder -> tdd -> code-review
+
+Start with **planning** for multi-step work. Use **tdd** during implementation. Finish with **code-review** before shipping.
+
+## Reference Material
+
+Most skills include `references/` directories with supporting docs loaded on demand:
+- `skills/planning/references/` — task templates, architect role, vertical slice pattern
+- `skills/git-workflow/references/` — commit format, safety guardrails
+- `skills/debugging/references/` — debugging session template
+- `skills/mcp-builder/references/` — TypeScript/Python guides, best practices
+- `skills/skill-creator/references/` — spec summary, progressive disclosure pattern

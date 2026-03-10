@@ -4,9 +4,7 @@ Personal agent toolkit. Skills follow the [Agent Skills Open Standard](https://a
 
 ## Structure
 
-- `skills/` — each skill is a directory with `SKILL.md` (YAML frontmatter + markdown body)
-- `prompts/` — reusable prompt templates (plain markdown, not auto-discovered)
-- `patterns/` — reference docs and agent workflow patterns (plain markdown)
+- `skills/` — each skill is a directory with `SKILL.md` (YAML frontmatter + markdown body); reference material lives in `skills/*/references/`
 - `providers/` — provider-specific adapters (Claude Code has hooks; others have setup stubs)
 - `lib/` — shared shell utilities (`core.sh` for CLI, `almanac-core.sh` for skill validation)
 - `tests/` — `test-structure.sh` checks files exist, `test-skills.sh` validates skill format
@@ -43,7 +41,7 @@ Four skills track upstream from `anthropics/skills`: `frontend-design`, `mcp-bui
 ## Testing
 
 ```bash
-bash tests/test-structure.sh   # 64 checks — all files and directories
+bash tests/test-structure.sh   # All files and directories
 bash tests/test-skills.sh      # Validates all 11 skills + 6 negative tests
 ```
 

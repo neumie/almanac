@@ -1,6 +1,6 @@
 # Almanac
 
-Personal agent toolkit — curated skills, prompts, and patterns for LLM coding agents.
+Personal agent toolkit — curated skills for LLM coding agents.
 
 Skills follow the [Agent Skills Open Standard](https://agentskills.io/specification) and work across Claude Code, OpenCode, Cursor, Codex, and 25+ compatible agents.
 
@@ -40,14 +40,7 @@ ln -s ~/.almanac/skills ~/.agents/skills/almanac
 | **skill-creator** | Create and validate skills against the Agent Skills Open Standard |
 | **git-workflow** | Clean commits, branching strategy, safe history management |
 | **refactoring** | Safe code restructuring: identify smells, apply patterns, preserve behavior |
-
-## Prompts & Patterns
-
-**Prompts** — reusable templates referenced by skills or used directly:
-`architect`, `commit-message`, `code-review-checklist`, `task-breakdown`
-
-**Patterns** — reference docs for agent workflows:
-`progressive-disclosure`, `hypothesis-driven-debugging`, `agent-safety`, `vertical-slice`
+| **catalog** | Lists all skills, helps choose workflows, explains how to combine skills |
 
 ## CLI
 
@@ -77,17 +70,16 @@ $ almanac sync
 almanac/
 ├── skills/              # Agent Skills Open Standard (SKILL.md)
 │   ├── tdd/
-│   ├── debugging/
+│   ├── debugging/       # + references/
 │   ├── code-review/
-│   ├── planning/
+│   ├── planning/        # + references/
 │   ├── frontend-design/
 │   ├── mcp-builder/     # + references/
 │   ├── webapp-testing/  # + scripts/
 │   ├── skill-creator/   # + references/
-│   ├── git-workflow/
-│   └── refactoring/
-├── prompts/             # Reusable prompt templates
-├── patterns/            # Reference docs & agent patterns
+│   ├── git-workflow/    # + references/
+│   ├── refactoring/
+│   └── catalog/
 ├── providers/           # Provider-specific adapters
 │   ├── claude-code/     # Full plugin (hooks, skills symlink)
 │   ├── opencode/

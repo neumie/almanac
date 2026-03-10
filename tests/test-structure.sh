@@ -21,9 +21,6 @@ echo "=== Structure Tests ==="
 
 # Directories
 check "skills/"
-check "skills/example/"
-check "prompts/"
-check "patterns/"
 check "providers/claude-code/"
 check "providers/claude-code/agents/"
 check "providers/claude-code/commands/"
@@ -35,12 +32,8 @@ check "lib/"
 check "tests/"
 check "docs/"
 
-# Core files
-check "skills/example/SKILL.md"
-check "prompts/README.md"
-check "patterns/README.md"
-
 # Skills
+check "skills/catalog/SKILL.md"
 check "skills/tdd/SKILL.md"
 check "skills/debugging/SKILL.md"
 check "skills/code-review/SKILL.md"
@@ -52,20 +45,18 @@ check "skills/webapp-testing/SKILL.md"
 check "skills/webapp-testing/scripts/"
 check "skills/skill-creator/SKILL.md"
 check "skills/skill-creator/references/"
+check "skills/skill-creator/references/progressive-disclosure.md"
 check "skills/git-workflow/SKILL.md"
+check "skills/git-workflow/references/"
+check "skills/git-workflow/references/commit-format.md"
+check "skills/git-workflow/references/safety-guardrails.md"
 check "skills/refactoring/SKILL.md"
-
-# Prompts
-check "prompts/architect.md"
-check "prompts/commit-message.md"
-check "prompts/code-review-checklist.md"
-check "prompts/task-breakdown.md"
-
-# Patterns
-check "patterns/progressive-disclosure.md"
-check "patterns/hypothesis-driven-debugging.md"
-check "patterns/agent-safety.md"
-check "patterns/vertical-slice.md"
+check "skills/planning/references/"
+check "skills/planning/references/task-template.md"
+check "skills/planning/references/architect-role.md"
+check "skills/planning/references/vertical-slice.md"
+check "skills/debugging/references/"
+check "skills/debugging/references/session-template.md"
 
 # CLI
 check "bin/almanac"
