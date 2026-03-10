@@ -46,9 +46,9 @@ metadata:
 
 3. Run `almanac sync` to verify tracking works.
 
-## Adding Prompts or Patterns
+## Adding Reference Material
 
-Add a markdown file to `prompts/` or `patterns/`. No required format, but keep them focused and actionable.
+Add reference docs as markdown files in `skills/<name>/references/`. These are loaded on demand when the skill needs them. Keep them focused and actionable.
 
 ## Testing
 

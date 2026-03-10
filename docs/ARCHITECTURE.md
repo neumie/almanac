@@ -14,11 +14,7 @@ Skills use progressive disclosure:
 
 Some skills are adapted from [anthropics/skills](https://github.com/anthropics/skills) and track their upstream via `metadata.upstream-sha` in frontmatter. Run `almanac sync` to check for updates.
 
-### `prompts/`
-Reusable prompt templates. Plain markdown. Not auto-discovered — referenced manually or by skills. Contains role definitions, checklists, and task templates.
-
-### `patterns/`
-Reference documentation and architectural patterns. Plain markdown. Contains agent workflow patterns, debugging methodology, safety guardrails.
+Reference material (templates, patterns, guardrails) lives in `skills/*/references/` directories, loaded on demand by the skills that use them.
 
 ## Layer 2: Adapters (provider-specific)
 
