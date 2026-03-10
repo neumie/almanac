@@ -2,12 +2,12 @@
 # install.sh — Install almanac for a specific provider
 
 _install_claude_code() {
-  local commands_dir="$HOME/.claude/commands"
+  local commands_dir="$HOME/.claude/commands/almanac"
 
   [[ -d "$HOME/.claude" ]] || _die "~/.claude not found — is Claude Code installed?"
   mkdir -p "$commands_dir"
 
-  # Symlink each skill's SKILL.md into ~/.claude/commands/<name>.md
+  # Symlink each skill's SKILL.md into ~/.claude/commands/almanac/<name>.md
   local count=0
   for dir in "$ALMANAC_HOME"/skills/*/; do
     [ -f "$dir/SKILL.md" ] || continue
@@ -18,12 +18,16 @@ _install_claude_code() {
     # Remove existing (symlink or file)
     [[ -L "$target" || -f "$target" ]] && rm "$target"
 
+    # Clean up legacy flat symlink from older installs
+    local legacy="$HOME/.claude/commands/$name.md"
+    [[ -L "$legacy" ]] && rm "$legacy"
+
     ln -s "$dir/SKILL.md" "$target"
     count=$((count + 1))
   done
 
-  _success "Installed $count skills into ~/.claude/commands/"
-  _info "Start claude as usual — almanac skills are loaded automatically"
+  _success "Installed $count skills into ~/.claude/commands/almanac/"
+  _info "Skills appear as almanac:<name> — start claude as usual"
 }
 
 _install_symlink() {

@@ -2,9 +2,9 @@
 # uninstall.sh — Remove almanac from a specific provider
 
 _uninstall_claude_code() {
-  local commands_dir="$HOME/.claude/commands"
+  local commands_dir="$HOME/.claude/commands/almanac"
 
-  # Remove skill symlinks from ~/.claude/commands/
+  # Remove skill symlinks from ~/.claude/commands/almanac/
   local count=0
   for dir in "$ALMANAC_HOME"/skills/*/; do
     [ -f "$dir/SKILL.md" ] || continue
@@ -16,8 +16,16 @@ _uninstall_claude_code() {
       rm "$target"
       count=$((count + 1))
     fi
+
+    # Also clean up legacy flat symlink
+    local legacy="$HOME/.claude/commands/$name.md"
+    [[ -L "$legacy" ]] && rm "$legacy"
   done
-  _info "Removed $count skill symlinks from ~/.claude/commands/"
+
+  # Remove almanac directory if empty
+  [[ -d "$commands_dir" ]] && rmdir "$commands_dir" 2>/dev/null || true
+
+  _info "Removed $count skill symlinks from ~/.claude/commands/almanac/"
 
   # Clean up legacy plugin registry entries (from older installs)
   local installed_plugins="$HOME/.claude/plugins/installed_plugins.json"
