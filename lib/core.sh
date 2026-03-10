@@ -36,7 +36,8 @@ _is_installed() {
 import json, sys
 with open('$plugins_file') as f:
     data = json.load(f)
-sys.exit(0 if 'almanac@local' in data.get('plugins', {}) else 1)
+plugins = data.get('plugins', {})
+sys.exit(0 if any(k.startswith('almanac@') for k in plugins) else 1)
 " 2>/dev/null
       ;;
     opencode)

@@ -8,6 +8,8 @@ Personal agent toolkit. Skills follow the [Agent Skills Open Standard](https://a
 - `prompts/` — reusable prompt templates (plain markdown, not auto-discovered)
 - `patterns/` — reference docs and agent workflow patterns (plain markdown)
 - `providers/` — provider-specific adapters (Claude Code has hooks; others have setup stubs)
+- `providers/claude-code/skills/` — committed copy of skills for Claude Code marketplace discovery
+- `.claude-plugin/marketplace.json` — marketplace manifest so the repo serves as a Claude Code plugin marketplace
 - `lib/` — shared shell utilities (`core.sh` for CLI, `almanac-core.sh` for skill validation)
 - `tests/` — `test-structure.sh` checks files exist, `test-skills.sh` validates skill format
 - `cmd/` — CLI commands: install, uninstall, list, update, sync, help

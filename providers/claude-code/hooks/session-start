@@ -3,7 +3,8 @@
 
 set -euo pipefail
 
-ALMANAC_ROOT="${ALMANAC_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+ALMANAC_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # Count available skills
 skill_count=0

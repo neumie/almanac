@@ -2,16 +2,18 @@
 # uninstall.sh — Remove almanac from a specific provider
 
 _uninstall_claude_code() {
-  local plugins_file="$HOME/.claude/plugins/installed_plugins.json"
+  local plugins_dir="$HOME/.claude/plugins"
+  local plugins_file="$plugins_dir/installed_plugins.json"
   local settings_file="$HOME/.claude/settings.json"
-  local plugin_key="almanac@local"
+  local marketplaces_file="$plugins_dir/known_marketplaces.json"
 
   if [[ -f "$plugins_file" ]]; then
     python3 -c "
 import json
 with open('$plugins_file', 'r') as f:
     data = json.load(f)
-data['plugins'].pop('$plugin_key', None)
+for key in ['almanac@almanac', 'almanac@local', 'almanac@claude-plugins-official']:
+    data['plugins'].pop(key, None)
 with open('$plugins_file', 'w') as f:
     json.dump(data, f, indent=2)
     f.write('\n')
@@ -24,15 +26,31 @@ import json
 with open('$settings_file', 'r') as f:
     data = json.load(f)
 if 'enabledPlugins' in data:
-    data['enabledPlugins'].pop('$plugin_key', None)
+    for key in ['almanac@almanac', 'almanac@local', 'almanac@claude-plugins-official']:
+        data['enabledPlugins'].pop(key, None)
 with open('$settings_file', 'w') as f:
     json.dump(data, f, indent=2)
     f.write('\n')
 "
   fi
 
-  # Clean up copied skills
-  rm -rf "$ALMANAC_HOME/providers/claude-code/skills"
+  # Remove marketplace registration
+  if [[ -f "$marketplaces_file" ]]; then
+    python3 -c "
+import json
+with open('$marketplaces_file', 'r') as f:
+    data = json.load(f)
+data.pop('almanac', None)
+with open('$marketplaces_file', 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+"
+  fi
+
+  # Clean up cache and marketplace clone
+  rm -rf "$plugins_dir/cache/almanac" 2>/dev/null || true
+  rm -rf "$plugins_dir/cache/claude-plugins-official/almanac" 2>/dev/null || true
+  rm -rf "$plugins_dir/marketplaces/almanac" 2>/dev/null || true
 
   _success "Uninstalled almanac from Claude Code"
   _info "Restart Claude Code to take effect"
