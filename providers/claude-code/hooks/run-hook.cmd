@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-ALMANAC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+ALMANAC_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK_NAME="${1:?Usage: run-hook.cmd <hook-name>}"
 shift
 

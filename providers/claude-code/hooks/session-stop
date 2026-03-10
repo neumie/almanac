@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # session-stop — Async hook that logs session end (runs in background)
 
-ALMANAC_ROOT="${ALMANAC_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}"
+ALMANAC_ROOT="${ALMANAC_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 LOG_DIR="$ALMANAC_ROOT/.logs"
 mkdir -p "$LOG_DIR"
 
