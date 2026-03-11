@@ -1,81 +1,81 @@
 ---
 name: webapp-testing
-description: Use when testing web applications with Playwright, including visual inspection, interaction testing, and end-to-end validation of dynamic web pages. Use this whenever the user wants to test a web app, verify frontend behavior, capture screenshots, or debug UI issues.
-metadata:
-  upstream: anthropics/skills/webapp-testing
-  upstream-sha: 4726215301db64a0cc4d41fc3219c61f37a30f4a
-  adapted-date: "2026-03-09"
+description: Use when testing web applications with agent-browser, including visual inspection, interaction testing, and end-to-end validation of dynamic web pages. Use this whenever the user wants to test a web app, verify frontend behavior, capture screenshots, or debug UI issues.
+compatibility: Requires agent-browser (npx agent-browser) for browser automation.
 ---
 
 # Web Application Testing
 
-Test local web applications using native Python Playwright scripts.
+Manually test web applications by navigating them with agent-browser. Open pages, inspect what rendered, interact with elements, and verify behavior — all through direct CLI commands.
 
-**Helper script:** `scripts/with_server.py` — manages server lifecycle (supports multiple servers). Run with `--help` first.
+## Workflow
 
-## Decision Tree
+1. **Start the app** if it isn't already running
+2. **Open the page** and wait for it to load
+3. **Inspect** — screenshot and snapshot to understand what's on screen
+4. **Interact** — click, fill, type to exercise the feature
+5. **Verify** — screenshot again, check state, read content to confirm behavior
 
-```
-User task → Is it static HTML?
-    ├─ Yes → Read HTML file directly to identify selectors
-    │         ├─ Success → Write Playwright script using selectors
-    │         └─ Fails/Incomplete → Treat as dynamic (below)
-    │
-    └─ No (dynamic webapp) → Is the server already running?
-        ├─ No → Use scripts/with_server.py helper
-        └─ Yes → Reconnaissance-then-action (below)
-```
+## Opening a Page
 
-## Using with_server.py
-
-**Single server:**
 ```bash
-python scripts/with_server.py --server "npm run dev" --port 5173 -- python your_automation.py
+npx agent-browser open http://localhost:5173
+npx agent-browser wait --load networkidle    # CRITICAL: wait for JS to finish
 ```
 
-**Multiple servers (backend + frontend):**
+Always wait for `networkidle` before doing anything else on dynamic apps.
+
+## Inspecting
+
 ```bash
-python scripts/with_server.py \
-  --server "cd backend && python server.py" --port 3000 \
-  --server "cd frontend && npm run dev" --port 5173 \
-  -- python your_automation.py
+npx agent-browser screenshot /tmp/page.png   # see what rendered
+npx agent-browser snapshot                    # accessibility tree with @refs
+npx agent-browser get text "main"             # read text content
+npx agent-browser get html                    # full page HTML
+npx agent-browser eval "document.title"       # run arbitrary JS
 ```
 
-## Automation Script Pattern
+`snapshot` returns an accessibility tree where every element has a `@ref` identifier. Use these refs to target elements precisely.
 
-Servers are managed by the helper — your script only needs Playwright logic:
+## Interacting
 
-```python
-from playwright.sync_api import sync_playwright
-
-with sync_playwright() as p:
-    browser = p.chromium.launch(headless=True)
-    page = browser.new_page()
-    page.goto('http://localhost:5173')
-    page.wait_for_load_state('networkidle')  # CRITICAL: wait for JS
-    # ... your automation logic
-    browser.close()
+```bash
+npx agent-browser click "button"              # CSS selector
+npx agent-browser click @ref                  # accessibility ref from snapshot
+npx agent-browser fill "input[name='email']" "test@example.com"
+npx agent-browser type "#search" "query"      # character by character
+npx agent-browser press Enter
+npx agent-browser select "#country" "Canada"
+npx agent-browser check "#agree"
+npx agent-browser scroll down 500
+npx agent-browser hover ".menu-trigger"
 ```
 
-## Reconnaissance-Then-Action
+## Verifying
 
-1. **Inspect rendered DOM:**
-   ```python
-   page.screenshot(path='/tmp/inspect.png', full_page=True)
-   content = page.content()
-   page.locator('button').all()
-   ```
-2. **Identify selectors** from inspection results
-3. **Execute actions** using discovered selectors
+```bash
+npx agent-browser screenshot /tmp/after.png
+npx agent-browser is visible ".success-message"
+npx agent-browser is enabled "button[type='submit']"
+npx agent-browser get text ".result"
+npx agent-browser get count ".list-item"
+npx agent-browser console                     # check for errors
+npx agent-browser errors                      # page errors only
+```
 
-## Common Pitfall
+## Mobile Testing
 
-Don't inspect the DOM before waiting for `networkidle` on dynamic apps. Always `page.wait_for_load_state('networkidle')` first.
+```bash
+npx agent-browser set device "iPhone 15"
+npx agent-browser open http://localhost:5173
+npx agent-browser wait --load networkidle
+npx agent-browser screenshot /tmp/mobile.png
+```
 
 ## Best Practices
 
-- Use `sync_playwright()` for synchronous scripts
-- Always close the browser when done
-- Use descriptive selectors: `text=`, `role=`, CSS selectors, or IDs
-- Add waits: `page.wait_for_selector()` or `page.wait_for_timeout()`
-- Use bundled scripts as black boxes — `--help` first, don't read source
+- Always wait for `networkidle` before inspecting dynamic pages
+- Use `snapshot` for element discovery — `@ref` identifiers are the most reliable selectors
+- Screenshot after each significant action to verify visual state
+- Use `console` and `errors` to catch JS issues that aren't visible on screen
+- For multi-step flows, inspect between steps — don't assume the next state
