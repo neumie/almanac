@@ -42,7 +42,7 @@ Four skills track upstream from `anthropics/skills`: `frontend-design`, `mcp-bui
 
 ```bash
 bash tests/test-structure.sh   # All files and directories
-bash tests/test-skills.sh      # Validates all 11 skills + 6 negative tests
+bash tests/test-skills.sh      # Validates all 13 skills + 6 negative tests
 ```
 
 ## CLI
