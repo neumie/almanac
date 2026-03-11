@@ -21,6 +21,10 @@ description: Use when the user asks what skills are available, needs help choosi
 - **debugging** — Hypothesis-driven root cause analysis. Use when encountering errors, test failures, or unexpected behavior.
 - **webapp-testing** — Test web apps with Playwright. Use for visual inspection, interaction testing, and e2e validation.
 
+### Assess
+- **frontend-perf** — Page loads, Core Web Vitals, bundle size, runtime performance. Use when assessing or optimizing web page performance.
+- **backend-perf** — Database queries, API response times, caching, resource usage. Use when assessing or optimizing server-side performance.
+
 ### Review
 - **code-review** — Structured review: correctness, security, performance, maintainability. Use when reviewing PRs or diffs.
 - **refactoring** — Safe code restructuring without changing external behavior. Use when cleaning up or simplifying code.
@@ -35,6 +39,7 @@ Common combinations:
 - **Bug fix**: debugging -> tdd (write regression test) -> git-workflow
 - **UI work**: planning -> frontend-design -> webapp-testing -> code-review
 - **New integration**: planning -> mcp-builder -> tdd -> code-review
+- **Performance audit**: frontend-perf + backend-perf -> planning -> tdd
 
 Start with **planning** for multi-step work. Use **tdd** during implementation. Finish with **code-review** before shipping.
 
@@ -46,3 +51,5 @@ Most skills include `references/` directories with supporting docs loaded on dem
 - `skills/debugging/references/` — debugging session template
 - `skills/mcp-builder/references/` — TypeScript/Python guides, best practices
 - `skills/skill-creator/references/` — spec summary, progressive disclosure pattern
+- `skills/frontend-perf/references/` — Lighthouse guide, bundle analysis
+- `skills/backend-perf/references/` — database analysis, caching patterns
