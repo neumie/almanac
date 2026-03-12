@@ -1,11 +1,11 @@
 ---
 name: branch-review
-description: Use when you want a detailed narrative review of all changes on the current branch compared to its base. Groups changes by feature and explains what each feature does in plain English with file:line references, so you can understand the branch without reading code. Use this before merging, when catching up on what was built, or when you need to brief someone on the branch.
+description: Use when you want a business-focused review of all changes on the current branch. Groups changes by feature and explains what each feature does for users and the product, with a light technical summary and manual testing steps. Use this before merging, when catching up on what was built, or when you need to brief someone on the branch.
 ---
 
 # Branch Review
 
-Produce a detailed, structured prose narrative of all changes on the current branch. The reader directed the work but did not write the code — they need to understand what was built by reading words, not code. Be thorough. Every claim should reference specific files and line numbers so the reader can click straight into their IDE.
+Produce a business-focused narrative of all changes on the current branch. The reader directed the work but did not write the code — they need to understand what was built, what it means for users, and how to quickly verify it works. Lead with business impact, not implementation details.
 
 This is a two-phase process: first discover and group changes into features, then write the narrative after the user confirms the grouping.
 
@@ -85,44 +85,46 @@ Once the user confirms the grouping, write the full review. Use this exact outpu
 ...
 ```
 
-Then, for each feature, write a detailed section with these subsections:
+Then, for each feature, write a section with these subsections:
 
 ### What it does
 
-Explain the purpose and behavior in plain English. What does this feature accomplish from the user's perspective? Avoid code jargon — describe it like you're explaining to someone who directed the work but hasn't seen the implementation.
+Lead with business impact. What does this feature mean for users or the product? What behavior changes, what rules are enforced, what outcomes are different? Write for someone who cares about the product, not the codebase. No file references in this section — pure business narrative.
 
-### Structure
+For example: "Users can now retry failed webhook deliveries instead of losing them permanently. Failed deliveries are retried up to 3 times with increasing delays, and the user sees the retry status in their dashboard."
 
-Describe what files make up this feature and what role each file plays. Reference each file as `file_path:line` so the reader can click into it. Explain how the files are organized relative to each other — which file is the entry point, which are helpers, which hold data structures.
+### How it's built
 
-### How it works
+A brief technical summary — 3-5 sentences max. Name the key files with `file_path:line` references for entry points only. Describe the high-level approach and any notable architectural choices. This is NOT a step-by-step execution trace.
 
-Trace the full execution flow step by step. This is the most important section — be thorough.
+For example: "Built as a background job triggered from `worker/retry.ts:12`. Uses the existing job queue infrastructure with a new retry policy defined in `config/retry.ts:5`. Retry state is persisted in the webhooks table via a new `retry_count` column."
 
-Walk through the path: "A request arrives at `routes/api.ts:23`, which extracts the payload and calls `services/processor.ts:45`. The processor validates the input against the schema defined in `models/task.ts:12-30`, then enqueues the job via `worker/queue.ts:67`..."
+### How to test it
 
-Every step should have a `file_path:line` reference. The reader should be able to follow the entire flow in their IDE by clicking the references in order.
+Numbered manual walkthrough steps the reader can follow to quickly verify the feature works. Written for someone who knows the product but hasn't seen the code. Cover the happy path; mention edge cases only if they're important to verify.
 
-### Key decisions
-
-Describe the patterns, data structures, and architectural choices visible in the code. What approach was taken, and what does the structure reveal about the design? For example: "Uses an event-driven pattern with a central event bus at `lib/events.ts:15` rather than direct function calls between modules."
+For example:
+1. Open the webhooks dashboard
+2. Trigger a webhook to a failing endpoint
+3. Observe the delivery marked as "Failed" with a "Retrying" badge
+4. Wait 30 seconds — the delivery should show "Retry 1 of 3"
+5. After all retries exhaust, status should show "Failed permanently"
 
 ### What changed
 
-Be specific about what was added, modified, or removed. Do not write vague descriptions like "updated the handler." Instead write: "Added a retry mechanism in `handler.ts:89-102` that catches timeout errors from the upstream API and re-enqueues the job with exponential backoff, starting at 1 second and capping at 30 seconds."
-
-Every change description must include `file_path:line` references to the exact location.
+Describe changes in terms of behavioral impact rather than code mechanics. Instead of "Added retry mechanism in handler.ts:89-102 that catches timeout errors," write "Failed webhook deliveries are now automatically retried instead of being marked as permanently failed." Include `file_path:line` references for the key locations only.
 
 If a feature connects to or depends on another feature in this branch, note the connection: "This feature provides the queue infrastructure that Feature 3 (notification dispatch) uses to send messages."
 
 ## Writing Guidelines
 
+- **Lead with business value.** Every feature section should first answer: what does this change mean for users or the product?
 - **Be purely descriptive.** Do not critique, suggest improvements, or flag concerns. The reader will make their own judgments.
-- **Be dense with references.** Every paragraph should contain `file_path:line` references. The reader should never have to guess where something lives.
+- **References at key entry points only.** Include `file_path:line` references for main entry points and important locations, not every paragraph. The reader should know where to look, not trace every line.
 - **Read the files, not just the diffs.** Explain how things work in context, not just what lines changed.
-- **Write for someone who directed the work.** They know the intent but not the implementation. Explain mechanism and structure, not motivation.
+- **Write for someone who directed the work.** They know the intent but not the implementation. Explain what was built and why it matters — the code is there for those who want depth.
 - **Features are about purpose, not location.** A feature is "added webhook retry logic," not "changes to src/webhooks/."
-- **Be detailed.** This review replaces reading the code. If you skip something, the reader won't know it exists. When in doubt, include it.
+- **Make testing easy.** The "How to test it" section should let someone verify the feature in under a minute.
 
 ## Phase 3 — Save the Review
 
