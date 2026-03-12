@@ -123,3 +123,7 @@ If a feature connects to or depends on another feature in this branch, note the 
 - **Write for someone who directed the work.** They know the intent but not the implementation. Explain mechanism and structure, not motivation.
 - **Features are about purpose, not location.** A feature is "added webhook retry logic," not "changes to src/webhooks/."
 - **Be detailed.** This review replaces reading the code. If you skip something, the reader won't know it exists. When in doubt, include it.
+
+## Phase 3 — Save the Review
+
+After writing the review to the conversation, save the complete output (from `# Branch Review:` through the end) to `.context/branch-review.md` using the Write tool. Create the `.context/` directory first if it doesn't exist. Tell the user where the file was saved.
