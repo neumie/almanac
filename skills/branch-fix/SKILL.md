@@ -1,23 +1,23 @@
 ---
 name: branch-fix
-description: Use after branch-review to fix problems you spotted in the review. Tell it what's wrong and it uses the saved review as context to locate and fix the actual code. Reads from .context/branch-review.md.
+description: Use after branch-summary to fix problems you spotted in the summary. Tell it what's wrong and it uses the saved summary as context to locate and fix the actual code. Reads from .context/branch-summary.md.
 ---
 
 # Branch Fix
 
-Fix problems on the current branch using the saved branch review as your map. The user has already read the review and knows what's wrong — your job is to locate the relevant code using the review's `file_path:line` references and make the fix.
+Fix problems on the current branch using the saved branch summary as your map. The user has already read the review and knows what's wrong — your job is to locate the relevant code using the review's `file_path:line` references and make the fix.
 
 This is a two-phase process: first load context from the review, then fix what the user tells you to fix.
 
 ## Phase 1 — Load Context
 
-### Step 1: Read the branch review
+### Step 1: Read the branch summary
 
-Read `.context/branch-review.md` using the Read tool.
+Read `.context/branch-summary.md` using the Read tool.
 
 If the file does not exist, tell the user:
 
-> "No branch review found at `.context/branch-review.md`. Run the `branch-review` skill first to generate one."
+> "No branch summary found at `.context/branch-summary.md`. Run the `branch-summary` skill first to generate one."
 
 Then stop. Do not proceed without a review.
 
@@ -36,7 +36,7 @@ This is your navigation map. You will use it to find the right code when the use
 
 Tell the user:
 
-> "I've loaded the branch review. What problems do you see?"
+> "I've loaded the branch summary. What problems do you see?"
 
 Wait for the user to describe what's wrong before proceeding.
 

@@ -19,29 +19,39 @@ description: Use when the user asks what skills are available, needs help choosi
 
 ### Test
 - **debugging** — Hypothesis-driven root cause analysis. Use when encountering errors, test failures, or unexpected behavior.
-- **webapp-testing** — Test web apps with Playwright. Use for visual inspection, interaction testing, and e2e validation.
+- **webapp-testing** — Test web apps with agent-browser. Use for visual inspection, interaction testing, and e2e validation.
 
 ### Assess
 - **frontend-perf** — Page loads, Core Web Vitals, bundle size, runtime performance. Use when assessing or optimizing web page performance.
 - **backend-perf** — Database queries, API response times, caching, resource usage. Use when assessing or optimizing server-side performance.
 
 ### Review
-- **code-review** — Structured review: correctness, security, performance, maintainability. Use when reviewing PRs or diffs.
+- **code-review** — Branch-scoped technical review: correctness, security, performance, readability, testing. Diffs against base branch and produces a structured report.
+- **branch-summary** — Business-focused narrative of branch changes. Groups by feature, explains impact, includes manual testing steps.
 - **refactoring** — Safe code restructuring without changing external behavior. Use when cleaning up or simplifying code.
 
 ### Ship
-- **git-workflow** — Clean commits, branching strategy, safe history management. Use when working with git beyond simple status checks.
+- **commit** — Analyze changes, write conventional commit messages, stage and commit safely. Use when committing code.
+- **push** — Push to remote with safety checks. Handles upstream tracking, diverged branches, force-push protection.
+- **rebase** — Rebase onto base branch with conflict handling and optional squash. Use before PRs to sync with main.
+- **create-pr** — Generate PR title and description from branch commits, push if needed, create the PR. Use when ready to merge.
+- **git-workflow** — Conventions reference: commit format, branch naming, safety rules. Referenced by other ship skills.
+
+### Fix
+- **branch-fix** — Fix problems using a saved branch summary as a map. Use after branch-summary to make targeted corrections.
 
 ## Combining Skills
 
 Common combinations:
-- **New feature**: planning -> tdd -> code-review -> git-workflow
-- **Bug fix**: debugging -> tdd (write regression test) -> git-workflow
-- **UI work**: planning -> frontend-design -> webapp-testing -> code-review
-- **New integration**: planning -> mcp-builder -> tdd -> code-review
+- **New feature**: planning -> tdd -> code-review -> commit -> push -> create-pr
+- **Bug fix**: debugging -> tdd (regression test) -> commit -> push -> create-pr
+- **UI work**: planning -> frontend-design -> webapp-testing -> code-review -> commit -> create-pr
+- **New integration**: planning -> mcp-builder -> tdd -> code-review -> commit -> create-pr
 - **Performance audit**: frontend-perf + backend-perf -> planning -> tdd
+- **Before PR**: rebase -> code-review -> push -> create-pr
+- **Branch catch-up**: branch-summary -> branch-fix -> commit
 
-Start with **planning** for multi-step work. Use **tdd** during implementation. Finish with **code-review** before shipping.
+Start with **planning** for multi-step work. Use **tdd** during implementation. Run **code-review** before shipping. Use **commit** -> **push** -> **create-pr** to ship.
 
 ## Reference Material
 

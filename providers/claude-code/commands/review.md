@@ -1,7 +1,3 @@
-Review the current changes using the code-review skill.
+Review the current branch using the code-review skill.
 
-1. Use the code-review skill for the full review workflow and checklist
-2. Run `git diff` to see staged and unstaged changes (or check the PR if a URL is provided)
-3. Go through each checklist category: correctness, security, performance, readability, testing
-4. Classify findings as blocker, suggestion, or nit
-5. Present findings organized by severity
+Use the `code-review` skill for the full workflow: diff against the base branch, review all changes for correctness, security, performance, readability, and testing, then produce a structured report saved to `.context/code-review.md`.

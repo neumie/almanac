@@ -75,6 +75,14 @@ check "cmd/help.sh"
 check "cmd/sync.sh"
 check "install.sh"
 
+# New skills
+check "skills/branch-summary/SKILL.md"
+check "skills/commit/SKILL.md"
+check "skills/push/SKILL.md"
+check "skills/rebase/SKILL.md"
+check "skills/create-pr/SKILL.md"
+check "skills/branch-fix/SKILL.md"
+
 # Claude Code adapter
 check "providers/claude-code/.claude-plugin/plugin.json"
 check "providers/claude-code/agents/.gitkeep"

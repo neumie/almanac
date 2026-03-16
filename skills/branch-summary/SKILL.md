@@ -1,9 +1,9 @@
 ---
-name: branch-review
-description: Use when you want a business-focused review of all changes on the current branch. Groups changes by feature and explains what each feature does for users and the product, with a light technical summary and manual testing steps. Use this before merging, when catching up on what was built, or when you need to brief someone on the branch.
+name: branch-summary
+description: Use when you want a business-focused summary of all changes on the current branch. Groups changes by feature and explains what each feature does for users and the product, with a light technical summary and manual testing steps. Use this before merging, when catching up on what was built, or when you need to brief someone on the branch. This is NOT a technical code review — use code-review for that.
 ---
 
-# Branch Review
+# Branch Summary
 
 Produce a business-focused narrative of all changes on the current branch. The reader directed the work but did not write the code — they need to understand what was built, what it means for users, and how to quickly verify it works. Lead with business impact, not implementation details.
 
@@ -74,7 +74,7 @@ Wait for confirmation before proceeding to Phase 2.
 Once the user confirms the grouping, write the full review. Use this exact output structure:
 
 ```
-# Branch Review: <branch-name> vs <base-branch>
+# Branch Summary: <branch-name> vs <base-branch>
 
 **Commits:** N | **Files changed:** N | **Insertions:** +N | **Deletions:** -N
 
@@ -126,6 +126,6 @@ If a feature connects to or depends on another feature in this branch, note the 
 - **Features are about purpose, not location.** A feature is "added webhook retry logic," not "changes to src/webhooks/."
 - **Make testing easy.** The "How to test it" section should let someone verify the feature in under a minute.
 
-## Phase 3 — Save the Review
+## Phase 3 — Save the Summary
 
-After writing the review to the conversation, save the complete output (from `# Branch Review:` through the end) to `.context/branch-review.md` using the Write tool. Create the `.context/` directory first if it doesn't exist. Tell the user where the file was saved.
+After writing the summary to the conversation, save the complete output (from `# Branch Summary:` through the end) to `.context/branch-summary.md` using the Write tool. Create the `.context/` directory first if it doesn't exist. Tell the user where the file was saved.
