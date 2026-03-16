@@ -1,6 +1,6 @@
 ---
 name: branch-fix
-description: Use after branch-summary to fix problems you spotted in the summary. Tell it what's wrong and it uses the saved summary as context to locate and fix the actual code. Reads from .context/branch-summary.md.
+description: Use after branch-summary to fix problems you spotted in the summary. Tell it what's wrong and it uses the saved summary as context to locate and fix the actual code. Reads from .mine/context/branch-summary.md.
 ---
 
 # Branch Fix
@@ -13,11 +13,11 @@ This is a two-phase process: first load context from the review, then fix what t
 
 ### Step 1: Read the branch summary
 
-Read `.context/branch-summary.md` using the Read tool.
+Read `.mine/context/branch-summary.md` using the Read tool.
 
 If the file does not exist, tell the user:
 
-> "No branch summary found at `.context/branch-summary.md`. Run the `branch-summary` skill first to generate one."
+> "No branch summary found at `.mine/context/branch-summary.md`. Run the `branch-summary` skill first to generate one."
 
 Then stop. Do not proceed without a review.
 

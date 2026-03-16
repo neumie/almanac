@@ -117,4 +117,4 @@ Each finding includes:
 
 ## Phase 4 — Save
 
-Save the report to `.context/code-review.md` using the Write tool. Create the `.context/` directory first if it doesn't exist. Tell the user where the file was saved.
+Save the report to `.mine/context/code-review.md` using the Write tool. Create the `.mine/context/` directory first if it doesn't exist. Tell the user where the file was saved.

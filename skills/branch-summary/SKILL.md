@@ -128,4 +128,4 @@ If a feature connects to or depends on another feature in this branch, note the 
 
 ## Phase 3 — Save the Summary
 
-After writing the summary to the conversation, save the complete output (from `# Branch Summary:` through the end) to `.context/branch-summary.md` using the Write tool. Create the `.context/` directory first if it doesn't exist. Tell the user where the file was saved.
+After writing the summary to the conversation, save the complete output (from `# Branch Summary:` through the end) to `.mine/context/branch-summary.md` using the Write tool. Create the `.mine/context/` directory first if it doesn't exist. Tell the user where the file was saved.
