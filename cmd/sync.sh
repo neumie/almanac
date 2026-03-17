@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # sync.sh — Check adapted skills for upstream changes
 
+source "$ALMANAC_HOME/lib/core.sh"
 source "$ALMANAC_HOME/lib/almanac-core.sh"
 
 SHOW_DIFF=false
@@ -51,16 +52,16 @@ for skill_dir in "$ALMANAC_HOME"/skills/*/; do
   current_sha=$(_fetch_sha "repos/$repo/contents/skills/$skill_path/SKILL.md")
 
   if [ -z "$current_sha" ]; then
-    echo "  ${_RED}✗${_RESET} $skill_name: failed to fetch upstream"
+    echo -e "  ${_RED}✗${_RESET} $skill_name: failed to fetch upstream"
     errors=$((errors + 1))
     continue
   fi
 
   if [ "$current_sha" = "$upstream_sha" ]; then
-    echo "  ${_GREEN}✓${_RESET} $skill_name: up to date"
+    echo -e "  ${_GREEN}✓${_RESET} $skill_name: up to date"
     up_to_date=$((up_to_date + 1))
   else
-    echo "  ${_YELLOW}⚠${_RESET} $skill_name: upstream changed (adapted $adapted_date)"
+    echo -e "  ${_YELLOW}⚠${_RESET} $skill_name: upstream changed (adapted $adapted_date)"
     changed=$((changed + 1))
 
     if [ "$SHOW_DIFF" = true ]; then
