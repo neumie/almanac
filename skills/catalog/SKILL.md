@@ -16,6 +16,7 @@ description: Use when the user asks what skills are available, needs help choosi
 - **frontend-design** — Distinctive production-grade web interfaces. Use when creating or improving any web UI.
 - **mcp-builder** — Build MCP servers in TypeScript or Python. Use when integrating external APIs as tools for LLMs.
 - **skill-creator** — Create and validate skills against the Agent Skills Open Standard. Use when building new skills.
+- **canvas** — Interactive browser-based visual canvas for structured agent-user communication. Use for planning, reviews, decisions, and explanations via annotatable JSX documents. Requires `agent-canvas` + Bun.
 
 ### Test
 - **debugging** — Hypothesis-driven root cause analysis. Use when encountering errors, test failures, or unexpected behavior.

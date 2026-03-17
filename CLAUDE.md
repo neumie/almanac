@@ -36,7 +36,7 @@ Optional directories: `scripts/`, `references/`, `assets/`
 
 ## Adapted Skills
 
-Three skills track upstream from `anthropics/skills`: `frontend-design`, `mcp-builder`, `skill-creator`. Check for updates with `almanac sync`.
+Four skills track upstream sources. Three from `anthropics/skills`: `frontend-design`, `mcp-builder`, `skill-creator`. One from `contember/agent-canvas`: `canvas`. Check for updates with `almanac sync`.
 
 ## Testing
 
