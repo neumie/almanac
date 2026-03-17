@@ -1,6 +1,6 @@
 ---
 name: commit
-description: Use when committing code changes. Analyzes staged and unstaged changes, writes a conventional commit message, stages specific files intelligently, and executes the commit. Use this whenever the user says commit, wants to save their work, or is done with a change.
+description: Use when committing code changes. Analyzes changes, writes a conventional commit message, and commits immediately without asking for confirmation. Use this whenever the user says commit, wants to save their work, or is done with a change.
 ---
 
 # Commit
@@ -47,18 +47,7 @@ Read `skills/git-workflow/references/commit-format.md` for the format reference.
 4. Write the body: explain **why**, not **what** (the diff shows what)
 5. Add footer if applicable: `Fixes #123`, `BREAKING CHANGE:`, etc.
 
-## Phase 2 — Confirm
-
-Present to the user:
-
-- **Files to stage** — list each by path
-- **Files to exclude** — list with reason (secret, unrelated, binary)
-- **Proposed commit message** — full format: `type(scope): subject` + body
-- Ask: **"Ready to commit? You can adjust the message, add/remove files, or cancel."**
-
-Wait for confirmation before proceeding.
-
-## Phase 3 — Execute
+## Phase 2 — Execute
 
 ### Step 1: Stage files
 
@@ -97,6 +86,6 @@ Always create a **new** commit. Never amend unless the user explicitly requested
 
 - **Nothing to commit:** Report and stop
 - **Pre-commit hook failure:** The commit did NOT happen. Fix the issue, re-stage, and create a **NEW** commit. Never use `--amend` after a hook failure — it would modify the previous commit.
-- **Mixed staged + unstaged changes:** Show both clearly. Ask the user which to include.
+- **Mixed staged + unstaged changes:** Include all changes (staged + unstaged) unless something looks unrelated or dangerous.
 - **Merge conflict markers in files:** Warn and refuse to commit those files.
-- **Multiple logical changes:** Advise splitting. Offer to commit a subset.
+- **Multiple logical changes:** Use best judgment to commit everything as one. Only split if the changes are clearly unrelated (e.g. a typo fix alongside a new feature).
