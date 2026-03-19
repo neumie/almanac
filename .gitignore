@@ -7,3 +7,4 @@ dist/
 build/
 .logs/
 providers/claude-code/skills
+.claude/settings.local.json
