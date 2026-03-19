@@ -35,19 +35,7 @@ git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null
 - **Diverged branch:** `git status` shows "diverged" — warn and suggest rebasing first (use the rebase skill).
 - **Force-push requested:** Warn explicitly that this rewrites remote history. If target is main/master, **REFUSE**. For other branches, proceed only with `--force-with-lease` (never bare `--force`).
 
-## Phase 2 — Confirm
-
-Present to the user:
-
-- **Branch:** `<branch-name>`
-- **Remote target:** `origin/<branch-name>`
-- **Commits to push:** count and list (oneline)
-- **Warnings:** diverged, dirty tree, force-push implications
-- Ask: **"Push these N commits to origin/`<branch>`?"**
-
-Wait for confirmation.
-
-## Phase 3 — Execute
+## Phase 2 — Execute
 
 ### Step 1: Push
 
