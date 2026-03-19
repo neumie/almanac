@@ -44,10 +44,17 @@ git branch -m <new-name>
 git for-each-ref --format='%(upstream:short)' refs/heads/<new-name>
 ```
 
-If a remote tracking branch exists, automatically update it:
+If a remote tracking branch exists, rename the remote branch using GitHub's API (this preserves any open PRs):
 
 ```bash
-git push origin :<old-name> && git push -u origin <new-name>
+gh api -X POST repos/{owner}/{repo}/branches/<old-name>/rename -f new_name="<new-name>"
+git branch -u origin/<new-name>
+```
+
+If the `gh` command fails (e.g. not a GitHub repo), fall back to:
+
+```bash
+git push -u origin <new-name> && git push origin :<old-name>
 ```
 
 ## Edge cases
