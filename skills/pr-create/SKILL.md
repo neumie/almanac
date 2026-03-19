@@ -106,6 +106,7 @@ If the user requested a draft: add `--draft` flag.
 
 - **PR already exists:** Show the URL. Ask if the user wants to update the title/body with `gh pr edit`.
 - **No commits on branch** (identical to base): Report and stop.
+- **Branch has a generic name** (e.g. `temp`, `wip`, `test`, or auto-generated names): Suggest using the `branch-name` skill to rename it before creating the PR.
 - **Not a GitHub repo:** Report error — this skill requires GitHub and the `gh` CLI.
 - **gh CLI not installed:** Report error with install instructions (`brew install gh` or see https://cli.github.com).
 - **Draft PR:** If user says "draft", add `--draft` flag to `gh pr create`.
