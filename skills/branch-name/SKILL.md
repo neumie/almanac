@@ -38,11 +38,16 @@ Use whatever is available. If on main/master with uncommitted changes, use the d
 git branch -m <new-name>
 ```
 
-5. If the branch had a remote tracking branch, inform the user they'll need to update it:
+5. After renaming, check if the old branch had a remote tracking branch:
 
+```bash
+git for-each-ref --format='%(upstream:short)' refs/heads/<new-name>
 ```
-Note: remote tracking branch still points to the old name.
-To update: git push origin :<old-name> && git push -u origin <new-name>
+
+If a remote tracking branch exists, automatically update it:
+
+```bash
+git push origin :<old-name> && git push -u origin <new-name>
 ```
 
 ## Edge cases
