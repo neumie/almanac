@@ -1,5 +1,5 @@
 ---
-name: create-pr
+name: pr-create
 description: Use when creating a GitHub pull request. Pushes the branch if needed, generates a title and description from branch commits, and creates the PR with gh CLI. Use this whenever the user says create PR, open PR, submit PR, or is ready to merge their work.
 compatibility: Requires gh CLI (GitHub CLI) for PR creation.
 ---

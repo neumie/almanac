@@ -27,22 +27,26 @@ compatibility: Requires X          # Optional, max 500 chars
 
 Optional directories: `scripts/`, `references/`, `assets/`
 
+## Naming Convention
+
+Skill names use `noun-verb` order (e.g. `pr-create`, `ci-fix`, `branch-summary`) so related skills group together alphabetically and are easier to search by topic.
+
 ## Adding a Skill
 
 1. Create `skills/<name>/SKILL.md` with frontmatter
-2. Name must be lowercase alphanumeric + hyphens, no `--`, no leading/trailing `-`
+2. Name must be lowercase alphanumeric + hyphens, no `--`, no leading/trailing `-`, using `noun-verb` order
 3. Description should start with "Use when..." for clear trigger conditions
 4. Run `bash tests/test-skills.sh` to validate
 
 ## Adapted Skills
 
-Four skills track upstream sources. Three from `anthropics/skills`: `frontend-design`, `mcp-builder`, `skill-creator`. One from `contember/agent-canvas`: `canvas`. Check for updates with `almanac sync`.
+One skill tracks an upstream source: `canvas` from `contember/agent-canvas`. Check for updates with `almanac sync`.
 
 ## Testing
 
 ```bash
 bash tests/test-structure.sh   # All files and directories
-bash tests/test-skills.sh      # Validates all 13 skills + 6 negative tests
+bash tests/test-skills.sh      # Validates all skills + negative tests
 ```
 
 ## CLI
