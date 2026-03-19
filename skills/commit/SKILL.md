@@ -5,87 +5,42 @@ description: Use when committing code changes. Analyzes changes, writes a conven
 
 # Commit
 
-Analyze changes, write a good message, commit safely.
+Commit staged and unstaged changes following the rules below.
 
-## Phase 1 — Analyze
+## Commit message format
 
-### Step 1: Survey the working tree
+Use semantic commit messages matching the project convention:
 
-Run these commands:
-
-- `git status` (never use `-uall`)
-- `git diff --staged --stat` and `git diff --stat` to understand scope
-- `git diff --staged` and `git diff` for full content
-- `git log --oneline -5` to see recent commit style
-
-If nothing is staged and nothing is modified, report "Nothing to commit" and stop.
-
-### Step 2: Read changed files
-
-For each changed file, read the full file (not just the diff) to understand context. Determine:
-
-- What logical change this represents
-- Whether this is one atomic change or multiple — if multiple, advise the user to split into separate commits
-
-### Step 3: Safety checks
-
-Scan for dangerous patterns before proceeding:
-
-- **Secrets:** `.env` files, API keys, tokens, passwords, `credentials.json`, private keys, connection strings with embedded passwords
-- **Large binaries:** Files over 1MB (images, compiled assets, archives)
-- **Should be gitignored:** `node_modules/`, `.DS_Store`, `__pycache__/`, `build/`, `dist/`, `.next/`
-
-If any secrets are found: **STOP.** List the files. Do NOT proceed until the user explicitly confirms exclusion.
-
-### Step 4: Draft the commit message
-
-Read `skills/git-workflow/references/commit-format.md` for the format reference.
-
-1. Classify the change type: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`, `ci`
-2. Identify scope from the primary area affected
-3. Write the subject line: imperative mood, under 72 chars, no trailing period
-4. Write the body: explain **why**, not **what** (the diff shows what)
-5. Add footer if applicable: `Fixes #123`, `BREAKING CHANGE:`, etc.
-
-## Phase 2 — Execute
-
-### Step 1: Stage files
-
-Stage each file individually by name:
-
-```bash
-git add path/to/file
+```
+<type>(<scope>): <short summary in imperative mood>
 ```
 
-**NEVER** use `git add -A` or `git add .`
+Types: `feat`, `fix`, `refactor`, `perf`, `chore`, `ci`, `docs`, `test`
 
-### Step 2: Commit
+- Summary is lowercase, no period at the end
+- Imperative mood ("add X", not "added X" or "adds X")
+- Keep the first line under 72 characters
+- Add a blank line + body only if the "why" isn't obvious from the summary
 
-Use heredoc format to preserve message formatting:
+## Splitting into logical commits
 
-```bash
-git commit -m "$(cat <<'EOF'
-type(scope): subject
+- If you have context about what work was done (e.g. you just finished implementing something), commit **only** that work. Don't bundle unrelated changes — leave other unstaged/untracked changes alone.
+- You MAY split your work into multiple logical commits if it makes sense (e.g. a refactor commit + a feature commit, or separating test changes from implementation).
+- If you have no prior context, read `git diff` and `git diff --cached` to understand all changes, then group them into reasonable logical commits by topic/purpose. If some changes appear unrelated to each other and you can't determine what belongs together, ask before committing.
+- Each commit should be self-contained and buildable on its own when possible.
 
-Body explaining why.
+## Procedure
 
-Footer
-EOF
-)"
-```
+1. Run `git status` and `git diff` (staged + unstaged) to see all changes.
+2. Review the changes and decide how to split them into commits (if needed).
+3. For each commit:
+   - Stage the relevant files with `git add <specific files>` (never `git add -A` or `git add .`)
+   - Create the commit
+4. Run `git status` after all commits to verify nothing was missed.
 
-Always create a **new** commit. Never amend unless the user explicitly requested it.
+## Edge cases
 
-### Step 3: Verify
-
-- Run `git status` to confirm the working tree state
-- Run `git log --oneline -1` to show the result
-- Report: **"Committed `<hash>`: `<subject>`"**
-
-## Edge Cases
-
-- **Nothing to commit:** Report and stop
-- **Pre-commit hook failure:** The commit did NOT happen. Fix the issue, re-stage, and create a **NEW** commit. Never use `--amend` after a hook failure — it would modify the previous commit.
-- **Mixed staged + unstaged changes:** Include all changes (staged + unstaged) unless something looks unrelated or dangerous.
-- **Merge conflict markers in files:** Warn and refuse to commit those files.
-- **Multiple logical changes:** Use best judgment to commit everything as one. Only split if the changes are clearly unrelated (e.g. a typo fix alongside a new feature).
+- **Nothing to commit:** Report and stop.
+- **Pre-commit hook failure:** The commit did NOT happen. Fix the issue, re-stage, and create a **new** commit. Never use `--amend` after a hook failure — it would modify the previous commit.
+- **Secrets / dangerous files:** If you spot `.env` files, API keys, tokens, credentials, or private keys, **stop** and warn before committing.
+- **Merge conflict markers:** Warn and refuse to commit those files.
