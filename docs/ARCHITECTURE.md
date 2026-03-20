@@ -23,7 +23,7 @@ Full local plugin:
 - `.claude-plugin/plugin.json` — plugin manifest
 - `skills/` — symlink to shared `../../skills`
 - `hooks/hooks.json` — lifecycle hooks (SessionStart, Stop)
-- `agents/`, `commands/` — extensible directories
+- `agents/` — extensible directory
 
 ### `providers/{opencode,cursor,codex}/`
 Setup stubs with symlink instructions for each provider's skill discovery path.
