@@ -49,7 +49,7 @@ for skill_dir in "$ALMANAC_HOME"/skills/*/; do
   skill_path=$(echo "$upstream" | cut -d'/' -f3-)
 
   # Get current SHA from GitHub API
-  current_sha=$(_fetch_sha "repos/$repo/contents/skills/$skill_path/SKILL.md")
+  current_sha=$(_fetch_sha "repos/$repo/contents/$skill_path/SKILL.md")
 
   if [ -z "$current_sha" ]; then
     echo -e "  ${_RED}✗${_RESET} $skill_name: failed to fetch upstream"
@@ -66,7 +66,7 @@ for skill_dir in "$ALMANAC_HOME"/skills/*/; do
 
     if [ "$SHOW_DIFF" = true ]; then
       echo ""
-      echo "    Upstream: https://github.com/$repo/blob/main/skills/$skill_path/SKILL.md"
+      echo "    Upstream: https://github.com/$repo/blob/main/$skill_path/SKILL.md"
       echo "    Local SHA:    ${upstream_sha:0:12}"
       echo "    Upstream SHA: ${current_sha:0:12}"
       echo ""
