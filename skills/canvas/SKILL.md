@@ -8,7 +8,7 @@ description: >
   Supports planning, architecture reviews, code reviews, discovery interviews,
   implementation summaries, proposals, decision documents, and explanations.
 metadata:
-  upstream: contember/agent-canvas/canvas
+  upstream: contember/agent-canvas/skills/canvas
   upstream-sha: 255f5758b8dffcd6a6ee247d36552f3631bc68ec
   adapted-date: "2026-03-17"
 compatibility: Requires agent-canvas npm package and Bun runtime. Install with bunx agent-canvas install global.
