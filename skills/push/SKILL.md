@@ -43,10 +43,48 @@ git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null
 - If no tracking: `git push -u origin <branch-name>`
 - If user confirmed force (non-main): `git push --force-with-lease`
 
-### Step 2: Verify
+### Step 2: Update PR description (if PR exists)
+
+After pushing, check if there's an open PR for this branch:
+
+```bash
+gh pr view --json number,title,url 2>/dev/null
+```
+
+If a PR exists:
+
+1. Gather the full branch content against the base:
+   - `git log origin/<base>..HEAD --oneline` — all commits
+   - `git diff origin/<base>..HEAD --stat` — files changed summary
+   - `git diff origin/<base>..HEAD` — full diff for understanding
+   - Read changed files for context
+2. Generate an updated PR body using the same format as the `pr-create` skill:
+   ```markdown
+   ## Summary
+   <1-3 bullet points describing what this PR does and why>
+
+   ## Changes
+   <grouped by logical feature, not by file>
+
+   ## Test plan
+   <bulleted checklist of how to verify the changes work>
+   ```
+3. Update the PR:
+   ```bash
+   gh pr edit <number> --body "$(cat <<'EOF'
+   ...
+   EOF
+   )"
+   ```
+4. Also update the PR title if the scope of the branch has changed significantly.
+
+If no PR exists, skip this step.
+
+### Step 3: Verify
 
 - Confirm push succeeded
 - Report: **"Pushed N commits to origin/`<branch>`"**
+- If PR was updated, report: **"Updated PR #N description"**
 
 ## Edge Cases
 
