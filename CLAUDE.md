@@ -40,7 +40,7 @@ Skill names use `noun-verb` order (e.g. `pr-create`, `ci-fix`, `branch-summary`)
 
 ## Adapted Skills
 
-One skill tracks an upstream source: `canvas` from `contember/agent-canvas`. Check for updates with `almanac sync`.
+Three skills track upstream sources: `canvas` (contember/agent-canvas), `interview-me` and `ubiquitous-language` (mattpocock/skills). Check for updates with `almanac sync`.
 
 ## Testing
 
@@ -48,6 +48,10 @@ One skill tracks an upstream source: `canvas` from `contember/agent-canvas`. Che
 bash tests/test-structure.sh   # All files and directories
 bash tests/test-skills.sh      # Validates all skills + negative tests
 ```
+
+## Keeping Documentation in Sync
+
+Skill metadata is referenced in multiple places: `README.md` (skills table, structure diagram, sync example), `CLAUDE.md` (adapted skills count), `docs/ARCHITECTURE.md`, and `docs/CONTRIBUTING.md`. When adding, removing, or renaming skills, update all of these. `test-structure.sh` dynamically discovers skills so it stays current automatically.
 
 ## CLI
 

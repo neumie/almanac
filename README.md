@@ -30,17 +30,15 @@ ln -s ~/.almanac/skills ~/.agents/skills/almanac
 
 | Skill | What it does |
 |-------|-------------|
-| **tdd** | Red-green-refactor cycle, vertical slice approach, behavior-focused testing |
-| **debugging** | Hypothesis-driven root cause analysis and regression prevention |
-| **code-review** | Structured review: correctness, security, performance, maintainability |
-| **planning** | Architecture decisions, task breakdown, trade-off analysis |
-| **frontend-design** | Distinctive production-grade web interfaces, anti-generic-AI aesthetics |
-| **mcp-builder** | Build MCP servers with proper tool design in TypeScript or Python |
-| **webapp-testing** | Test web apps with Playwright — visual inspection, e2e validation |
-| **skill-creator** | Create and validate skills against the Agent Skills Open Standard |
-| **git-workflow** | Clean commits, branching strategy, safe history management |
-| **refactoring** | Safe code restructuring: identify smells, apply patterns, preserve behavior |
-| **catalog** | Lists all skills, helps choose workflows, explains how to combine skills |
+| **branch-name** | Generate descriptive branch names from branch contents |
+| **canvas** | Interactive visual canvas for structured communication (adapted from contember/agent-canvas) |
+| **ci-fix** | Fix failing GitHub Actions by reading logs and patching code |
+| **commit** | Analyze changes, write conventional commit messages, commit immediately |
+| **interview-me** | Stress-test plans and designs through relentless questioning (adapted from mattpocock/skills) |
+| **pr-create** | Create GitHub PRs with auto-generated titles and descriptions |
+| **push** | Push branch to remote safely with tracking and divergence checks |
+| **rebase** | Rebase onto base branch with conflict handling |
+| **ubiquitous-language** | Extract and formalize domain terminology into a DDD-style glossary (adapted from mattpocock/skills) |
 
 ## CLI
 
@@ -55,13 +53,13 @@ almanac help                 Show help
 
 ### Upstream Sync
 
-Four skills are adapted from [anthropics/skills](https://github.com/anthropics/skills) and track their upstream source. Run `almanac sync` to check for updates:
+Three skills are adapted from upstream sources and track their origin. Run `almanac sync` to check for updates:
 
 ```
 $ almanac sync
-✓ frontend-design: up to date
-✓ mcp-builder: up to date
-⚠ skill-creator: upstream changed (adapted 2026-03-09)
+✓ canvas: up to date
+✓ interview-me: up to date
+⚠ ubiquitous-language: upstream changed (adapted 2026-03-19)
 ```
 
 ## Structure
@@ -69,17 +67,15 @@ $ almanac sync
 ```
 almanac/
 ├── skills/              # Agent Skills Open Standard (SKILL.md)
-│   ├── tdd/
-│   ├── debugging/       # + references/
-│   ├── code-review/
-│   ├── planning/        # + references/
-│   ├── frontend-design/
-│   ├── mcp-builder/     # + references/
-│   ├── webapp-testing/  # + scripts/
-│   ├── skill-creator/   # + references/
-│   ├── git-workflow/    # + references/
-│   ├── refactoring/
-│   └── catalog/
+│   ├── branch-name/
+│   ├── canvas/          # + flows.md, components.md
+│   ├── ci-fix/
+│   ├── commit/
+│   ├── interview-me/
+│   ├── pr-create/
+│   ├── push/
+│   ├── rebase/
+│   └── ubiquitous-language/
 ├── providers/           # Provider-specific adapters
 │   ├── claude-code/     # Full plugin (hooks, skills symlink)
 │   ├── opencode/
