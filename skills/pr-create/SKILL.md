@@ -58,21 +58,7 @@ Store the result as `<base>`.
 <bulleted checklist of how to verify the changes work>
 ```
 
-## Phase 2 — Confirm
-
-Present to the user:
-
-- **Target:** `<base>` branch
-- **Title:** the generated title
-- **Body:** full rendered description
-- **Commits included:** count and list
-- **Push needed:** whether the branch needs to be pushed first
-- **Existing PR:** if one exists, offer to update instead of creating
-- Ask: **"Create this PR?"**
-
-Wait for confirmation. The user can adjust the title, body, or add `--draft`.
-
-## Phase 3 — Execute
+## Phase 2 — Execute
 
 ### Step 1: Push if needed
 
