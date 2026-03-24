@@ -38,6 +38,7 @@ ln -s ~/.almanac/skills ~/.agents/skills/almanac
 | **pr-create** | Create GitHub PRs with auto-generated titles and descriptions |
 | **push** | Push branch to remote safely with tracking and divergence checks |
 | **rebase** | Rebase onto base branch with conflict handling |
+| **ship** | Name branch, commit, push, and create PR in one step |
 | **ubiquitous-language** | Extract and formalize domain terminology into a DDD-style glossary (adapted from mattpocock/skills) |
 
 ## CLI
@@ -75,6 +76,7 @@ almanac/
 │   ├── pr-create/
 │   ├── push/
 │   ├── rebase/
+│   ├── ship/
 │   └── ubiquitous-language/
 ├── providers/           # Provider-specific adapters
 │   ├── claude-code/     # Full plugin (hooks, skills symlink)
