@@ -36,6 +36,7 @@ ln -s ~/.almanac/skills ~/.agents/skills/almanac
 | **commit** | Analyze changes, write conventional commit messages, commit immediately |
 | **interview-me** | Stress-test plans and designs through relentless questioning (adapted from mattpocock/skills) |
 | **pr-create** | Create GitHub PRs with auto-generated titles and descriptions |
+| **pr-watch** | Watch PR CI checks, auto-fix failures, report when ready to merge |
 | **push** | Push branch to remote safely with tracking and divergence checks |
 | **rebase** | Rebase onto base branch with conflict handling |
 | **ship** | Name branch, commit, push, and create PR in one step |
@@ -74,6 +75,7 @@ almanac/
 │   ├── commit/
 │   ├── interview-me/
 │   ├── pr-create/
+│   ├── pr-watch/
 │   ├── push/
 │   ├── rebase/
 │   ├── ship/
