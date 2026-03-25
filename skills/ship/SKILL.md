@@ -185,3 +185,5 @@ Shipped:
 ```
 
 Replace any skipped steps with their skip message (e.g., `Commit: nothing to commit (skipped)`).
+
+After the summary, ask: **"Watch CI?"** If the user says yes, invoke the `pr-watch` skill on the PR.
