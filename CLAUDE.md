@@ -40,7 +40,7 @@ Skill names use `noun-verb` order (e.g. `pr-create`, `ci-fix`, `branch-summary`)
 
 ## Adapted Skills
 
-Three skills track upstream sources: `canvas` (contember/agent-canvas), `interview-me` and `ubiquitous-language` (mattpocock/skills). Check for updates with `almanac sync`.
+Four skills track upstream sources: `canvas` (contember/agent-canvas), `interview-me`, `tdd`, and `ubiquitous-language` (mattpocock/skills). Check for updates with `almanac sync`.
 
 ## Testing
 

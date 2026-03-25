@@ -32,13 +32,13 @@ Step-by-step instructions for the agent...
 
 ## Adapting an Upstream Skill
 
-When adapting from [anthropics/skills](https://github.com/anthropics/skills):
+When adapting from upstream sources (e.g. [mattpocock/skills](https://github.com/mattpocock/skills), [contember/agent-canvas](https://github.com/contember/agent-canvas)):
 
 1. Add upstream tracking metadata:
 ```yaml
 metadata:
-  upstream: anthropics/skills/skill-name
-  upstream-sha: <SHA from gh api repos/anthropics/skills/contents/skills/<name>/SKILL.md --jq '.sha'>
+  upstream: mattpocock/skills/skill-name
+  upstream-sha: <SHA from gh api repos/mattpocock/skills/contents/skill-name/SKILL.md --jq '.sha'>
   adapted-date: "YYYY-MM-DD"
 ```
 

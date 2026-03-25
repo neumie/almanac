@@ -39,6 +39,8 @@ ln -s ~/.almanac/skills ~/.agents/skills/almanac
 | **push** | Push branch to remote safely with tracking and divergence checks |
 | **rebase** | Rebase onto base branch with conflict handling |
 | **ship** | Name branch, commit, push, and create PR in one step |
+| **tdd** | Red-green-refactor TDD with vertical slices (adapted from mattpocock/skills) |
+| **test-write** | Backfill behavior-focused regression tests on existing code |
 | **ubiquitous-language** | Extract and formalize domain terminology into a DDD-style glossary (adapted from mattpocock/skills) |
 
 ## CLI
@@ -54,12 +56,13 @@ almanac help                 Show help
 
 ### Upstream Sync
 
-Three skills are adapted from upstream sources and track their origin. Run `almanac sync` to check for updates:
+Four skills are adapted from upstream sources and track their origin. Run `almanac sync` to check for updates:
 
 ```
 $ almanac sync
 ✓ canvas: up to date
 ✓ interview-me: up to date
+✓ tdd: up to date
 ⚠ ubiquitous-language: upstream changed (adapted 2026-03-19)
 ```
 
@@ -77,6 +80,8 @@ almanac/
 │   ├── push/
 │   ├── rebase/
 │   ├── ship/
+│   ├── tdd/             # + references/
+│   ├── test-write/
 │   └── ubiquitous-language/
 ├── providers/           # Provider-specific adapters
 │   ├── claude-code/     # Full plugin (hooks, skills symlink)
