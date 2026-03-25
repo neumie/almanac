@@ -92,11 +92,11 @@ Note for the summary: `Commit: "<message>"` (or multiple lines if split into mul
 
 If there are no unpushed commits (already up to date), skip the push itself but still check for an open PR to update its description.
 
-### Update PR description (if PR exists)
+### Update PR description (if open PR exists)
 
-After pushing, check: `gh pr view --json number,title,url 2>/dev/null`
+After pushing, check: `gh pr view --json number,title,url,state 2>/dev/null`
 
-If a PR exists:
+If an **open** PR exists (state is `OPEN` — ignore `MERGED` or `CLOSED` PRs):
 
 1. Gather the full branch diff against base:
    - `git log origin/<base>..HEAD --oneline`
@@ -127,7 +127,11 @@ Try `origin/main`, then `origin/master`.
 
 ### Skip condition
 
-If a PR already exists for this branch, skip creation. Record: `PR: #N already exists — <url>`.
+Check: `gh pr view --json number,url,state 2>/dev/null`
+
+If an **open** PR already exists for this branch (state is `OPEN`), skip creation. Record: `PR: #N already exists — <url>`.
+
+If the PR is `MERGED` or `CLOSED`, treat it as if no PR exists — proceed to create a new one.
 
 ### Generate PR content
 
