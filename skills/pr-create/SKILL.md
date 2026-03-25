@@ -36,7 +36,7 @@ Store the result as `<base>`.
 
 - Is the branch pushed? `git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null`
 - Are all commits pushed? `git log @{u}..HEAD --oneline 2>/dev/null`
-- Does a PR already exist? `gh pr view 2>/dev/null`
+- Does an **open** PR already exist? `gh pr view --json state 2>/dev/null` (only `OPEN` counts — `MERGED`/`CLOSED` means create a new one)
 
 ### Step 5: Generate PR content
 
@@ -90,7 +90,8 @@ If the user requested a draft: add `--draft` flag.
 
 ## Edge Cases
 
-- **PR already exists:** Show the URL. Ask if the user wants to update the title/body with `gh pr edit`.
+- **Open PR already exists:** Show the URL. Ask if the user wants to update the title/body with `gh pr edit`.
+- **Merged/closed PR exists for branch:** Treat as no PR — create a new one.
 - **No commits on branch** (identical to base): Report and stop.
 - **Branch has a generic name** (e.g. `temp`, `wip`, `test`, or auto-generated names): Suggest using the `branch-name` skill to rename it before creating the PR.
 - **Not a GitHub repo:** Report error — this skill requires GitHub and the `gh` CLI.

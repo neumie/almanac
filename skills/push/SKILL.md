@@ -43,15 +43,15 @@ git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null
 - If no tracking: `git push -u origin <branch-name>`
 - If user confirmed force (non-main): `git push --force-with-lease`
 
-### Step 2: Update PR description (if PR exists)
+### Step 2: Update PR description (if open PR exists)
 
 After pushing, check if there's an open PR for this branch:
 
 ```bash
-gh pr view --json number,title,url 2>/dev/null
+gh pr view --json number,title,url,state 2>/dev/null
 ```
 
-If a PR exists:
+If an **open** PR exists (state is `OPEN` — ignore `MERGED` or `CLOSED` PRs):
 
 1. Gather the full branch content against the base:
    - `git log origin/<base>..HEAD --oneline` — all commits
