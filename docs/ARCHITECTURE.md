@@ -12,7 +12,7 @@ Skills use progressive disclosure:
 2. **Instructions** (<5000 tokens) — SKILL.md body, loaded on activation
 3. **Resources** (on demand) — scripts/, references/, assets/
 
-Some skills are adapted from [anthropics/skills](https://github.com/anthropics/skills) and track their upstream via `metadata.upstream-sha` in frontmatter. Run `almanac sync` to check for updates.
+Some skills are adapted from upstream sources ([mattpocock/skills](https://github.com/mattpocock/skills), [contember/agent-canvas](https://github.com/contember/agent-canvas)) and track their upstream via `metadata.upstream-sha` in frontmatter. Run `almanac sync` to check for updates.
 
 Reference material (templates, patterns, guardrails) lives in `skills/*/references/` directories, loaded on demand by the skills that use them.
 
