@@ -39,6 +39,7 @@ ln -s ~/.almanac/skills ~/.agents/skills/almanac
 | **pr-watch** | Watch PR CI checks, auto-fix failures, report when ready to merge |
 | **push** | Push branch to remote safely with tracking and divergence checks |
 | **rebase** | Rebase onto base branch with conflict handling |
+| **session-recap** | Summarize current branch work to pick up where you left off |
 | **ship** | Name branch, commit, push, and create PR in one step |
 | **tdd** | Red-green-refactor TDD with vertical slices (adapted from mattpocock/skills) |
 | **test-write** | Backfill behavior-focused regression tests on existing code |
@@ -81,6 +82,7 @@ almanac/
 │   ├── pr-watch/
 │   ├── push/
 │   ├── rebase/
+│   ├── session-recap/
 │   ├── ship/
 │   ├── tdd/             # + references/
 │   ├── test-write/
