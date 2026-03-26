@@ -17,6 +17,21 @@ gh pr view --json number,title,url,state,headRefName
 
 If no PR exists or state is not `OPEN`, stop and report.
 
+## Check for CI
+
+Before watching, verify that the repo actually has CI checks configured:
+
+```bash
+gh api repos/{owner}/{repo}/actions/workflows --jq '.total_count'
+```
+
+If the count is 0, report and suggest merge:
+
+```
+No CI workflows configured — nothing to watch.
+Ready to merge: gh pr merge #42 --squash --auto --delete-branch
+```
+
 ## Watch Checks
 
 Run:
