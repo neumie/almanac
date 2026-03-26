@@ -44,7 +44,7 @@ Watching PR #42 (feat/add-tdd-and-test-write-skills)...
   CI: 5/5 passed
 
 Result: All checks passed
-Ready to merge: gh pr merge #42 --squash --delete-branch
+Ready to merge: gh pr merge #42 --squash --auto --delete-branch
 ```
 
 ### Some checks failed (fix attempts remaining)
@@ -69,7 +69,7 @@ Watching PR #42...
   CI: 5/5 passed
 
 Result: All checks passed (1 fix applied)
-Ready to merge: gh pr merge #42 --squash --delete-branch
+Ready to merge: gh pr merge #42 --squash --auto --delete-branch
 ```
 
 ### Some checks failed (no fix attempts remaining)
