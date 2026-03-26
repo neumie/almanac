@@ -186,4 +186,11 @@ Shipped:
 
 Replace any skipped steps with their skip message (e.g., `Commit: nothing to commit (skipped)`).
 
-After the summary, ask: **"Watch CI?"** If the user says yes, invoke the `pr-watch` skill on the PR.
+After the summary, check if the repo has CI workflows:
+
+```bash
+gh api repos/{owner}/{repo}/actions/workflows --jq '.total_count'
+```
+
+- If workflows exist (count > 0): ask **"Watch CI?"** — if yes, invoke the `pr-watch` skill on the PR.
+- If no workflows (count is 0): ask **"Merge?"** — if yes, run `gh pr merge <number> --squash --auto --delete-branch`.
