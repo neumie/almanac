@@ -1,6 +1,6 @@
 ---
 name: task-start
-description: Use when beginning work on a task. Assesses complexity, then routes to the right execution depth — trivial tasks get solved immediately, moderate ones are broken into steps, complex ones get a plan first. Use this whenever the user says start this, work on this, do this, or describes a task they want done.
+description: Use when beginning work on a NEW task that hasn't been explored yet. Assesses complexity, then routes to the right execution depth — trivial tasks get solved immediately, moderate ones are broken into steps, complex ones get a plan first. Do NOT use when the task has already been discussed, explored, or planned in the current conversation — in that case just execute directly.
 metadata:
   dependencies:
     - complexity-assess
@@ -17,7 +17,10 @@ Verify the working context before starting:
 
 - Check the current branch with `git branch --show-current`
 - If on `main` or `master`, warn: "You're on main — consider creating a worktree or feature branch first." Continue anyway (don't block).
-- If the branch doesn't have a descriptive name yet (e.g. still on a default worktree name, a generic branch, or doesn't match `<type>/<description>` pattern), name it using the `branch-name` skill. Do this after exploration (Step 2) so the name reflects the actual work.
+
+## Fast-path — Self-evidently trivial tasks
+
+If the task is unambiguously trivial — exact file, line, and change are specified with no exploration needed (e.g. "fix the typo on line 42 of foo.py") — skip the assessment and go straight to implementation. Note: "Skipping assessment — task is self-evidently trivial." Then implement, verify, and report. This fast-path is only for tasks where complexity assessment would add no information.
 
 ## Step 1 — Understand the task
 
@@ -25,21 +28,25 @@ Read the user's task description. If the task references specific files, errors,
 
 ## Step 2 — Explore
 
-Before assessing complexity, explore the codebase to understand what's involved:
+Explore the codebase to understand what's involved:
 
 - Grep for terms from the task description
 - Read files that are likely relevant
 - Understand the current state of the code in this area
 
-This exploration is required — you cannot score complexity accurately without it.
+This exploration is required — you cannot score complexity accurately without it. This is the single exploration phase for the entire workflow. Later steps (complexity-assess and execution) should build on what was learned here rather than re-exploring from scratch.
 
 ## Step 3 — Assess complexity
 
-Follow the `complexity-assess` skill to score the task across 4 dimensions (scope, clarity, risk, novelty) and determine the tier (trivial, moderate, or complex).
+Follow the `complexity-assess` skill to score the task across 4 dimensions (scope, clarity, risk, novelty) and determine the tier (trivial, moderate, or complex). The exploration from Step 2 has already been done — use those findings directly when scoring.
 
 Output the assessment table as specified by the skill. Do not ask for confirmation. Announce the tier and move to execution.
 
-## Step 4 — Execute
+## Step 4 — Name the branch
+
+If the branch doesn't have a descriptive name yet (e.g. still on a default worktree name, a generic branch, or doesn't match `<type>/<description>` pattern), name it using the `branch-name` skill. Do this here — after exploration and assessment — so the name reflects both the work and its scope.
+
+## Step 5 — Execute
 
 Load and follow the reference file for the assessed tier:
 

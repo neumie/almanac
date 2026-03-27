@@ -4,11 +4,11 @@ The task is large, ambiguous, or high-risk. Plan before you build.
 
 ## Steps
 
-### Phase 1 — Explore
+### Phase 1 — Deepen exploration
 
-Broad codebase exploration to understand the architecture around the task:
+Build on the exploration done during assessment. Focus on what you still don't know:
 
-- Read relevant modules end-to-end, not just the files you think you'll change
+- Read relevant modules end-to-end, not just the files already explored
 - Understand data flow, dependencies, and existing patterns
 - Identify what you don't know — list the unknowns
 
@@ -42,7 +42,7 @@ Write a structured implementation plan:
 - <How to verify the changes work>
 ```
 
-Announce the plan before executing. Do not ask for confirmation — just state it and proceed.
+Announce the plan and ask: "Does this plan look right, or should I adjust before executing?" Wait for the user's response before proceeding.
 
 ### Phase 4 — Execute
 
