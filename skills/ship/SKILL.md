@@ -75,4 +75,4 @@ gh api repos/{owner}/{repo}/actions/workflows --jq '.total_count'
 ```
 
 - If workflows exist (count > 0): invoke the `pr-watch` skill on the PR immediately — do not ask.
-- If no workflows (count is 0): ask **"Merge?"** — if yes, run `gh pr merge <number> --squash --auto --delete-branch`.
+- If no workflows (count is 0): ask **"Merge?"** — if yes, try `gh pr merge <number> --squash --delete-branch`. If it fails (e.g., git worktree conflict), merge via API: `gh api repos/{owner}/{repo}/pulls/{number}/merge -X PUT -f merge_method=squash`, then delete the remote branch: `gh api repos/{owner}/{repo}/git/refs/heads/{branch} -X DELETE`.
