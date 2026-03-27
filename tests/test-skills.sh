@@ -89,6 +89,34 @@ neg_test "missing name" "no-name" "---
 description: Use when testing
 ---"
 
+# Dependency validation negative test
+# Creates a skill that depends on a non-existent skill
+dep_neg_test() {
+  local tmpdir
+  tmpdir=$(mktemp -d)
+  mkdir -p "$tmpdir/dep-test"
+  cat > "$tmpdir/dep-test/SKILL.md" << 'DEPEOF'
+---
+name: dep-test
+description: Use when testing dependencies
+metadata:
+  dependencies:
+    - nonexistent-skill
+---
+DEPEOF
+
+  if almanac_validate_skill "$tmpdir/dep-test" 2>/dev/null; then
+    echo "  FAIL: missing dependency (should have been rejected)"
+    NEG_FAIL=$((NEG_FAIL + 1))
+  else
+    echo "  PASS: missing dependency (correctly rejected)"
+    NEG_PASS=$((NEG_PASS + 1))
+  fi
+  rm -rf "$tmpdir"
+}
+
+dep_neg_test
+
 echo ""
 echo "Negative results: $NEG_PASS passed, $NEG_FAIL failed"
 

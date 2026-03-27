@@ -116,6 +116,32 @@ almanac_validate_skill() {
     warnings=$((warnings + 1))
   fi
 
+  # --- Optional: metadata.dependencies validation ---
+  # Check that each dependency references an existing skill directory
+  local skills_root
+  skills_root="$(dirname "$skill_dir")"
+  local in_deps=0
+  while IFS= read -r line; do
+    # Detect the start of the dependencies list
+    if echo "$line" | grep -qE '^[[:space:]]+dependencies:'; then
+      in_deps=1
+      continue
+    fi
+    # If we're in the dependencies list, read list items
+    if [ "$in_deps" -eq 1 ]; then
+      if echo "$line" | grep -qE '^[[:space:]]+-[[:space:]]'; then
+        local dep
+        dep=$(echo "$line" | sed 's/^[[:space:]]*-[[:space:]]*//')
+        if [ ! -d "$skills_root/$dep" ] || [ ! -f "$skills_root/$dep/SKILL.md" ]; then
+          echo "FAIL: dependency '$dep' not found (required by $(basename "$skill_dir"))" >&2
+          errors=$((errors + 1))
+        fi
+      else
+        in_deps=0
+      fi
+    fi
+  done <<< "$frontmatter"
+
   [ "$errors" -eq 0 ] && return 0 || return 1
 }
 

@@ -20,6 +20,8 @@ metadata:                          # Optional
   upstream: anthropics/skills/x    # For adapted skills — tracks source
   upstream-sha: abc123...          # Git blob SHA at time of adaptation
   adapted-date: "2026-03-09"
+  dependencies:                    # Skills this skill follows (validated by tests)
+    - other-skill
 compatibility: Requires X          # Optional, max 500 chars
 ---
 # Markdown instructions (keep under 500 lines)
@@ -37,6 +39,18 @@ Skill names use `noun-verb` order (e.g. `pr-create`, `ci-fix`, `branch-summary`)
 2. Name must be lowercase alphanumeric + hyphens, no `--`, no leading/trailing `-`, using `noun-verb` order
 3. Description should start with "Use when..." for clear trigger conditions
 4. Run `bash tests/test-skills.sh` to validate
+
+## Skill Deduplication
+
+Orchestrator skills (`ship`, `task-start`) must reference standalone skills rather than inlining their logic. Each capability has one source of truth:
+
+- **Branch naming** → `branch-name`
+- **Committing** → `commit`
+- **Pushing** → `push`
+- **PR creation** → `pr-create`
+- **Complexity scoring** → `complexity-assess`
+
+When adding a new orchestrator or composite skill, delegate to existing skills with "Follow the `<skill-name>` skill" rather than duplicating their instructions. Declare hard dependencies in `metadata.dependencies` — validation will fail if a listed dependency doesn't exist.
 
 ## Adapted Skills
 
