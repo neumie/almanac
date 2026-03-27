@@ -32,7 +32,7 @@ If the count is 0, report and suggest merge:
 
 ```
 No CI workflows configured — nothing to watch.
-Ready to merge: gh pr merge #42 --squash --auto --delete-branch
+Ready to merge: gh pr merge #42 --squash --delete-branch
 ```
 
 ## Watch Checks
@@ -62,7 +62,7 @@ Watching PR #42 (feat/add-tdd-and-test-write-skills)...
   CI: 5/5 passed
 
 Result: All checks passed
-Ready to merge: gh pr merge #42 --squash --auto --delete-branch
+Ready to merge: gh pr merge #42 --squash --delete-branch
 ```
 
 ### Some checks failed (fix attempts remaining)
@@ -87,7 +87,7 @@ Watching PR #42...
   CI: 5/5 passed
 
 Result: All checks passed (1 fix applied)
-Ready to merge: gh pr merge #42 --squash --auto --delete-branch
+Ready to merge: gh pr merge #42 --squash --delete-branch
 ```
 
 ### Some checks failed (no fix attempts remaining)
@@ -111,8 +111,19 @@ Needs manual investigation.
 
 ## Rules
 
-- Never merge the PR — only report and suggest
+- Never merge the PR automatically during watching — only report and suggest
 - Maximum 2 ci-fix attempts to prevent infinite loops
 - If ci-fix itself fails (can't identify the issue), stop and report immediately
 - Each fix attempt gets its own commit (never amend)
 - If the PR is closed or merged while watching, stop and report the new state
+
+## Merge Procedure
+
+When the user asks to merge after watching:
+
+1. Try `gh pr merge <number> --squash --delete-branch`
+2. If it fails (e.g., git worktree conflict), merge via API instead:
+   ```bash
+   gh api repos/{owner}/{repo}/pulls/{number}/merge -X PUT -f merge_method=squash
+   gh api repos/{owner}/{repo}/git/refs/heads/{branch} -X DELETE
+   ```
