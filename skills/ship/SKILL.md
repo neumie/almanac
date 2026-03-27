@@ -74,5 +74,5 @@ After the summary, check if the repo has CI workflows:
 gh api repos/{owner}/{repo}/actions/workflows --jq '.total_count'
 ```
 
-- If workflows exist (count > 0): ask **"Watch CI?"** — if yes, invoke the `pr-watch` skill on the PR.
+- If workflows exist (count > 0): invoke the `pr-watch` skill on the PR immediately — do not ask.
 - If no workflows (count is 0): ask **"Merge?"** — if yes, run `gh pr merge <number> --squash --auto --delete-branch`.
