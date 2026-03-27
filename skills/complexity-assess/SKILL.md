@@ -10,7 +10,7 @@ Evaluate a task's complexity using a structured heuristic. This is a pure analys
 ## Process
 
 1. **Read the task description** — what the user wants to accomplish
-2. **Explore the codebase** — grep for relevant terms, read related files, understand what's involved
+2. **Explore the codebase** — grep for relevant terms, read related files, understand what's involved. When invoked from `task-start`, exploration has already been done — use those findings directly rather than re-exploring.
 3. **Score each dimension** (see heuristic below) with a one-line justification
 4. **Report the tier** and recommended approach
 

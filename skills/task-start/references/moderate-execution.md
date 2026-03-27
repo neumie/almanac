@@ -7,7 +7,7 @@ The task has multiple moving parts but the goal is clear. Break it down and work
 1. **Break down** — Decompose the task into 3-8 concrete, ordered steps. Each step should be independently verifiable. List them before starting.
 
 2. **Execute each step:**
-   - Explore the relevant code for this step
+   - Read any additional code needed for this step beyond what was explored during assessment
    - Implement the change
    - Verify it works (run tests, check behavior) before moving on
 
