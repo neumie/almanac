@@ -1,6 +1,9 @@
 ---
 name: pr-watch
 description: Use when waiting for CI checks on a pull request. Watches check status, auto-fixes failures via ci-fix (max 2 attempts), and reports when done with a suggested merge command. Use this whenever the user says watch PR, watch CI, wait for checks, or wants to monitor a PR until it's ready to merge.
+metadata:
+  dependencies:
+    - ci-fix
 ---
 
 # PR Watch

@@ -34,6 +34,7 @@ ln -s ~/.almanac/skills ~/.agents/skills/almanac
 | **canvas** | Interactive visual canvas for structured communication (adapted from contember/agent-canvas) |
 | **ci-fix** | Fix failing GitHub Actions by reading logs and patching code |
 | **commit** | Analyze changes, write conventional commit messages, commit immediately |
+| **complexity-assess** | Evaluate task complexity using a structured heuristic (scope, clarity, risk, novelty) |
 | **interview-me** | Stress-test plans and designs through relentless questioning (adapted from mattpocock/skills) |
 | **pr-create** | Create GitHub PRs with auto-generated titles and descriptions |
 | **pr-watch** | Watch PR CI checks, auto-fix failures, report when ready to merge |
@@ -41,6 +42,7 @@ ln -s ~/.almanac/skills ~/.agents/skills/almanac
 | **rebase** | Rebase onto base branch with conflict handling |
 | **session-recap** | Summarize current branch work to pick up where you left off |
 | **ship** | Name branch, commit, push, and create PR in one step |
+| **task-start** | Assess task complexity and route to the right execution depth (trivial/moderate/complex) |
 | **tdd** | Red-green-refactor TDD with vertical slices (adapted from mattpocock/skills) |
 | **test-write** | Backfill behavior-focused regression tests on existing code |
 | **ubiquitous-language** | Extract and formalize domain terminology into a DDD-style glossary (adapted from mattpocock/skills) |
@@ -77,6 +79,7 @@ almanac/
 │   ├── canvas/          # + flows.md, components.md
 │   ├── ci-fix/
 │   ├── commit/
+│   ├── complexity-assess/
 │   ├── interview-me/
 │   ├── pr-create/
 │   ├── pr-watch/
@@ -84,6 +87,7 @@ almanac/
 │   ├── rebase/
 │   ├── session-recap/
 │   ├── ship/
+│   ├── task-start/      # + references/
 │   ├── tdd/             # + references/
 │   ├── test-write/
 │   └── ubiquitous-language/
