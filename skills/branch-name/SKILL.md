@@ -59,7 +59,8 @@ git push -u origin <new-name> && git push origin :<old-name>
 
 ## Edge cases
 
-- **No changes and no commits:** Report "nothing to name — no changes or commits found" and stop.
+- **No changes and no commits:** Use the current conversation context (task description, discussed goals) to derive the branch name. If there is no conversation context either, report "nothing to name — no context available" and stop.
+- **On `main`/`master`:** Create a new branch instead of renaming: `git checkout -b <name>`
 - **Already on a well-named branch:** Suggest keeping it, or offer the new name as an alternative.
 - **Detached HEAD:** Report error — must be on a branch to rename.
 - **Mixed change types:** Use the dominant type. If truly split, suggest the user commit separately and name after the primary purpose.

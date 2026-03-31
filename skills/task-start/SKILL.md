@@ -44,7 +44,7 @@ Output the assessment table as specified by the skill. Do not ask for confirmati
 
 ## Step 4 — Name the branch
 
-If the branch doesn't have a descriptive name yet (e.g. still on a default worktree name, a generic branch, or doesn't match `<type>/<description>` pattern), name it using the `branch-name` skill. Do this here — after exploration and assessment — so the name reflects both the work and its scope.
+If the current branch doesn't already match `<type>/<description>` pattern (e.g. on `main`, a worktree default name, or a generic branch), follow the `branch-name` skill to name it. Since no code has been written yet, `branch-name` will use the task description from this conversation as context instead of diffs.
 
 ## Step 5 — Execute
 
