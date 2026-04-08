@@ -8,7 +8,7 @@ Skills follow the [Agent Skills Open Standard](https://agentskills.io/specificat
 
 Skills are portable instruction sets that teach coding agents *how* to do things — commit code, create PRs, run TDD, fix CI, and more. Each skill is a single Markdown file (`SKILL.md`) with YAML frontmatter. Agents discover and load them automatically.
 
-Almanac bundles 16 skills organized around a typical development workflow:
+Almanac bundles 17 skills organized around a typical development workflow:
 
 ```
 task-start → complexity-assess → tdd / test-write → commit → push → pr-create → pr-watch → ci-fix
@@ -70,6 +70,7 @@ ln -s ~/.almanac/skills ~/.agents/skills/almanac             # Codex
 | **tdd** | Red-green-refactor TDD with vertical slices |
 | **test-write** | Backfill behavior-focused regression tests on existing code |
 | **canvas** | Interactive visual canvas for structured communication |
+| **interface-design** | Craft-focused interface design for dashboards, admin panels, and SaaS apps |
 
 ### Planning & process
 
@@ -100,11 +101,12 @@ almanac help                 Show help
 
 ### Upstream sync
 
-Four skills are adapted from upstream repositories and track their origin:
+Five skills are adapted from upstream repositories and track their origin:
 
 | Skill | Upstream |
 |-------|----------|
 | canvas | [contember/agent-canvas](https://github.com/niclas-niclas/agent-canvas) |
+| interface-design | [Dammyjay93/interface-design](https://github.com/Dammyjay93/interface-design) |
 | interview-me | [mattpocock/skills](https://github.com/mattpocock/dotfiles) |
 | tdd | [mattpocock/skills](https://github.com/mattpocock/dotfiles) |
 | ubiquitous-language | [mattpocock/skills](https://github.com/mattpocock/dotfiles) |
@@ -129,6 +131,7 @@ almanac/
 │   ├── ci-fix/
 │   ├── commit/
 │   ├── complexity-assess/
+│   ├── interface-design/ # + references/ (principles, critique, examples)
 │   ├── interview-me/
 │   ├── pr-create/
 │   ├── pr-watch/

@@ -54,7 +54,7 @@ When adding a new orchestrator or composite skill, delegate to existing skills w
 
 ## Adapted Skills
 
-Four skills track upstream sources: `canvas` (contember/agent-canvas), `interview-me`, `tdd`, and `ubiquitous-language` (mattpocock/skills). Check for updates with `almanac sync`.
+Five skills track upstream sources: `canvas` (contember/agent-canvas), `interface-design` (Dammyjay93/interface-design), `interview-me`, `tdd`, and `ubiquitous-language` (mattpocock/skills). Check for updates with `almanac sync`.
 
 ## Testing
 
