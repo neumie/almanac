@@ -8,11 +8,11 @@ Skills follow the [Agent Skills Open Standard](https://agentskills.io/specificat
 
 Skills are portable instruction sets that teach coding agents *how* to do things — commit code, create PRs, run TDD, fix CI, and more. Each skill is a single Markdown file (`SKILL.md`) with YAML frontmatter. Agents discover and load them automatically.
 
-Almanac bundles 17 skills organized around a typical development workflow:
+Almanac bundles 18 skills organized around a typical development workflow:
 
 ```
-task-start → complexity-assess → tdd / test-write → commit → push → pr-create → pr-watch → ci-fix
-                                                         └── ship (does it all in one step) ──┘
+task-start → complexity-assess → tdd / test-write / test-flow → commit → push → pr-create → pr-watch → ci-fix
+                                                                    └── ship (does it all in one step) ──┘
 ```
 
 ## Install
@@ -69,6 +69,7 @@ ln -s ~/.almanac/skills ~/.agents/skills/almanac             # Codex
 |-------|-------------|
 | **tdd** | Red-green-refactor TDD with vertical slices |
 | **test-write** | Backfill behavior-focused regression tests on existing code |
+| **test-flow** | Lock down user paths as E2E regression tests via browser exploration |
 | **canvas** | Interactive visual canvas for structured communication |
 | **interface-design** | Craft-focused interface design for dashboards, admin panels, and SaaS apps |
 
@@ -141,6 +142,7 @@ almanac/
 │   ├── ship/
 │   ├── task-start/      # + references/
 │   ├── tdd/             # + references/
+│   ├── test-flow/
 │   ├── test-write/
 │   └── ubiquitous-language/
 ├── providers/           # Provider-specific adapters
