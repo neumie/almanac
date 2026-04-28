@@ -27,6 +27,13 @@ _uninstall_claude_code() {
 
   _info "Removed $count skill symlinks from ~/.claude/commands/almanac/"
 
+  # Remove CLAUDE.md symlink if it points to almanac
+  local claude_md="$HOME/.claude/CLAUDE.md"
+  if [[ -L "$claude_md" ]] && [[ "$(readlink "$claude_md")" == *almanac* ]]; then
+    rm "$claude_md"
+    _info "Removed CLAUDE.md symlink from ~/.claude/"
+  fi
+
   # Clean up legacy plugin registry entries (from older installs)
   local installed_plugins="$HOME/.claude/plugins/installed_plugins.json"
   local settings="$HOME/.claude/settings.json"
