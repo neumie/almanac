@@ -32,6 +32,27 @@ _install_claude_code() {
     [[ -e "$link" ]] || rm "$link"
   done
 
+  # Symlink global CLAUDE.md (only if no custom one exists)
+  local claude_md="$ALMANAC_HOME/providers/claude-code/CLAUDE.md"
+  local claude_target="$HOME/.claude/CLAUDE.md"
+  if [[ -f "$claude_md" ]]; then
+    if [[ ! -e "$claude_target" && ! -L "$claude_target" ]]; then
+      ln -s "$claude_md" "$claude_target"
+      _success "Installed global CLAUDE.md -> ~/.claude/CLAUDE.md"
+    elif [[ -L "$claude_target" ]] && readlink "$claude_target" | grep -q "almanac"; then
+      rm "$claude_target"
+      ln -s "$claude_md" "$claude_target"
+      _success "Updated global CLAUDE.md -> ~/.claude/CLAUDE.md"
+    elif [[ "$GLOBAL_CONFIG" == true ]]; then
+      [[ -f "$claude_target" ]] && _warn "Replacing custom ~/.claude/CLAUDE.md with almanac version"
+      [[ -L "$claude_target" || -f "$claude_target" ]] && rm "$claude_target"
+      ln -s "$claude_md" "$claude_target"
+      _success "Installed global CLAUDE.md -> ~/.claude/CLAUDE.md"
+    else
+      _info "Skipped ~/.claude/CLAUDE.md — custom file exists (use --global-config to override)"
+    fi
+  fi
+
   _success "Installed $count skills into ~/.claude/commands/almanac/"
   _info "Skills appear as almanac:<name> — start claude as usual"
 }
@@ -50,8 +71,17 @@ _install_symlink() {
 
 # --- main ---
 
-PROVIDER="${1:-}"
-[[ -z "$PROVIDER" ]] && _die "Usage: almanac install <provider>"
+GLOBAL_CONFIG=false
+PROVIDER=""
+for arg in "$@"; do
+  case "$arg" in
+    --global-config) GLOBAL_CONFIG=true ;;
+    -*) _die "Unknown flag: $arg" ;;
+    *) PROVIDER="$arg" ;;
+  esac
+done
+
+[[ -z "$PROVIDER" ]] && _die "Usage: almanac install <provider> [--global-config]"
 
 PROVIDER_DIR="$ALMANAC_HOME/providers/$PROVIDER"
 [[ -d "$PROVIDER_DIR" ]] || _die "Unknown provider: $PROVIDER (run 'almanac list')"
