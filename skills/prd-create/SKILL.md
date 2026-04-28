@@ -18,11 +18,13 @@ A deep module (as opposed to a shallow module) is one which encapsulates a lot o
 
 Check with the user that these modules match their expectations. Check with the user which modules they want tests written for.
 
-3. Write the PRD using the template below and save it to `plans/prd.md`:
+3. Derive a short kebab-case name for the PRD from the feature (e.g. `auth-system`, `dashboard-redesign`, `link-shortener`). Write the PRD using the template below and save it to `plans/<name>.md`:
 
 ```bash
 mkdir -p plans
 ```
+
+Report the file path so the user knows which PRD to pass to `/ralph-loop`.
 
 ## PRD Template
 

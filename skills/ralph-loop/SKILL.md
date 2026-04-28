@@ -12,17 +12,20 @@ Autonomous implementation loop. Each iteration gets fresh context, picks one tas
 
 ## Setup
 
-### 1. Check for a PRD
+### 1. Select a PRD
 
-The loop needs a PRD to work from. Check for one:
+The loop needs a PRD to work from. List available PRDs:
 
 ```bash
-ls plans/prd.md 2>/dev/null
+ls plans/*.md 2>/dev/null | grep -v prompt | grep -v brief
 ```
 
-If no PRD exists:
-- If there's a GitHub issue to work from, fetch it and write it to `plans/prd.md`
-- Otherwise, tell the user to run `/prd-create` first
+- If the user passed a name (e.g. `/ralph-loop auth-system`), use `plans/auth-system.md`
+- If there's exactly one PRD, use it
+- If there are multiple, ask the user which one to use
+- If there are none, tell the user to run `/prd-create` first
+
+Store the selected PRD path as `PRD_FILE` for use in the prompt template.
 
 ### 2. Detect feedback loops
 
@@ -45,12 +48,12 @@ mkdir -p plans
 
 ### 4. Generate the prompt
 
-Write `plans/prompt.md` using the template below, filling in the detected feedback loops:
+Write `plans/prompt-<name>.md` (e.g. `plans/prompt-auth-system.md`) using the template below, filling in the detected feedback loops and the PRD path:
 
 ```markdown
 # INPUTS
 
-Pull @plans/prd.md into your context.
+Pull @{{PRD_FILE}} into your context.
 
 You've been passed the last 10 RALPH commits (SHA, date, full message). Review these to understand what work has been done.
 
@@ -88,7 +91,7 @@ Before committing, run ALL feedback loops. Fix any failures before proceeding.
 
 Make a git commit. The commit message must:
 
-1. Start with `RALPH:` prefix
+1. Start with `RALPH(<name>):` prefix (e.g. `RALPH(auth-system):`)
 2. Include task completed + PRD reference
 3. Key decisions made
 4. Files changed
@@ -112,16 +115,16 @@ Replace `{{FEEDBACK_COMMANDS}}` with the detected commands as a markdown list, e
 Print:
 
 ```
-Ralph loop ready.
+Ralph loop ready for <name>.
 
   Single iteration (HITL):
-    bash {{SKILL_SCRIPTS}}/once.sh
+    bash {{SKILL_SCRIPTS}}/once.sh <name>
 
   Autonomous (AFK):
-    bash {{SKILL_SCRIPTS}}/afk.sh <iterations>
+    bash {{SKILL_SCRIPTS}}/afk.sh <name> <iterations>
 
   Example — run 10 iterations:
-    bash {{SKILL_SCRIPTS}}/afk.sh 10
+    bash {{SKILL_SCRIPTS}}/afk.sh auth-system 10
 ```
 
 Where `{{SKILL_SCRIPTS}}` is the path to this skill's scripts directory: `${CLAUDE_SKILL_DIR}/scripts`.
@@ -147,10 +150,10 @@ Single iteration with human in the loop. Runs one pass — you review the result
 While AFK mode runs, you can watch progress:
 
 ```bash
-git log --grep="RALPH" --oneline
+git log --grep="RALPH(auth-system)" --oneline
 ```
 
-Each `RALPH:` commit message contains what was done and notes for the next iteration.
+Each `RALPH(<name>):` commit message contains what was done and notes for the next iteration. The name prefix means multiple PRDs can run against the same repo without confusing each other's progress.
 
 ## When to stop
 
