@@ -1,35 +1,42 @@
 #!/bin/bash
 set -e
 
-if [ -z "$1" ]; then
-  echo "Usage: $0 <iterations>"
-  echo "Example: $0 10"
+if [ -z "$1" ] || [ -z "$2" ]; then
+  echo "Usage: $0 <prd-name> <iterations>"
+  echo "Example: $0 auth-system 10"
+  echo ""
+  echo "Available PRDs:"
+  ls plans/*.md 2>/dev/null | grep -v prompt | grep -v brief | sed 's|plans/||;s|\.md||' | sed 's/^/  /'
   exit 1
 fi
 
-if [ ! -f "plans/prompt.md" ]; then
-  echo "Error: plans/prompt.md not found. Run /ralph-loop to set up first."
+PRD_NAME="$1"
+ITERATIONS="$2"
+PROMPT="plans/prompt-${PRD_NAME}.md"
+
+if [ ! -f "$PROMPT" ]; then
+  echo "Error: $PROMPT not found. Run /ralph-loop $PRD_NAME to set up first."
   exit 1
 fi
 
 stream_text='select(.type == "assistant").message.content[]? | select(.type == "text").text // empty | gsub("\n"; "\r\n") | . + "\r\n\n"'
 final_result='select(.type == "result").result // empty'
 
-for ((i=1; i<=$1; i++)); do
+for ((i=1; i<=$ITERATIONS; i++)); do
   tmpfile=$(mktemp)
   trap "rm -f $tmpfile" EXIT
 
   echo ""
-  echo "======= ITERATION $i of $1 ======="
+  echo "======= ITERATION $i of $ITERATIONS ($PRD_NAME) ======="
   echo ""
 
-  ralph_commits=$(git log --grep="RALPH" -n 10 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No RALPH commits found")
+  ralph_commits=$(git log --grep="RALPH($PRD_NAME)" -n 10 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No RALPH commits found")
 
   claude \
     --print \
     --output-format stream-json \
     --verbose \
-    "@plans/prompt.md Previous RALPH commits: $ralph_commits" \
+    "@$PROMPT Previous RALPH commits: $ralph_commits" \
   | grep --line-buffered '^{' \
   | tee "$tmpfile" \
   | jq --unbuffered -rj "$stream_text"
@@ -50,4 +57,4 @@ for ((i=1; i<=$1; i++)); do
 done
 
 echo ""
-echo "Ralph finished $1 iterations. Tasks may remain — check with: git log --grep=RALPH --oneline"
+echo "Ralph finished $ITERATIONS iterations. Tasks may remain — check with: git log --grep='RALPH($PRD_NAME)' --oneline"
