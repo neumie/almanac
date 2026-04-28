@@ -30,6 +30,25 @@ if [[ -d "$COMMANDS_DIR" ]]; then
     [[ -e "$link" ]] || { rm "$link"; removed=$((removed + 1)); }
   done
 
+  # Sync global CLAUDE.md (only if already ours or missing)
+  local_claude_md="$ALMANAC_ROOT/providers/claude-code/CLAUDE.md"
+  claude_target="$HOME/.claude/CLAUDE.md"
+  if [[ -f "$local_claude_md" ]]; then
+    if [[ ! -e "$claude_target" && ! -L "$claude_target" ]]; then
+      ln -s "$local_claude_md" "$claude_target"
+      added=$((added + 1))
+    elif [[ -L "$claude_target" ]] && readlink "$claude_target" | grep -q "almanac"; then
+      # Already ours — update if target changed
+      current=$(readlink "$claude_target")
+      if [[ "$current" != "$local_claude_md" ]]; then
+        rm "$claude_target"
+        ln -s "$local_claude_md" "$claude_target"
+        added=$((added + 1))
+      fi
+    fi
+    # User's own file → leave it alone
+  fi
+
   # Report only if changes were made
   if [[ $added -gt 0 || $removed -gt 0 ]]; then
     msg="almanac: synced"
