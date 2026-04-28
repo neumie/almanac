@@ -54,7 +54,7 @@ When adding a new orchestrator or composite skill, delegate to existing skills w
 
 ## Adapted Skills
 
-Seven skills track upstream sources: `interface-design` (Dammyjay93/interface-design), `grill-me`, `grill-plan`, `prd-create`, `issues-create`, `codebase-improve`, and `tdd` (mattpocock/skills). Check for updates with `almanac sync`.
+Eight skills track upstream sources: `interface-design` (Dammyjay93/interface-design), `codebase-improve`, `diagnose`, `grill-me`, `grill-plan`, `issues-create`, `prd-create`, and `tdd` (mattpocock/skills). Check for updates with `almanac sync`.
 
 ## Testing
 

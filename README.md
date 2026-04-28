@@ -61,16 +61,17 @@ almanac help                 Show help
 
 ### Upstream sync
 
-Seven skills are adapted from upstream repositories:
+Eight skills are adapted from upstream repositories:
 
 | Skill | Upstream |
 |-------|----------|
+| codebase-improve | [mattpocock/skills](https://github.com/mattpocock/skills) |
+| diagnose | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | grill-me | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | grill-plan | [mattpocock/skills](https://github.com/mattpocock/skills) |
-| prd-create | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | issues-create | [mattpocock/skills](https://github.com/mattpocock/skills) |
+| prd-create | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | tdd | [mattpocock/skills](https://github.com/mattpocock/skills) |
-| ubiquitous-language | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | interface-design | [Dammyjay93/interface-design](https://github.com/Dammyjay93/interface-design) |
 
 Run `almanac sync` to check for updates.
