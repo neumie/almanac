@@ -65,6 +65,7 @@ Does it document the things that actually prevent mistakes?
 **Deep modules enforcement** — the most important part of danger coverage:
 
 - Are existing deep modules documented as mandatory? Not "we have a column registry" but "Always use the column registry. Never create inline DataGridColumn components." The codebase scan identifies shared abstractions; the audit checks whether the file directs agents to use them.
+- Does it tell agents to **extend** deep modules, not just use them? A global config, registry, or context should be the place agents add new entries when they have a similar use case — not create a parallel mechanism. Example: "If you need new shared metadata, add it to GlobalConfig. Don't create a separate query."
 - Is enforcement language strong enough? "Prefer using..." is weak — agents rationalize around it. "Always use... never..." is strong.
 - Is there a decision framework for new code? Before creating a new utility, check if an existing module covers the use case. If creating new: will this have multiple callers? If yes, design the interface first. If no, a simple solution is fine.
 
