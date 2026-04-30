@@ -82,9 +82,9 @@ Bad: "We have a global variable context for sharing state."
 Good: "Always use `GlobalVarContext` for cross-component state. Never create local state stores — check the context first. If no variable exists for your use case, add one to the context rather than creating a standalone store."
 
 Bad: "Prefer using the column registry."
-Good: "Always use the column registry. Never create inline DataGridColumn components."
+Good: "Always use the column registry. Never create inline DataGridColumn components. If you need a new column type, add it to the registry — don't create a one-off."
 
-"Prefer" is too weak — agents rationalize around it. "Always/never" is the bar.
+"Prefer" is too weak — agents rationalize around it. "Always/never" is the bar. And always tell agents to **extend** the deep module when their use case isn't covered yet — otherwise they'll build around it.
 
 ### Include a decision framework for new code
 
