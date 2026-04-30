@@ -5,6 +5,7 @@ metadata:
   dependencies:
     - branch-name
     - commit
+    - commits-squash
     - push
     - pr-create
 ---
@@ -36,7 +37,15 @@ If there are no staged or unstaged changes, skip this step. Record: `Commit: not
 
 Note for the summary: `Commit: "<message>"` (or multiple lines if split into multiple commits).
 
-## Step 3 — Push
+## Step 3 — Squash commits
+
+Follow the `commits-squash` skill to combine related commits into logical groups. If there are 0 or 1 commits, or commits are already clean, the skill will skip automatically.
+
+### Record
+
+Note for the summary: `Squash: N commits into M` (or `Squash: already clean (skipped)`).
+
+## Step 4 — Push
 
 Follow the `push` skill to push the branch to remote safely. It will handle tracking, safety checks, and updating any open PR description.
 
@@ -44,7 +53,7 @@ Follow the `push` skill to push the branch to remote safely. It will handle trac
 
 Note for the summary: `Push: N commits to origin/<branch>` (or `Push: already up to date (skipped)`). If PR was updated: `PR #N: description updated`.
 
-## Step 4 — Create PR
+## Step 5 — Create PR
 
 Follow the `pr-create` skill to create the pull request. If the user requested a draft, pass that through.
 
@@ -62,6 +71,7 @@ After all steps complete, print a compact summary:
 Shipped:
   Branch: feat/add-user-avatar
   Commit: "feat(avatar): add upload endpoint"
+  Squash: 5 commits into 2
   Push: 1 commit to origin/feat/add-user-avatar
   PR: Created #42 — https://github.com/org/repo/pull/42
 ```
