@@ -8,26 +8,26 @@ CLAUDE.md files exist for things an agent **cannot derive from the code**. If it
 
 ### High value (always include)
 
-- **"Use X, not Y" rules** — when the obvious approach is wrong. Example: "Use column registry, don't create inline DataGridColumn components."
-- **Non-obvious gotchas** — things that compile fine but break at runtime or produce wrong behavior. Example: "`$entity.id` in a DataGrid column refers to the row entity, not a nested relation."
-- **Commands that aren't in package.json** — hatch commands, multi-step workflows, CI workarounds.
-- **Architecture decisions that aren't obvious from structure** — why lib-core has no React dependency, why gates are split across two packages, why the scan app aliases `@app` to admin's lib.
-- **Integration patterns** — how to wire up a new feature gate (3 parts across 3 packages), how to add a path-based route, how static render field registration works.
-- **Deep module enforcement** — when a shared abstraction exists (registry, context, factory), mandate its use with "always/never" language. Agents will create shallow inline alternatives if not explicitly told to use the deep module.
+- **"Use X, not Y" rules** — when the obvious approach is wrong. Example: "Always use the config registry. Never hardcode config values."
+- **Non-obvious gotchas** — things that compile fine but break at runtime. Example: "`getId()` returns the DB surrogate key, not the business entity ID — use `getEntityId()` instead."
+- **Commands that aren't discoverable** — multi-step workflows, CI workarounds, non-standard build steps.
+- **Architecture decisions that aren't obvious from structure** — why a package has no external dependencies, why two modules are split, why an abstraction exists.
+- **Integration patterns** — how to wire up a new feature across multiple packages or layers.
+- **Deep module enforcement** — when a shared abstraction exists (registry, repository, logger), mandate its use with "always/never" language. Agents will create shallow inline alternatives if not explicitly told to use the deep module.
 
 ### Medium value (include if genuinely non-obvious)
 
-- **Build/dev commands** — but only at the root level, and only if they're not standard (`npm run dev`).
-- **Environment quirks** — dynamic ports, two-phase migrations, worktree-specific behavior.
-- **Framework-specific patterns** — Contember's static/dynamic render split, Binding scope rules.
+- **Build/dev commands** — only if non-standard.
+- **Environment quirks** — dynamic ports, two-phase migrations, platform-specific behavior.
+- **Framework-specific patterns** — patterns unique to the framework that differ from the obvious approach.
 
 ### Low value (usually omit)
 
 - **File/directory listings** — agents can `ls` and `find`.
-- **Hook/component catalogs** — agents can `grep` for exports.
+- **Export catalogs** — agents can `grep` for exports.
 - **Type definitions** — agents can read the source.
-- **Things documented in the code itself** — JSDoc, inline comments, README files.
-- **Generic best practices** — "use TypeScript", "write tests", "follow SOLID".
+- **Things documented in the code itself** — docstrings, inline comments, README files.
+- **Generic best practices** — "write tests", "follow SOLID", "use meaningful names".
 
 ## Structure
 
@@ -40,7 +40,7 @@ The primary file. Contains:
 - Architecture decisions and patterns that apply project-wide
 - Critical rules ("never do X")
 - Non-obvious workflows (schema changes, migrations, data fixes)
-- Deep module mandates — which shared abstractions agents must use
+- Deep module mandates — which shared abstractions agents must use and extend
 
 Target: under 400 lines. If longer, move domain-specific content to subdirectory files.
 
@@ -50,13 +50,13 @@ Narrow scope — one concern per file. Place next to the code it describes.
 
 **Good examples:**
 
-- `admin/app/pages/CLAUDE.md` — documents path-based route registration (one non-obvious pattern, 20 lines)
-- `lib-core/src/domain/gates/CLAUDE.md` — documents the gate pattern (naming, placement rules, consumer pattern)
+- `src/auth/CLAUDE.md` — documents the token refresh flow (one non-obvious pattern, 20 lines)
+- `lib/db/CLAUDE.md` — documents the repository pattern (naming, query conventions, caching rules)
 
 **Bad examples:**
 
-- `admin/app/CLAUDE.md` that lists every hook and component directory — this is a catalog, not guidance
-- `src/CLAUDE.md` that restates the root file
+- `src/CLAUDE.md` that lists every module and export — this is a catalog, not guidance
+- `lib/CLAUDE.md` that restates the root file
 
 ### When to create a subdirectory CLAUDE.md
 
@@ -70,19 +70,19 @@ Create one when ALL of these are true:
 
 ### Be prescriptive, not descriptive
 
-Bad: "The column registry provides reusable DataGrid column definitions per entity."
-Good: "Always check the column registry before creating inline DataGridColumn components."
+Bad: "The config registry provides centralized configuration management."
+Good: "Always use `getConfig(key)` for configuration values. Never hardcode config or read env vars directly."
 
-Bad: "lib-core contains domain logic shared across environments."
-Good: "lib-core must have zero React/DOM/Node dependencies — pure TypeScript only."
+Bad: "The logging module handles structured logging."
+Good: "Always use the logger. Never `console.log` or `print` directly — the logger handles formatting, levels, and transport."
 
 ### Enforce deep modules
 
-Bad: "We have a global variable context for sharing state."
-Good: "Always use `GlobalVarContext` for cross-component state. Never create local state stores — check the context first. If no variable exists for your use case, add one to the context rather than creating a standalone store."
+Bad: "We have a repository layer for DB access."
+Good: "Always use the repository. Never write raw queries outside `lib/db/`. If you need a new query, add a method to the repository — don't create a one-off."
 
-Bad: "Prefer using the column registry."
-Good: "Always use the column registry. Never create inline DataGridColumn components. If you need a new column type, add it to the registry — don't create a one-off."
+Bad: "Prefer using the config registry."
+Good: "Always use `getConfig()`. Never read env vars directly. If a new config value is needed, add it to the registry with validation — don't create a separate config reader."
 
 "Prefer" is too weak — agents rationalize around it. "Always/never" is the bar. And always tell agents to **extend** the deep module when their use case isn't covered yet — otherwise they'll build around it.
 
@@ -94,39 +94,39 @@ Good: "Before creating a new utility: (1) check if an existing module covers the
 ### Lead with the rule, follow with the why
 
 ```
-Never insert `??` fallbacks for values the schema guarantees.
-Defaulting a "shouldn't be null" value silently converts a data bug into wrong UI state.
+Never insert fallback defaults for values the schema guarantees.
+Defaulting a "shouldn't be null" value silently converts a data bug into wrong behavior.
 ```
 
 ### Use concrete examples for gotchas
 
 ```
-**Wrong:** `<Link to="projectDetail(id: $entity.id)">` inside an Activity DataGrid column — `$entity.id` is the Activity ID, not the Project ID.
-**Right:** Use `useField('activityGroup.project.id')` to get the actual project ID.
+**Wrong:** `user.getId()` — returns the internal DB surrogate key (auto-increment).
+**Right:** `user.getEntityId()` — returns the business entity UUID used across services.
 ```
 
 ### Keep commands copy-paste ready
 
 ```bash
-hatch down && hatch setup    # Full reset when migrations are corrupted
+docker compose down -v && docker compose up -d && npm run db:migrate    # Full reset
 ```
 
-Not: "Run hatch down followed by hatch setup to reset the database."
+Not: "Bring down the containers, then bring them back up and run migrations."
 
 ### Don't explain what the code does — explain what to watch out for
 
 Bad:
 ```
-## Shared Hooks
-- `useCurrentUserId()` — returns the current user's content ID
-- `useIsAdmin()` — checks if user has admin role
-- `useDealTotals()` — calculates deal revenue
+## Utilities
+- `formatDate()` — formats a date to ISO string
+- `parseConfig()` — parses YAML config files
+- `hashPassword()` — hashes passwords with bcrypt
 ```
 
 Good:
 ```
-## Hooks
-Use `useCurrentUserId()` (not `useIdentity()`) when you need the content User entity ID — `useIdentity()` returns the tenant person UUID which is different.
+## Utilities
+Use `formatDate()` (not `toISOString()`) — it applies the project's timezone normalization. Raw `toISOString()` produces UTC which breaks date comparisons in reports.
 ```
 
 ## Anti-patterns
@@ -149,7 +149,7 @@ Documenting how things SHOULD work rather than how they DO work. CLAUDE.md must 
 
 ### The obvious
 
-"Components use PascalCase." "Files are in kebab-case." If it's enforced by the linter or visible from any file in the directory, don't document it.
+"Use PascalCase for classes." "Files are in kebab-case." If it's enforced by the linter or visible from any file in the directory, don't document it.
 
 ### The weak mandate
 

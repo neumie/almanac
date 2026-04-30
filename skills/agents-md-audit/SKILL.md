@@ -9,6 +9,8 @@ Audit a CLAUDE.md or AGENTS.md file. Score it 0-100 across six metrics, cite spe
 
 **Input:** Path to target file. Default: `./CLAUDE.md`
 
+**Scope rule:** Content belongs where its domain lives. A subdirectory CLAUDE.md owns domain-specific instructions (hooks, registries, patterns used in that directory). If root also documents the same thing, recommend **removing it from root entirely** — not shortening, not summarizing, removing. Never suggest removing domain-specific content from a subdirectory file or deferring to root.
+
 ## Phase 1: Context Scan
 
 Run before scoring. Build a mental model of what the directory actually does.
@@ -35,6 +37,8 @@ Use the context scan as ground truth. See `${CLAUDE_SKILL_DIR}/references/best-p
 | 7-13 | Mixed — useful rules buried among file listings or generic descriptions. |
 | 0-6 | Dominated by discoverable content — directory trees, component lists, type definitions. |
 
+Flag cross-references between CLAUDE.md files ("see also `admin/app/pages/CLAUDE.md`") as noise — agents discover them by directory traversal. Each file stands on its own.
+
 ### Prescriptiveness (20 pts)
 
 | Range | Descriptor |
@@ -55,6 +59,8 @@ Use the context scan as ground truth. See `${CLAUDE_SKILL_DIR}/references/best-p
 
 Deep modules: check that agents are told to **use** existing abstractions AND **extend** them (add to the registry/config, don't create parallel mechanisms). "Prefer" is too weak — "always/never" is the bar.
 
+Self-maintenance (root files only): does the file tell agents to update CLAUDE.md when they encounter undocumented gotchas or patterns? A root CLAUDE.md that doesn't ask to be maintained will go stale.
+
 ### Structure & Organization (15 pts)
 
 | Range | Descriptor |
@@ -64,7 +70,9 @@ Deep modules: check that agents are told to **use** existing abstractions AND **
 | 4-7 | Flat wall of text or illogical grouping. |
 | 0-3 | No structure. |
 
-Flag root sections scoped to a subdirectory for extraction. When content appears in both root and subdirectory, decide by scope — domain-specific modules belong in the subdirectory file. Recommend trimming root, not subdirectory.
+Flag root sections scoped to a subdirectory for extraction. Apply the scope rule (above) when evaluating duplication between root and subdirectory files.
+
+**Position check:** Is this CLAUDE.md at the right level? Content about a specific subdirectory should be pushed down. Project-wide rules in a nested file should be pulled up to root. Content describing code that no longer lives here means the file is orphaned or misplaced.
 
 ### Conciseness (10 pts)
 
