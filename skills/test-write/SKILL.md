@@ -36,17 +36,27 @@ If the working tree is clean, check the last commit with `git diff HEAD~1`.
 
 ### 1. Detect Test Framework
 
+These commands run automatically when the skill loads — output replaces each line below:
+
+- Test config files: !`ls vitest.config.* jest.config.* pytest.ini pyproject.toml 2>/dev/null`
+- Test directories: !`ls -d __tests__ tests test src/__tests__ 2>/dev/null`
+- Test scripts in package.json: !`cat package.json 2>/dev/null | grep -E '"test"' || true`
+- Unstaged changes: !`git diff --stat`
+- Staged changes: !`git diff --cached --stat`
+
 Look for existing setup in this order:
 
-1. Test config files (`vitest.config.*`, `jest.config.*`, `pytest.ini`, etc.)
-2. `package.json` test scripts
+1. Test config files (`vitest.config.*`, `jest.config.*`, `pytest.ini`, etc.) — see pre-run output
+2. `package.json` test scripts — see pre-run output
 3. Existing test files for patterns and conventions
 4. If nothing found, see Scaffolding section below
 
 Also detect:
-- Where tests live (`__tests__/`, `*.test.*`, `*.spec.*`, `test/`)
+- Where tests live — see pre-run directory output
 - Naming conventions used in existing tests
 - Import patterns and assertion style
+
+The `git diff` pre-run feeds Diff-Based Mode — if the user gave no target, use the changed files from the diff output.
 
 ### 2. Analyze the Code
 

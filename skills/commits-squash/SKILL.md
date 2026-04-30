@@ -20,21 +20,27 @@ Group by **code dependency**, not just by topic or file proximity. Read the actu
 
 ## Phase 1 — Analyze
 
-### Step 1: Detect the base branch
+These commands run automatically when the skill loads — output replaces each line below:
 
-Try in order:
+- PR base (if any): !`gh pr view --json baseRefName -q '.baseRefName' 2>/dev/null`
+- origin/main exists: !`git rev-parse --verify origin/main 2>/dev/null && echo origin/main`
+- origin/master exists: !`git rev-parse --verify origin/master 2>/dev/null && echo origin/master`
+- Working tree status: !`git status`
+- Branch commits: !`git log "origin/$(gh pr view --json baseRefName -q '.baseRefName' 2>/dev/null || (git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master))..HEAD" --oneline 2>/dev/null`
 
-1. `gh pr view --json baseRefName -q '.baseRefName' 2>/dev/null` — use PR base if exists
-2. `git rev-parse --verify origin/main 2>/dev/null` — use main
-3. `git rev-parse --verify origin/master 2>/dev/null` — use master
+### Step 1: Determine base
 
-Store as `<base>`.
+Pick `<base>` from the pre-run output:
+
+1. PR base if `gh pr view` returned one
+2. Otherwise `main` if it exists
+3. Otherwise `master`
 
 ### Step 2: Check prerequisites
 
-- `git status` — if uncommitted changes exist, follow the `commit` skill first, then continue.
+- From `git status` output: if uncommitted changes exist, follow the `commit` skill first, then continue.
 - Check for in-progress rebase: `.git/rebase-merge` or `.git/rebase-apply`. If found, **STOP** and report.
-- `git log origin/<base>..HEAD --oneline` — list commits. If 0 or 1, report "nothing to squash" and stop.
+- From the commit list: if 0 or 1 commits, report "nothing to squash" and stop.
 
 ### Step 3: Gather context
 

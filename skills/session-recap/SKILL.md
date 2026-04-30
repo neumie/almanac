@@ -9,60 +9,20 @@ Summarize what happened on the current branch so the user can pick up where they
 
 ## Gather Context
 
-Run all of these. Use whatever succeeds — not every repo has a remote, PR, or diverged branch.
+These commands run automatically when the skill loads — output replaces each line below. Use whatever succeeded.
 
-### 1. Branch and base
+- Current branch: !`git branch --show-current`
+- Working tree (short): !`git status --short`
+- Unstaged stat: !`git diff --stat`
+- Staged stat: !`git diff --cached --stat`
+- Recent commits: !`git log --oneline -10`
+- Base detection: !`git rev-parse --verify origin/main 2>/dev/null && echo "BASE=main" || (git rev-parse --verify origin/master 2>/dev/null && echo "BASE=master")`
+- Branch commits: !`git log "origin/$(git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master)..HEAD" --oneline 2>/dev/null`
+- Branch commit messages: !`git log "origin/$(git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master)..HEAD" --format="%h %s%n%b" 2>/dev/null`
+- Branch diff stat: !`git diff "origin/$(git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master)..HEAD" --stat 2>/dev/null`
+- Open PR: !`gh pr view --json number,title,url,state,body,reviews,statusCheckRollup 2>/dev/null`
 
-```bash
-BRANCH=$(git branch --show-current)
-```
-
-Detect the base branch:
-
-```bash
-git rev-parse --verify origin/main 2>/dev/null && BASE=main || {
-  git rev-parse --verify origin/master 2>/dev/null && BASE=master || BASE=""
-}
-```
-
-### 2. Commits on this branch
-
-```bash
-git log origin/$BASE..HEAD --oneline 2>/dev/null
-```
-
-For richer context, also get full commit messages:
-
-```bash
-git log origin/$BASE..HEAD --format="%h %s%n%b" 2>/dev/null
-```
-
-### 3. What changed (files)
-
-```bash
-git diff origin/$BASE..HEAD --stat 2>/dev/null
-```
-
-### 4. Uncommitted changes
-
-```bash
-git status --short
-```
-
-If there are uncommitted changes:
-
-```bash
-git diff --stat
-git diff --cached --stat
-```
-
-### 5. Open PR
-
-```bash
-gh pr view --json number,title,url,state,body,reviews,statusCheckRollup 2>/dev/null
-```
-
-If `gh` is unavailable or no PR exists, skip.
+If any output was empty, that information is unavailable for this repo — skip the corresponding section in the recap.
 
 ## Produce the Recap
 

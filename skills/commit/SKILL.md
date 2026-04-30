@@ -31,12 +31,20 @@ Types: `feat`, `fix`, `refactor`, `perf`, `chore`, `ci`, `docs`, `test`
 
 ## Procedure
 
-1. Run `git status` and `git diff` (staged + unstaged) to see all changes.
-2. Review the changes and decide how to split them into commits (if needed).
-3. For each commit:
+These commands run automatically when the skill loads — output replaces each line below:
+
+- Working tree status: !`git status`
+- Unstaged diff: !`git diff`
+- Staged diff: !`git diff --cached`
+- Recent commits: !`git log --oneline -10`
+
+Then:
+
+1. Review the changes and decide how to split them into commits (if needed).
+2. For each commit:
    - Stage the relevant files with `git add <specific files>` (never `git add -A` or `git add .`)
    - Create the commit
-4. Run `git status` after all commits to verify nothing was missed.
+3. Run `git status` after all commits to verify nothing was missed.
 
 ## Edge cases
 

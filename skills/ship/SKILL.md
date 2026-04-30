@@ -16,6 +16,14 @@ Run the full workflow: name the branch, commit, push, and open a PR. Each step r
 
 If the user says "ship draft" or "draft", create the PR as a draft.
 
+## Pre-run state
+
+These commands run automatically when the skill loads — output replaces each line below:
+
+- Working tree status: !`git status`
+- Current branch: !`git branch --show-current`
+- Workflow count: !`gh api repos/{owner}/{repo}/actions/workflows --jq '.total_count' 2>/dev/null`
+
 ## Step 1 — Name the branch
 
 Follow the `branch-name` skill to analyze the branch contents and rename if needed.
@@ -78,11 +86,7 @@ Shipped:
 
 Replace any skipped steps with their skip message (e.g., `Commit: nothing to commit (skipped)`).
 
-After the summary, check if the repo has CI workflows:
-
-```bash
-gh api repos/{owner}/{repo}/actions/workflows --jq '.total_count'
-```
+After the summary, use the workflow count from the pre-run:
 
 - If workflows exist (count > 0): invoke the `pr-watch` skill on the PR immediately — do not ask.
 - If no workflows (count is 0): ask **"Merge?"** — if yes, try `gh pr merge <number> --squash --delete-branch`. If it fails (e.g., git worktree conflict), merge via API: `gh api repos/{owner}/{repo}/pulls/{number}/merge -X PUT -f merge_method=squash`, then delete the remote branch: `gh api repos/{owner}/{repo}/git/refs/heads/{branch} -X DELETE`.

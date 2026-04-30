@@ -14,11 +14,17 @@ If a question can be answered by exploring the codebase, explore the codebase in
 
 ## Domain awareness
 
-During codebase exploration, look for existing documentation:
+These commands run automatically when the skill loads — output replaces each line below:
 
-- **`CONTEXT.md`** — glossary of domain terms. If it exists, use its vocabulary in all output. If it doesn't exist, create one when the first term is resolved.
-- **`CONTEXT-MAP.md`** — if present at root, the repo has multiple bounded contexts. The map points to where each one lives.
-- **`docs/adr/`** — architecture decision records. Create the directory when the first ADR is needed.
+- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null`
+- CONTEXT-MAP.md: !`cat CONTEXT-MAP.md 2>/dev/null`
+- ADR list: !`ls docs/adr/ 2>/dev/null`
+
+Use the output above:
+
+- **`CONTEXT.md`** — glossary of domain terms. If content is in context, use its vocabulary in all output. If empty, create one when the first term is resolved.
+- **`CONTEXT-MAP.md`** — if content is in context, the repo has multiple bounded contexts. The map points to where each one lives.
+- **`docs/adr/`** — architecture decision records. If files were listed, read the relevant ones. Create the directory when the first ADR is needed.
 
 ## During the session
 

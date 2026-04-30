@@ -15,15 +15,21 @@ These tests exist to detect regressions. Once a user path works, it should keep 
 
 ### 1. Detect E2E Framework
 
+These commands run automatically when the skill loads — output replaces each line below:
+
+- E2E config files: !`ls playwright.config.* cypress.config.* wdio.conf.* 2>/dev/null`
+- E2E directories: !`ls -d e2e tests/e2e cypress/e2e test/e2e 2>/dev/null`
+- E2E scripts in package.json: !`cat package.json 2>/dev/null | grep -E '"(e2e|playwright|cypress|test:e2e)"' || true`
+
 Look for an existing setup in this order:
 
-1. Config files (`playwright.config.*`, `cypress.config.*`, `wdio.conf.*`, etc.)
-2. `package.json` scripts referencing e2e or test runners
+1. Config files (`playwright.config.*`, `cypress.config.*`, `wdio.conf.*`, etc.) — see pre-run output
+2. `package.json` scripts referencing e2e or test runners — see pre-run output
 3. Existing e2e test files for patterns and conventions
 4. If nothing found, see Scaffolding section below
 
 Also detect:
-- Where e2e tests live (`e2e/`, `tests/`, `cypress/e2e/`, `test/e2e/`)
+- Where e2e tests live — see pre-run directory output
 - Naming conventions used in existing tests
 - Page object patterns or test utilities already in place
 

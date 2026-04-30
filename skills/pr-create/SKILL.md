@@ -10,20 +10,24 @@ Push the branch and open a GitHub pull request with a well-crafted description.
 
 ## Phase 1 — Analyze
 
+These commands run automatically when the skill loads — output replaces each line below:
+
+- Working tree status: !`git status`
+- Current branch: !`git branch --show-current`
+- origin/main exists: !`git rev-parse --verify origin/main 2>/dev/null && echo main`
+- origin/master exists: !`git rev-parse --verify origin/master 2>/dev/null && echo master`
+- Tracking branch: !`git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null`
+- Existing PR: !`gh pr view --json number,state,url 2>/dev/null`
+
 ### Step 1: Detect the base branch
 
-Try these in order:
-
-1. **Try main:** `git rev-parse --verify origin/main 2>/dev/null`. If it exists, use `main`.
-2. **Try master:** `git rev-parse --verify origin/master 2>/dev/null`. If it exists, use `master`.
-
-Store the result as `<base>`.
+From the pre-run output, use `main` if it exists, otherwise `master`. Store as `<base>`.
 
 ### Step 2: Check prerequisites
 
-- `git status` — warn if uncommitted changes exist (suggest committing first using the commit skill)
-- `git branch --show-current` — get the branch name
-- Verify not on main/master — cannot create a PR from the base branch to itself
+- From `git status`: warn if uncommitted changes exist (suggest committing first using the commit skill)
+- From `git branch --show-current`: confirm not on main/master — cannot create a PR from the base branch to itself
+- From `gh pr view`: if state is `OPEN`, an open PR already exists — show URL and ask whether to update title/body. `MERGED`/`CLOSED` means create a new one.
 
 ### Step 3: Gather branch content
 
@@ -32,11 +36,10 @@ Store the result as `<base>`.
 - `git diff origin/<base>..HEAD` — full diff for understanding
 - Read changed files for context
 
-### Step 4: Check remote state
+### Step 4: Check unpushed commits
 
-- Is the branch pushed? `git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null`
-- Are all commits pushed? `git log @{u}..HEAD --oneline 2>/dev/null`
-- Does an **open** PR already exist? `gh pr view --json state 2>/dev/null` (only `OPEN` counts — `MERGED`/`CLOSED` means create a new one)
+- If `@{u}` was empty: branch is not pushed, run `git push -u origin <branch>` in Phase 2.
+- If `@{u}` exists: `git log @{u}..HEAD --oneline 2>/dev/null` to see unpushed commits.
 
 ### Step 5: Generate PR content
 

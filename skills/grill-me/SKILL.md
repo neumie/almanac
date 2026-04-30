@@ -13,7 +13,11 @@ Interview the user relentlessly about every aspect of their plan until reaching 
 
 ## Setup
 
-At the start, check if `plans/brief.md` exists. If it does, read it — you're continuing a previous grilling session. Acknowledge what's already decided and pick up from open questions.
+Pre-run on skill load — output replaces the line below:
+
+- Existing brief: !`cat plans/brief.md 2>/dev/null`
+
+If the content is present above, you're continuing a previous grilling session — acknowledge what's already decided and pick up from open questions. If empty, this is a fresh session.
 
 ```bash
 mkdir -p plans

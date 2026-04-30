@@ -35,7 +35,12 @@ This skill is _informed_ by the project's domain model. The domain language give
 
 ### 1. Explore
 
-Read `CONTEXT.md` and relevant ADRs first if they exist.
+These commands run automatically when the skill loads — output replaces each line below:
+
+- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null`
+- ADR list: !`ls docs/adr/ 2>/dev/null`
+
+If `CONTEXT.md` content is present above, use that vocabulary throughout. If `ADR list` showed files, read the relevant ones before exploring.
 
 Then use the Agent tool with `subagent_type=Explore` to walk the codebase. Don't follow rigid heuristics — explore organically and note where you experience friction:
 

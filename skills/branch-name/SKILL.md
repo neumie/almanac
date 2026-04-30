@@ -9,14 +9,16 @@ Generate a descriptive branch name from the branch's contents and rename the cur
 
 ## What to analyze
 
-Gather context in this order (use whatever is available):
+These commands run automatically when the skill loads — their output replaces each line below. Use whatever has content.
 
-1. `git diff --cached --stat` and `git diff --cached` — staged changes
-2. `git diff --stat` and `git diff` — unstaged changes
-3. `git log main..HEAD --oneline 2>/dev/null || git log master..HEAD --oneline 2>/dev/null` — commits on the branch
-4. `git log main..HEAD --format="%B" 2>/dev/null || git log master..HEAD --format="%B" 2>/dev/null` — full commit messages
+- Staged file list: !`git diff --cached --stat`
+- Staged diff: !`git diff --cached`
+- Unstaged file list: !`git diff --stat`
+- Unstaged diff: !`git diff`
+- Branch commits: !`git log main..HEAD --oneline 2>/dev/null || git log master..HEAD --oneline 2>/dev/null`
+- Commit messages: !`git log main..HEAD --format="%B" 2>/dev/null || git log master..HEAD --format="%B" 2>/dev/null`
 
-Use whatever is available. If on main/master with uncommitted changes, use the diff only.
+If on main/master with uncommitted changes, only the diff output will be useful.
 
 ## Naming rules
 

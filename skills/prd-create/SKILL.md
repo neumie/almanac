@@ -10,7 +10,12 @@ Synthesize the current conversation context and codebase understanding into a PR
 
 ## Process
 
-1. Read `plans/brief.md` if it exists — this contains decisions from a grilling session. Also explore the repo to understand the current state of the codebase, if you haven't already. If a `CONTEXT.md` exists, read it and use its vocabulary throughout the PRD.
+These commands run automatically when the skill loads — output replaces each line below:
+
+- Existing brief: !`cat plans/brief.md 2>/dev/null`
+- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null`
+
+1. If `Existing brief` content is present above, those are decisions from a grilling session — use them. If `CONTEXT.md` content is present, use its vocabulary throughout the PRD. Also explore the repo to understand the current state of the codebase, if you haven't already.
 
 2. Sketch out the major modules you will need to build or modify to complete the implementation. Actively look for opportunities to extract deep modules that can be tested in isolation.
 
