@@ -37,7 +37,7 @@ Use the context scan as ground truth. See `${CLAUDE_SKILL_DIR}/references/best-p
 | 7-13 | Mixed — useful rules buried among file listings or generic descriptions. |
 | 0-6 | Dominated by discoverable content — directory trees, component lists, type definitions. |
 
-Flag cross-references between CLAUDE.md files ("see also `admin/app/pages/CLAUDE.md`") as noise — agents discover them by directory traversal. Each file stands on its own.
+Cross-references between CLAUDE.md files ("see also `pages/CLAUDE.md`") are noise — agents discover them by directory traversal. Each file stands on its own. Never suggest adding cross-references. Flag existing ones for removal.
 
 ### Prescriptiveness (20 pts)
 

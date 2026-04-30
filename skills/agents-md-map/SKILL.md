@@ -9,6 +9,8 @@ Scan the entire project to determine where CLAUDE.md/AGENTS.md files should exis
 
 **Input:** Project root path. Default: `.`
 
+**File convention:** Each location should have AGENTS.md as the actual file and CLAUDE.md as a symlink to it (`ln -s AGENTS.md CLAUDE.md`). AGENTS.md is the standard-agnostic name; the symlink ensures Claude Code discovers it. Flag locations that only have one or the other.
+
 ## Phase 1: Deep Scan
 
 Walk the directory tree from root. Skip `.gitignore`d paths, `node_modules`, `.git`, build output, vendored deps, test fixtures.
@@ -81,3 +83,5 @@ Every verdict must cite specific signals found in the code.
 
 Run `agents-md-audit` on each file to score quality and get improvement suggestions.
 ```
+
+After printing the map, if any locations are missing the AGENTS.md + CLAUDE.md symlink pair, list them and ask: "Want me to fix the symlink setup for these locations?" If yes, create the missing symlinks (`ln -s AGENTS.md CLAUDE.md`) or rename CLAUDE.md to AGENTS.md and create the symlink.
