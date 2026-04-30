@@ -11,6 +11,8 @@ Audit a CLAUDE.md or AGENTS.md file. Score it 0-100 across six metrics, cite spe
 
 **Scope rule:** Content belongs where its domain lives. A subdirectory CLAUDE.md owns domain-specific instructions (hooks, registries, patterns used in that directory). If root also documents the same thing, recommend **removing it from root entirely** — not shortening, not summarizing, removing. Never suggest removing domain-specific content from a subdirectory file or deferring to root.
 
+**Debt rule:** CLAUDE.md sets the rules. Existing codebase violations don't invalidate rules — they're just debt. Never suggest weakening a rule because the codebase doesn't fully follow it. Never suggest adding debt acknowledgements ("121 instances are legacy"). Never suggest qualifying rules with "except for existing code." If a rule says "never use X" and the codebase has violations, the rule is still correct.
+
 ## Phase 1: Context Scan
 
 Run before scoring. Build a mental model of what the directory actually does.
