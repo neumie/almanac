@@ -11,7 +11,12 @@ metadata:
 
 Discipline for hard bugs. Skip phases only when explicitly justified.
 
-Before exploring the codebase, check for `CONTEXT.md` at repo root and `docs/adr/` for architectural decisions. Use the vocabulary defined there. If these files don't exist, proceed silently.
+Domain context runs automatically when the skill loads — output replaces each line below:
+
+- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null`
+- ADR list: !`ls docs/adr/ 2>/dev/null`
+
+If `CONTEXT.md` content is present above, use that vocabulary. If `ADR list` showed files, read the relevant ones before exploring the codebase. If both were empty, proceed silently.
 
 ## Phase 1 — Build a feedback loop
 

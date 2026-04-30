@@ -9,20 +9,27 @@ Rebase the current branch onto the base branch. Handle conflicts gracefully.
 
 ## Phase 1 — Analyze
 
+These commands run automatically when the skill loads — output replaces each line below:
+
+- PR base (if any): !`gh pr view --json baseRefName -q '.baseRefName' 2>/dev/null`
+- origin/main exists: !`git rev-parse --verify origin/main 2>/dev/null && echo origin/main`
+- origin/master exists: !`git rev-parse --verify origin/master 2>/dev/null && echo origin/master`
+- Working tree status: !`git status`
+- Current branch: !`git branch --show-current`
+- In-progress rebase: !`ls -d .git/rebase-merge .git/rebase-apply 2>/dev/null`
+
 ### Step 1: Detect the base branch
 
-Try these in order:
+Pick `<base>` from the pre-run output:
 
-1. **Check for a PR:** `gh pr view --json baseRefName -q '.baseRefName'`. If a PR exists, use its base branch.
-2. **Try main:** `git rev-parse --verify origin/main 2>/dev/null`. If it exists, use `origin/main`.
-3. **Try master:** `git rev-parse --verify origin/master 2>/dev/null`. If it exists, use `origin/master`.
-
-Store the result as `<base>`.
+1. PR base if `gh pr view` returned one
+2. Otherwise `origin/main` if it exists
+3. Otherwise `origin/master`
 
 ### Step 2: Check prerequisites
 
-- `git status` — if there are uncommitted changes, **STOP**. Ask the user to commit or stash first.
-- Check for an in-progress rebase: look for `.git/rebase-merge` or `.git/rebase-apply`. If found, ask the user if they want to `--continue`, `--abort`, or `--skip`.
+- From `git status`: if uncommitted changes, **STOP**. Ask the user to commit or stash first.
+- If `ls .git/rebase-*` returned a path, an in-progress rebase exists. Ask the user if they want to `--continue`, `--abort`, or `--skip`.
 
 ### Step 3: Fetch latest
 

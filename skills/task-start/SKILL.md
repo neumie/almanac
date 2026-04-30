@@ -13,10 +13,11 @@ Take a task from vague description to execution. Assess complexity autonomously 
 
 ## Prerequisites
 
-Verify the working context before starting:
+Pre-run on skill load — output replaces the line below:
 
-- Check the current branch with `git branch --show-current`
-- If on `main` or `master`, warn: "You're on main — consider creating a worktree or feature branch first." Continue anyway (don't block).
+- Current branch: !`git branch --show-current`
+
+If on `main` or `master`, warn: "You're on main — consider creating a worktree or feature branch first." Continue anyway (don't block).
 
 ## Fast-path — Self-evidently trivial tasks
 

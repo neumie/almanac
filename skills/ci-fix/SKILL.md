@@ -11,13 +11,11 @@ Fetch the failing GitHub Actions logs, find the root cause, fix the code. No rep
 
 ### 1. Get the Failing Run
 
-Find the most recent failed run on the current branch:
+Pre-run on skill load — output replaces the line below:
 
-```bash
-gh run list --branch "$(git branch --show-current)" --status failure --limit 1 --json databaseId,name,conclusion,headBranch,event,createdAt
-```
+- Most recent failed run: !`gh run list --branch "$(git branch --show-current)" --status failure --limit 1 --json databaseId,name,conclusion,headBranch,event,createdAt`
 
-If no failed runs exist, tell the user and stop.
+If the output is `[]`, no failed runs exist — tell the user and stop.
 
 If the user specifies a particular run ID or workflow name, use that instead.
 

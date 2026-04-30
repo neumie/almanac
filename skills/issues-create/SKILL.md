@@ -16,7 +16,11 @@ Work from whatever is already in the conversation context. If the user passes a 
 
 ### 2. Explore the codebase (optional)
 
-If you have not already explored the codebase, do so to understand the current state of the code. If a `CONTEXT.md` exists, read it and use its vocabulary in issue titles and descriptions.
+`CONTEXT.md` runs automatically when the skill loads — output replaces the line below:
+
+- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null`
+
+If content is present above, use its vocabulary in issue titles and descriptions. If you have not already explored the codebase, do so to understand the current state of the code.
 
 ### 3. Draft vertical slices
 

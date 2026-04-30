@@ -9,20 +9,23 @@ Push the current branch to remote safely.
 
 ## Phase 1 — Analyze
 
-### Step 1: Check current state
+### Step 1: Check current state and tracking
 
-- `git status` — warn if there are uncommitted changes (dirty working tree)
-- `git branch --show-current` — get the current branch name
-- `git log --oneline -5` — see recent commits
+These commands run automatically when the skill loads — output replaces each line below:
 
-### Step 2: Check remote tracking
+- Working tree status: !`git status`
+- Current branch: !`git branch --show-current`
+- Recent commits: !`git log --oneline -5`
+- Tracking branch: !`git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null`
+- Open PR: !`gh pr view --json number,title,url,state 2>/dev/null`
 
-```bash
-git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null
-```
+From the output:
 
-- If a tracking branch exists, note it
-- If no tracking branch, note that upstream will be set on push
+- Warn if there are uncommitted changes (dirty working tree)
+- Note the current branch name and recent commits
+- If `@{u}` returned a tracking branch, note it
+- If `@{u}` was empty, upstream will be set on push
+- If `gh pr view` returned an open PR, you'll update its description after pushing
 
 ### Step 3: Determine what will be pushed
 

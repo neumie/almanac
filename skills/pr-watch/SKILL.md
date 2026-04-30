@@ -10,25 +10,20 @@ metadata:
 
 Watch a PR's CI checks until they complete. If checks fail, attempt to fix them automatically. Report the result with a suggested next step.
 
-## Detect the PR
+## Detect the PR and CI
 
-If the user provides a PR number, use it. Otherwise detect from the current branch:
+These commands run automatically when the skill loads — output replaces each line below:
 
-```bash
-gh pr view --json number,title,url,state,headRefName
-```
+- PR for current branch: !`gh pr view --json number,title,url,state,headRefName 2>/dev/null`
+- Workflow count: !`gh api repos/{owner}/{repo}/actions/workflows --jq '.total_count' 2>/dev/null`
+
+If the user provides a PR number, use that instead of the detected one.
 
 If no PR exists or state is not `OPEN`, stop and report.
 
 ## Check for CI
 
-Before watching, verify that the repo actually has CI checks configured:
-
-```bash
-gh api repos/{owner}/{repo}/actions/workflows --jq '.total_count'
-```
-
-If the count is 0, report and suggest merge:
+If the workflow count is 0, report and suggest merge:
 
 ```
 No CI workflows configured — nothing to watch.

@@ -12,13 +12,15 @@ Autonomous implementation loop. Each iteration gets fresh context, picks one tas
 
 ## Setup
 
+These commands run automatically when the skill loads — output replaces each line below:
+
+- Available PRDs: !`ls plans/*.md 2>/dev/null | grep -v prompt | grep -v brief`
+- Project files: !`ls package.json Makefile Cargo.toml go.mod pyproject.toml setup.py 2>/dev/null`
+- Tests directory: !`ls tests/ 2>/dev/null`
+
 ### 1. Select a PRD
 
-The loop needs a PRD to work from. List available PRDs:
-
-```bash
-ls plans/*.md 2>/dev/null | grep -v prompt | grep -v brief
-```
+From the PRD list:
 
 - If the user passed a name (e.g. `/ralph-loop auth-system`), use `plans/auth-system.md`
 - If there's exactly one PRD, use it
@@ -29,7 +31,7 @@ Store the selected PRD path as `PRD_FILE` for use in the prompt template.
 
 ### 2. Detect feedback loops
 
-Look for available feedback commands in the project:
+Map the detected project files to feedback commands:
 
 - `package.json` → `npm run test`, `npm run typecheck`, `npm run lint`
 - `Makefile` → `make test`, `make check`
