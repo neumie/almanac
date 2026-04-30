@@ -14,10 +14,11 @@ Audit a CLAUDE.md or AGENTS.md file. Score it 0-100 across six metrics, cite spe
 Run before scoring. Build a mental model of what the directory actually does.
 
 1. **Directory scan** — `find` the directory tree. Note file types, structure, entry points, configs.
-2. **Dependency trace** — grep for imports/requires referencing paths outside the directory. Map shared utilities.
-3. **Code signals** — non-obvious patterns, complex configs, multiple entry points. For subdirectory files, also scan for `// HACK`, `// TODO`, `// FIXME`. For root files, skip file-level comments.
-4. **Deep module detection** — identify shared abstractions: registries, contexts, factories, facades. Candidates for mandatory-use rules.
-5. **Mental model** — what does this directory do? What would trip someone up? What deep modules must agents use and extend?
+2. **Parent CLAUDE.md scan** — read all CLAUDE.md/AGENTS.md files in parent directories up to repo root. These establish context the audited file should complement, not duplicate.
+3. **Dependency trace** — grep for imports/requires referencing paths outside the directory. Map shared utilities.
+4. **Code signals** — non-obvious patterns, complex configs, multiple entry points. For subdirectory files, also scan for `// HACK`, `// TODO`, `// FIXME`. For root files, skip file-level comments.
+5. **Deep module detection** — identify shared abstractions: registries, contexts, factories, facades. Candidates for mandatory-use rules.
+6. **Mental model** — what does this directory do? What would trip someone up? What deep modules must agents use and extend?
 
 **File-only fallback:** No codebase available → skip this phase, score on textual quality only, note in output.
 
