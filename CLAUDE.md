@@ -34,6 +34,10 @@ Always extend `almanac_validate_skill()` in `lib/almanac-core.sh` for new skill-
 
 `providers/claude-code/skills` is a symlink to `../../skills`. Editing files under `providers/claude-code/skills/` edits the canonical files in `skills/`. Always edit at the canonical `skills/` path — never through the symlink.
 
+## Skill Resources (scripts/, references/)
+
+`almanac install claude-code` creates two links: per-skill `SKILL.md` symlinks at `~/.claude/commands/almanac/<name>.md` (slash invocation, `almanac:` namespace) and a directory symlink at `~/.claude/skills/almanac` → `$ALMANAC_HOME/skills` (resource resolution). The commands path is a single-file symlink — `${CLAUDE_SKILL_DIR}/scripts/...` resolved from there will not find the skill's `scripts/` subdir. Skills that ship runnable assets must print absolute paths under `~/.claude/skills/almanac/<name>/scripts/...` in user-facing instructions, not `${CLAUDE_SKILL_DIR}`-relative ones.
+
 ## Global Config Scope
 
 `providers/claude-code/CLAUDE.md` (caveman mode) gets symlinked to `~/.claude/CLAUDE.md` when users run `almanac install claude-code --global-config`. Edits there affect every Claude Code session globally — not just this repo. Never put project-specific rules there; project-only guidance belongs in this file.

@@ -27,6 +27,13 @@ _uninstall_claude_code() {
 
   _info "Removed $count skill symlinks from ~/.claude/commands/almanac/"
 
+  # Remove skills resource symlink (added in newer installs)
+  local skills_link="$HOME/.claude/skills/almanac"
+  if [[ -L "$skills_link" ]] && [[ "$(readlink "$skills_link")" == *almanac* ]]; then
+    rm "$skills_link"
+    _info "Removed skill resource link ~/.claude/skills/almanac"
+  fi
+
   # Remove CLAUDE.md symlink if it points to almanac
   local claude_md="$HOME/.claude/CLAUDE.md"
   if [[ -L "$claude_md" ]] && [[ "$(readlink "$claude_md")" == *almanac* ]]; then
