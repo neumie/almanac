@@ -29,6 +29,14 @@ fi
 stream_text='select(.type == "assistant").message.content[]? | select(.type == "text").text // empty | gsub("\n"; "\r\n") | . + "\r\n\n"'
 final_result='select(.type == "result").result // empty'
 
+push_ralph_commits() {
+  if git remote get-url origin >/dev/null 2>&1; then
+    echo ""
+    echo "======= PUSHING TO REMOTE ======="
+    git push 2>&1 || echo "[warn] git push failed — push manually to share work."
+  fi
+}
+
 for ((i=1; i<=$ITERATIONS; i++)); do
   tmpfile=$(mktemp)
   trap "rm -f $tmpfile" EXIT
@@ -54,15 +62,18 @@ for ((i=1; i<=$ITERATIONS; i++)); do
   if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then
     echo ""
     echo "Ralph complete after $i iterations."
+    push_ralph_commits
     exit 0
   fi
 
   if [[ "$result" == *"<promise>ABORT</promise>"* ]]; then
     echo ""
     echo "Ralph aborted at iteration $i. Check the last commit message for details."
+    push_ralph_commits
     exit 1
   fi
 done
 
 echo ""
 echo "Ralph finished $ITERATIONS iterations. Tasks may remain — check with: git log --grep='RALPH($PRD_NAME)' --oneline"
+push_ralph_commits
