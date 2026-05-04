@@ -11,12 +11,12 @@ Rebase the current branch onto the base branch. Handle conflicts gracefully.
 
 These commands run automatically when the skill loads — output replaces each line below:
 
-- PR base (if any): !`gh pr view --json baseRefName -q '.baseRefName' 2>/dev/null`
-- origin/main exists: !`git rev-parse --verify origin/main 2>/dev/null && echo origin/main`
-- origin/master exists: !`git rev-parse --verify origin/master 2>/dev/null && echo origin/master`
+- PR base (if any): !`gh pr view --json baseRefName -q '.baseRefName' 2>/dev/null || true`
+- origin/main exists: !`git rev-parse --verify origin/main 2>/dev/null && echo origin/main || true`
+- origin/master exists: !`git rev-parse --verify origin/master 2>/dev/null && echo origin/master || true`
 - Working tree status: !`git status`
 - Current branch: !`git branch --show-current`
-- In-progress rebase: !`ls -d .git/rebase-merge .git/rebase-apply 2>/dev/null`
+- In-progress rebase: !`ls -d .git/rebase-merge .git/rebase-apply 2>/dev/null || true`
 
 ### Step 1: Detect the base branch
 

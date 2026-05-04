@@ -2,47 +2,17 @@
 
 Personal agent toolkit. Skills follow the [Agent Skills Open Standard](https://agentskills.io/specification) — they work across all compatible agents.
 
-## Structure
+## Naming
 
-- `skills/` — each skill is a directory with `SKILL.md` (YAML frontmatter + markdown body); reference material lives in `skills/*/references/`
-- `providers/` — provider-specific adapters (Claude Code has hooks; others have setup stubs)
-- `lib/` — shared shell utilities (`core.sh` for CLI, `almanac-core.sh` for skill validation)
-- `tests/` — `test-structure.sh` checks files exist, `test-skills.sh` validates skill format
-- `cmd/` — CLI commands: install, uninstall, list, update, sync, help
+Always name skills `noun-verb` (`pr-create`, `ci-fix`, `session-recap`). Never `verb-noun` — breaks alphabetical grouping by topic. Lowercase alphanumeric + hyphens only, no `--`, no leading/trailing `-`. Name must match the directory name exactly.
 
-## Skill Format (Agent Skills Open Standard)
+## Skill Format
 
-```yaml
----
-name: lowercase-kebab-case        # Required, max 64 chars, must match directory name
-description: Use when [condition]  # Required, max 1024 chars
-metadata:                          # Optional
-  upstream: anthropics/skills/x    # For adapted skills — tracks source
-  upstream-sha: abc123...          # Git blob SHA at time of adaptation
-  adapted-date: "2026-03-09"
-  dependencies:                    # Skills this skill follows (validated by tests)
-    - other-skill
-compatibility: Requires X          # Optional, max 500 chars
----
-# Markdown instructions (keep under 500 lines)
-```
-
-Optional directories: `scripts/`, `references/`, `assets/`
-
-## Naming Convention
-
-Skill names use `noun-verb` order (e.g. `pr-create`, `ci-fix`, `branch-summary`) so related skills group together alphabetically and are easier to search by topic.
-
-## Adding a Skill
-
-1. Create `skills/<name>/SKILL.md` with frontmatter
-2. Name must be lowercase alphanumeric + hyphens, no `--`, no leading/trailing `-`, using `noun-verb` order
-3. Description should start with "Use when..." for clear trigger conditions
-4. Run `bash tests/test-skills.sh` to validate
+Description must start with `Use when` and state the trigger condition explicitly — agents under-trigger otherwise. Keep the body under 500 lines; move detail to `references/`. Full frontmatter schema: `docs/CONTRIBUTING.md`.
 
 ## Skill Deduplication
 
-Orchestrator skills (`ship`, `task-start`) must reference standalone skills rather than inlining their logic. Each capability has one source of truth:
+Orchestrator skills (`ship`, `task-start`) **must** reference standalone skills, never inline their logic. One source of truth per capability:
 
 - **Branch naming** → `branch-name`
 - **Committing** → `commit`
@@ -50,27 +20,34 @@ Orchestrator skills (`ship`, `task-start`) must reference standalone skills rath
 - **PR creation** → `pr-create`
 - **Complexity scoring** → `complexity-assess`
 
-When adding a new orchestrator or composite skill, delegate to existing skills with "Follow the `<skill-name>` skill" rather than duplicating their instructions. Declare hard dependencies in `metadata.dependencies` — validation will fail if a listed dependency doesn't exist.
+When adding a new orchestrator or composite skill, delegate with "Follow the `<skill-name>` skill" — never duplicate. Declare hard dependencies in `metadata.dependencies`; validation fails if a listed dependency doesn't exist.
 
-## Adapted Skills
+## Decision Framework: New Skill vs Extend
 
-Eight skills track upstream sources: `interface-design` (Dammyjay93/interface-design), `codebase-improve`, `diagnose`, `grill-me`, `grill-plan`, `issues-create`, `prd-create`, and `tdd` (mattpocock/skills). Check for updates with `almanac sync`.
+Before creating a new skill: (1) check if an existing skill already covers the trigger, (2) if it overlaps an orchestrator (`ship`, `task-start`), extend the orchestrator instead of adding a sibling.
 
-## Testing
+## Validation as Deep Module
 
-```bash
-bash tests/test-structure.sh   # All files and directories
-bash tests/test-skills.sh      # Validates all skills + negative tests
-```
+Always extend `almanac_validate_skill()` in `lib/almanac-core.sh` for new skill-format rules. Never inline ad-hoc checks in `tests/test-skills.sh` — leads to scattered validation. Always run `bash tests/test-skills.sh` after editing any skill; if it fails, fix the skill — never skip the test, weaken the validator, or commit with failures.
 
-## Keeping Documentation in Sync
+## Symlink Architecture
 
-Skill metadata is referenced in multiple places: `README.md` (skills table, structure diagram, sync example), `CLAUDE.md` (adapted skills count), `docs/ARCHITECTURE.md`, and `docs/CONTRIBUTING.md`. When adding, removing, or renaming skills, update all of these. `test-structure.sh` dynamically discovers skills so it stays current automatically.
+`providers/claude-code/skills` is a symlink to `../../skills`. Editing files under `providers/claude-code/skills/` edits the canonical files in `skills/`. Always edit at the canonical `skills/` path — never through the symlink.
 
-## CLI
+## Global Config Scope
 
-```bash
-almanac install claude-code    # Add session hook to ~/.claude/settings.json
-almanac sync                   # Check adapted skills for upstream changes
-almanac list                   # Show providers and install status
-```
+`providers/claude-code/CLAUDE.md` (caveman mode) gets symlinked to `~/.claude/CLAUDE.md` when users run `almanac install claude-code --global-config`. Edits there affect every Claude Code session globally — not just this repo. Never put project-specific rules there; project-only guidance belongs in this file.
+
+## Doc Sync
+
+When adding/removing/renaming a skill, you **must** update in the same commit:
+
+- `README.md` — skills table, structure diagram, sync example
+- `docs/ARCHITECTURE.md`
+- `docs/CONTRIBUTING.md`
+
+`test-structure.sh` only catches missing skill files — it does not catch stale prose. Adapted skills track upstream sources via `metadata.upstream-sha`; `almanac sync` checks for updates.
+
+## Self-Maintenance
+
+Discovered an undocumented gotcha or non-obvious pattern while working in this repo? Add it here in the same commit.

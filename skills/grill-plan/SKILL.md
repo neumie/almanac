@@ -16,9 +16,9 @@ If a question can be answered by exploring the codebase, explore the codebase in
 
 These commands run automatically when the skill loads — output replaces each line below:
 
-- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null`
-- CONTEXT-MAP.md: !`cat CONTEXT-MAP.md 2>/dev/null`
-- ADR list: !`ls docs/adr/ 2>/dev/null`
+- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null || true`
+- CONTEXT-MAP.md: !`cat CONTEXT-MAP.md 2>/dev/null || true`
+- ADR list: !`ls docs/adr/ 2>/dev/null || true`
 
 Use the output above:
 

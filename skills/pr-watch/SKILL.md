@@ -14,8 +14,8 @@ Watch a PR's CI checks until they complete. If checks fail, attempt to fix them 
 
 These commands run automatically when the skill loads — output replaces each line below:
 
-- PR for current branch: !`gh pr view --json number,title,url,state,headRefName 2>/dev/null`
-- Workflow count: !`gh api repos/{owner}/{repo}/actions/workflows --jq '.total_count' 2>/dev/null`
+- PR for current branch: !`gh pr view --json number,title,url,state,headRefName 2>/dev/null || true`
+- Workflow count: !`gh api repos/{owner}/{repo}/actions/workflows --jq '.total_count' 2>/dev/null || true`
 
 If the user provides a PR number, use that instead of the detected one.
 

@@ -18,7 +18,7 @@ Work from whatever is already in the conversation context. If the user passes a 
 
 `CONTEXT.md` runs automatically when the skill loads — output replaces the line below:
 
-- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null`
+- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null || true`
 
 If content is present above, use its vocabulary in issue titles and descriptions. If you have not already explored the codebase, do so to understand the current state of the code.
 

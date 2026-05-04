@@ -22,11 +22,11 @@ Group by **code dependency**, not just by topic or file proximity. Read the actu
 
 These commands run automatically when the skill loads — output replaces each line below:
 
-- PR base (if any): !`gh pr view --json baseRefName -q '.baseRefName' 2>/dev/null`
-- origin/main exists: !`git rev-parse --verify origin/main 2>/dev/null && echo origin/main`
-- origin/master exists: !`git rev-parse --verify origin/master 2>/dev/null && echo origin/master`
+- PR base (if any): !`gh pr view --json baseRefName -q '.baseRefName' 2>/dev/null || true`
+- origin/main exists: !`git rev-parse --verify origin/main 2>/dev/null && echo origin/main || true`
+- origin/master exists: !`git rev-parse --verify origin/master 2>/dev/null && echo origin/master || true`
 - Working tree status: !`git status`
-- Branch commits: !`git log "origin/$(gh pr view --json baseRefName -q '.baseRefName' 2>/dev/null || (git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master))..HEAD" --oneline 2>/dev/null`
+- Branch commits: !`git log "origin/$(gh pr view --json baseRefName -q '.baseRefName' 2>/dev/null || (git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master))..HEAD" --oneline 2>/dev/null || true`
 
 ### Step 1: Determine base
 

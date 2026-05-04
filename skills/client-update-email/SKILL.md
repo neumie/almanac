@@ -22,8 +22,8 @@ Ask the user for these if not already provided in conversation context:
 Run these commands, adapting refs to the user's scope:
 
 - Commit list: !`git log deploy/prod..deploy/stage --oneline --no-merges 2>/dev/null || echo "SCOPE_ERROR: adjust refs"`
-- Diff stat: !`git diff deploy/prod..deploy/stage --stat 2>/dev/null`
-- Merged PRs: !`gh pr list --state merged --limit 50 --json number,title,body,url 2>/dev/null`
+- Diff stat: !`git diff deploy/prod..deploy/stage --stat 2>/dev/null || true`
+- Merged PRs: !`gh pr list --state merged --limit 50 --json number,title,body,url 2>/dev/null || true`
 
 If the default refs don't exist, ask the user which branches or refs to compare.
 

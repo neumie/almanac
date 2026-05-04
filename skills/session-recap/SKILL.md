@@ -16,11 +16,11 @@ These commands run automatically when the skill loads — output replaces each l
 - Unstaged stat: !`git diff --stat`
 - Staged stat: !`git diff --cached --stat`
 - Recent commits: !`git log --oneline -10`
-- Base detection: !`git rev-parse --verify origin/main 2>/dev/null && echo "BASE=main" || (git rev-parse --verify origin/master 2>/dev/null && echo "BASE=master")`
-- Branch commits: !`git log "origin/$(git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master)..HEAD" --oneline 2>/dev/null`
-- Branch commit messages: !`git log "origin/$(git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master)..HEAD" --format="%h %s%n%b" 2>/dev/null`
-- Branch diff stat: !`git diff "origin/$(git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master)..HEAD" --stat 2>/dev/null`
-- Open PR: !`gh pr view --json number,title,url,state,body,reviews,statusCheckRollup 2>/dev/null`
+- Base detection: !`git rev-parse --verify origin/main 2>/dev/null && echo "BASE=main" || (git rev-parse --verify origin/master 2>/dev/null && echo "BASE=master") || true`
+- Branch commits: !`git log "origin/$(git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master)..HEAD" --oneline 2>/dev/null || true`
+- Branch commit messages: !`git log "origin/$(git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master)..HEAD" --format="%h %s%n%b" 2>/dev/null || true`
+- Branch diff stat: !`git diff "origin/$(git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master)..HEAD" --stat 2>/dev/null || true`
+- Open PR: !`gh pr view --json number,title,url,state,body,reviews,statusCheckRollup 2>/dev/null || true`
 
 If any output was empty, that information is unavailable for this repo — skip the corresponding section in the recap.
 

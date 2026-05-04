@@ -15,7 +15,7 @@ Interview the user relentlessly about every aspect of their plan until reaching 
 
 Pre-run on skill load — output replaces the line below:
 
-- Existing brief: !`cat plans/brief.md 2>/dev/null`
+- Existing brief: !`cat plans/brief.md 2>/dev/null || true`
 
 If the content is present above, you're continuing a previous grilling session — acknowledge what's already decided and pick up from open questions. If empty, this is a fresh session.
 

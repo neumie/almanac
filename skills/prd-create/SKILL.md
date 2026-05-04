@@ -12,8 +12,8 @@ Synthesize the current conversation context and codebase understanding into a PR
 
 These commands run automatically when the skill loads — output replaces each line below:
 
-- Existing brief: !`cat plans/brief.md 2>/dev/null`
-- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null`
+- Existing brief: !`cat plans/brief.md 2>/dev/null || true`
+- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null || true`
 
 1. If `Existing brief` content is present above, those are decisions from a grilling session — use them. If `CONTEXT.md` content is present, use its vocabulary throughout the PRD. Also explore the repo to understand the current state of the codebase, if you haven't already.
 
