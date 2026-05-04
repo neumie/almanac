@@ -165,7 +165,15 @@ Check if a local dev server is already running by testing common ports (3000, 30
 lsof -i :3000 -i :3001 -i :5173 -i :8080 -sTCP:LISTEN 2>/dev/null
 ```
 
-If not running, detect the start command from `package.json` (look for `dev`, `start`, or `serve` scripts) and start it. Wait for it to be ready before proceeding.
+If not running, figure out how to start it. Check these sources in order:
+
+1. **CLAUDE.md / AGENTS.md / README.md** — often has "how to run" instructions, dev URLs, docker-compose commands
+2. **docker-compose.yml / docker-compose.dev.yml** — if the project uses Docker, run `docker compose up` (or the specific service)
+3. **Makefile** — look for `dev`, `serve`, `run` targets
+4. **package.json** — look for `dev`, `start`, or `serve` scripts
+5. **.env / .env.local** — may contain `PORT` or `BASE_URL` hints
+
+Start the dev server using whatever method the project uses. Wait for it to be ready before proceeding. If unsure which method is correct, ask the user.
 
 ### Step 2: Plan captures
 
