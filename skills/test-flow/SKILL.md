@@ -13,6 +13,10 @@ These tests exist to detect regressions. Once a user path works, it should keep 
 
 ## Process
 
+### 0. Verify Browser Tooling
+
+Before exploring, confirm a browser MCP is available — Playwright MCP or `mcp__claude-in-chrome__*` tools. Without one, you'd be inventing selectors from JSX/HTML source, which produces brittle tests. If nothing is wired up, ask the user to install Playwright MCP, or fall back to `npx playwright codegen <url>` and have them paste the recorded interactions.
+
 ### 1. Detect E2E Framework
 
 These commands run automatically when the skill loads — output replaces each line below:
@@ -73,10 +77,20 @@ Rules:
 For each approved flow, write an E2E test that:
 
 - Replays the exact user journey from start to finish
-- Uses realistic selectors (prefer accessible roles, labels, test IDs over brittle CSS selectors)
+- Uses selectors from the ladder below (never invent them from source)
 - Asserts on user-visible outcomes (text appears, page navigates, element is visible)
 - Is independent — each test can run in isolation
 - Has a clear, descriptive name that reads like a user story
+
+**Selector ladder** — use in order, only drop down when the above is ambiguous:
+
+1. `getByRole` with accessible name
+2. `getByLabel` for form controls
+3. `getByText` for unique visible copy
+4. `getByTestId` only when 1–3 are ambiguous
+5. CSS/XPath as last resort, with a comment explaining why
+
+Pull selectors from the live a11y snapshot (MCP), not from reading the source. If a selector matches multiple elements, narrow with role + name + scope — never `nth-child` or index.
 
 Follow the project's existing conventions for:
 - File location and naming
@@ -90,12 +104,15 @@ If no conventions exist, use sensible defaults for the detected framework.
 
 Execute the tests immediately after writing them.
 
+**Before declaring green:** verify the test exercised the *intended* path, not a backdoor. Did the assertions pin user-visible outcomes that would actually break if the feature regressed? If the test passed by skipping a step, navigating directly to a success URL, or asserting something trivially always-true, fix the test — passing ≠ correct.
+
 **If tests pass:** Move to the next flow.
 
 **If tests fail — determine the cause:**
 
 **A) Test is wrong** (bad selector, timing issue, wrong assertion, missing setup):
 - Fix the test yourself. This is your mistake, not a bug in the app.
+- Fix selectors by *narrowing* (more specific role + name + scope) — never by loosening. Never relax assertions to make a test pass. If a selector matches multiple elements, disambiguate scope rather than picking `nth-match`.
 - Re-run until it passes.
 - Do not ask the user about test-level issues.
 
