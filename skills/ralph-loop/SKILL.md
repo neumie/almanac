@@ -129,7 +129,13 @@ Ralph loop ready for <name>.
     bash {{SKILL_SCRIPTS}}/afk.sh auth-system 10
 ```
 
-Where `{{SKILL_SCRIPTS}}` is the path to this skill's scripts directory: `${CLAUDE_SKILL_DIR}/scripts`.
+Where `{{SKILL_SCRIPTS}}` is the absolute path to this skill's scripts. Resolve in this order:
+
+1. `~/.claude/skills/almanac/ralph-loop/scripts` — set by `almanac install claude-code` (recommended; works on any provider that installs via the `~/.claude/skills/` directory symlink).
+2. `${CLAUDE_SKILL_DIR}/scripts` — fallback if the host agent populates `CLAUDE_SKILL_DIR` from the resolved skill directory.
+3. `$ALMANAC_HOME/skills/ralph-loop/scripts` — fallback when invoked outside an installed Claude Code provider.
+
+Print the literal `~/.claude/skills/almanac/ralph-loop/scripts/...` paths in the user-facing instructions so they work regardless of how the host agent resolves `${CLAUDE_SKILL_DIR}`.
 
 ## Modes
 
