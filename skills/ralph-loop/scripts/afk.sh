@@ -38,6 +38,15 @@ push_ralph_commits() {
 }
 
 for ((i=1; i<=$ITERATIONS; i++)); do
+  if [ -f .ralph-stop ]; then
+    echo ""
+    echo "======= STOP SIGNAL DETECTED (.ralph-stop) ======="
+    echo "Exiting after iteration $((i-1)) of $ITERATIONS."
+    rm -f .ralph-stop
+    push_ralph_commits
+    exit 0
+  fi
+
   tmpfile=$(mktemp)
   trap "rm -f $tmpfile" EXIT
 
