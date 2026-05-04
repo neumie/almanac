@@ -14,6 +14,13 @@ PRD_NAME="$1"
 ITERATIONS="$2"
 PROMPT="plans/prompt-${PRD_NAME}.md"
 
+# Model override: set RALPH_MODEL env var (e.g. RALPH_MODEL=claude-opus-4-7).
+# Unset = use Claude Code's default (currently Sonnet).
+MODEL_ARG=()
+if [ -n "${RALPH_MODEL:-}" ]; then
+  MODEL_ARG=(--model "$RALPH_MODEL")
+fi
+
 if [ ! -f "$PROMPT" ]; then
   echo "Error: $PROMPT not found. Run /ralph-loop $PRD_NAME to set up first."
   exit 1
@@ -36,6 +43,7 @@ for ((i=1; i<=$ITERATIONS; i++)); do
     --print \
     --output-format stream-json \
     --verbose \
+    "${MODEL_ARG[@]}" \
     "@$PROMPT Previous RALPH commits: $ralph_commits" \
   | grep --line-buffered '^{' \
   | tee "$tmpfile" \
