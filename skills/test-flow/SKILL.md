@@ -21,8 +21,8 @@ Before exploring, confirm a browser MCP is available — Playwright MCP or `mcp_
 
 These commands run automatically when the skill loads — output replaces each line below:
 
-- E2E config files: !`ls playwright.config.* cypress.config.* wdio.conf.* 2>/dev/null`
-- E2E directories: !`ls -d e2e tests/e2e cypress/e2e test/e2e 2>/dev/null`
+- E2E config files: !`ls playwright.config.* cypress.config.* wdio.conf.* 2>/dev/null || true`
+- E2E directories: !`ls -d e2e tests/e2e cypress/e2e test/e2e 2>/dev/null || true`
 - E2E scripts in package.json: !`cat package.json 2>/dev/null | grep -E '"(e2e|playwright|cypress|test:e2e)"' || true`
 
 Look for an existing setup in this order:

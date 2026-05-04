@@ -15,8 +15,8 @@ These commands run automatically when the skill loads — their output replaces 
 - Staged diff: !`git diff --cached`
 - Unstaged file list: !`git diff --stat`
 - Unstaged diff: !`git diff`
-- Branch commits: !`git log main..HEAD --oneline 2>/dev/null || git log master..HEAD --oneline 2>/dev/null`
-- Commit messages: !`git log main..HEAD --format="%B" 2>/dev/null || git log master..HEAD --format="%B" 2>/dev/null`
+- Branch commits: !`git log main..HEAD --oneline 2>/dev/null || git log master..HEAD --oneline 2>/dev/null || true`
+- Commit messages: !`git log main..HEAD --format="%B" 2>/dev/null || git log master..HEAD --format="%B" 2>/dev/null || true`
 
 If on main/master with uncommitted changes, only the diff output will be useful.
 

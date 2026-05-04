@@ -14,10 +14,10 @@ These commands run automatically when the skill loads — output replaces each l
 
 - Working tree status: !`git status`
 - Current branch: !`git branch --show-current`
-- origin/main exists: !`git rev-parse --verify origin/main 2>/dev/null && echo main`
-- origin/master exists: !`git rev-parse --verify origin/master 2>/dev/null && echo master`
-- Tracking branch: !`git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null`
-- Existing PR: !`gh pr view --json number,state,url 2>/dev/null`
+- origin/main exists: !`git rev-parse --verify origin/main 2>/dev/null && echo main || true`
+- origin/master exists: !`git rev-parse --verify origin/master 2>/dev/null && echo master || true`
+- Tracking branch: !`git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || true`
+- Existing PR: !`gh pr view --json number,state,url 2>/dev/null || true`
 
 ### Step 1: Detect the base branch
 

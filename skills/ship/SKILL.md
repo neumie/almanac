@@ -22,7 +22,7 @@ These commands run automatically when the skill loads — output replaces each l
 
 - Working tree status: !`git status`
 - Current branch: !`git branch --show-current`
-- Workflow count: !`gh api repos/{owner}/{repo}/actions/workflows --jq '.total_count' 2>/dev/null`
+- Workflow count: !`gh api repos/{owner}/{repo}/actions/workflows --jq '.total_count' 2>/dev/null || true`
 
 ## Step 1 — Name the branch
 

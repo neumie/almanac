@@ -38,8 +38,8 @@ If the working tree is clean, check the last commit with `git diff HEAD~1`.
 
 These commands run automatically when the skill loads — output replaces each line below:
 
-- Test config files: !`ls vitest.config.* jest.config.* pytest.ini pyproject.toml 2>/dev/null`
-- Test directories: !`ls -d __tests__ tests test src/__tests__ 2>/dev/null`
+- Test config files: !`ls vitest.config.* jest.config.* pytest.ini pyproject.toml 2>/dev/null || true`
+- Test directories: !`ls -d __tests__ tests test src/__tests__ 2>/dev/null || true`
 - Test scripts in package.json: !`cat package.json 2>/dev/null | grep -E '"test"' || true`
 - Unstaged changes: !`git diff --stat`
 - Staged changes: !`git diff --cached --stat`

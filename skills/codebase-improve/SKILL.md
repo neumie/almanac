@@ -37,8 +37,8 @@ This skill is _informed_ by the project's domain model. The domain language give
 
 These commands run automatically when the skill loads — output replaces each line below:
 
-- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null`
-- ADR list: !`ls docs/adr/ 2>/dev/null`
+- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null || true`
+- ADR list: !`ls docs/adr/ 2>/dev/null || true`
 
 If `CONTEXT.md` content is present above, use that vocabulary throughout. If `ADR list` showed files, read the relevant ones before exploring.
 

@@ -14,9 +14,9 @@ Autonomous implementation loop. Each iteration gets fresh context, picks one tas
 
 These commands run automatically when the skill loads — output replaces each line below:
 
-- Available PRDs: !`ls plans/*.md 2>/dev/null | grep -v prompt | grep -v brief`
-- Project files: !`ls package.json Makefile Cargo.toml go.mod pyproject.toml setup.py 2>/dev/null`
-- Tests directory: !`ls tests/ 2>/dev/null`
+- Available PRDs: !`ls plans/*.md 2>/dev/null | grep -v prompt | grep -v brief || true`
+- Project files: !`ls package.json Makefile Cargo.toml go.mod pyproject.toml setup.py 2>/dev/null || true`
+- Tests directory: !`ls tests/ 2>/dev/null || true`
 
 ### 1. Select a PRD
 

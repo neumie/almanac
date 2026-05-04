@@ -13,8 +13,8 @@ Discipline for hard bugs. Skip phases only when explicitly justified.
 
 Domain context runs automatically when the skill loads — output replaces each line below:
 
-- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null`
-- ADR list: !`ls docs/adr/ 2>/dev/null`
+- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null || true`
+- ADR list: !`ls docs/adr/ 2>/dev/null || true`
 
 If `CONTEXT.md` content is present above, use that vocabulary. If `ADR list` showed files, read the relevant ones before exploring the codebase. If both were empty, proceed silently.
 

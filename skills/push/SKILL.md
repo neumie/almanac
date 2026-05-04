@@ -16,8 +16,8 @@ These commands run automatically when the skill loads — output replaces each l
 - Working tree status: !`git status`
 - Current branch: !`git branch --show-current`
 - Recent commits: !`git log --oneline -5`
-- Tracking branch: !`git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null`
-- Open PR: !`gh pr view --json number,title,url,state 2>/dev/null`
+- Tracking branch: !`git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || true`
+- Open PR: !`gh pr view --json number,title,url,state 2>/dev/null || true`
 
 From the output:
 
