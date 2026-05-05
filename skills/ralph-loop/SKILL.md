@@ -145,6 +145,11 @@ Fully autonomous. Runs N iterations, each in a fresh Claude context. Stops when:
 - All tasks complete (`<promise>COMPLETE</promise>`)
 - A task is blocked (`<promise>ABORT</promise>`)
 - Iteration limit reached
+- `.ralph-stop` file exists in the working directory (graceful stop — see below)
+
+**Model override:** set `RALPH_MODEL` (e.g. `RALPH_MODEL=claude-opus-4-7 bash afk.sh <name> 10`); unset uses Claude Code's default.
+
+**Auto-push:** when the loop ends (any reason above), accumulated `RALPH(<name>)` commits are pushed to `origin` automatically — no manual `git push` needed after AFK runs.
 
 ### HITL Mode (`once.sh`)
 
@@ -165,7 +170,8 @@ Each `RALPH(<name>):` commit message contains what was done and notes for the ne
 
 ## When to stop
 
-- All tasks done → loop exits with "Ralph complete"
-- Something's wrong → loop exits with "Ralph aborted"
-- You see bad commits → Ctrl+C and review
-- Context is confused → kill it, fix the issue, restart (fresh context = fresh start)
+- All tasks done → loop exits with "Ralph complete" + auto-push.
+- Something's wrong → loop exits with "Ralph aborted" + auto-push.
+- Graceful stop mid-run → `touch .ralph-stop` in the working directory. The loop exits at the start of the next iteration, pushes commits, removes the file. Use this instead of Ctrl+C — Ctrl+C skips the auto-push and may leave RALPH commits stranded locally.
+- You see bad commits → Ctrl+C, review, and `git push` manually if you want to keep them.
+- Context is confused → kill it, fix the issue, restart (fresh context = fresh start).
