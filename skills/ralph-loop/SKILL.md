@@ -146,10 +146,13 @@ Fully autonomous. Runs N iterations, each in a fresh Claude context. Stops when:
 - A task is blocked (`<promise>ABORT</promise>`)
 - Iteration limit reached
 - `.ralph-stop` file exists in the working directory (graceful stop — see below)
+- Observer detects HIGH drift (writes `.ralph-stop` automatically — see Observer below)
 
 **Model override:** set `RALPH_MODEL` (e.g. `RALPH_MODEL=claude-opus-4-7 bash afk.sh <name> 10`); unset uses Claude Code's default.
 
 **Auto-push:** when the loop ends (any reason above), accumulated `RALPH(<name>)` commits are pushed to `origin` automatically — no manual `git push` needed after AFK runs.
+
+**Observer:** a parallel Claude process wakes every 15 minutes (configurable via `RALPH_OBSERVE_INTERVAL`, in seconds) and reviews recent `RALPH(<name>)` commits + the PRD for drift — repeated tasks, off-PRD work, ABORT loops, vague commits, scope creep, test rot, etc. Each check is logged to `plans/observer-<name>.log` with `DRIFT_LEVEL: low|medium|high` + reasoning. On HIGH drift the observer writes `.ralph-stop`, which makes the loop exit gracefully at the next iteration boundary. Disable with `RALPH_NO_OBSERVE=1`.
 
 ### HITL Mode (`once.sh`)
 

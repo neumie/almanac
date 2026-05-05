@@ -37,6 +37,98 @@ push_ralph_commits() {
   fi
 }
 
+# Observer: periodic drift detection. Runs in a background subshell, polls every
+# RALPH_OBSERVE_INTERVAL seconds (default 900 = 15min). On HIGH drift, writes
+# .ralph-stop so the next iteration exits gracefully. Set RALPH_NO_OBSERVE=1 to
+# disable.
+OBSERVE_INTERVAL="${RALPH_OBSERVE_INTERVAL:-900}"
+OBSERVE_LOG="plans/observer-${PRD_NAME}.log"
+OBSERVER_PID=""
+
+run_observer_once() {
+  local recent_commits
+  recent_commits=$(git log --grep="RALPH(${PRD_NAME})" -n 10 --format="%h %ad %s%n%b---" --date=short 2>/dev/null || echo "No RALPH commits yet")
+
+  local observer_prompt
+  observer_prompt="Read the PRD context at @${PROMPT}. You are an observer watching an autonomous coding loop named ralph(${PRD_NAME}).
+
+Recent RALPH commits (last 10):
+${recent_commits}
+
+Detect drift. Drift includes (non-exhaustive):
+- Repeated tasks or task ping-pong
+- Off-PRD topics — work unrelated to the PRD
+- ABORT loops — repeated aborts on the same blocker
+- Vague 'no real progress' commits
+- Scope creep beyond the PRD
+- Test rot or growing failures
+- Anything else that suggests wasted effort
+
+Output exactly two lines, no preamble:
+DRIFT_LEVEL: <low|medium|high>
+REASON: <one paragraph explaining the assessment>
+
+Be conservative. Only output 'high' with clear evidence — when 'high', the loop will be stopped via .ralph-stop."
+
+  local result
+  result=$(claude \
+    --print \
+    --permission-mode plan \
+    "${MODEL_ARG[@]}" \
+    "$observer_prompt" 2>&1 || true)
+
+  {
+    echo ""
+    echo "===== OBSERVE $(date -Iseconds) ====="
+    echo "$result"
+  } >> "$OBSERVE_LOG"
+
+  if echo "$result" | grep -qiE '^[[:space:]]*DRIFT_LEVEL:[[:space:]]*high'; then
+    {
+      echo ""
+      echo "======= OBSERVER: HIGH DRIFT DETECTED — writing .ralph-stop ======="
+      echo "$result"
+    } >&2
+    touch .ralph-stop
+  fi
+}
+
+start_observer() {
+  if [ "${RALPH_NO_OBSERVE:-}" = "1" ]; then
+    echo "[observer] disabled (RALPH_NO_OBSERVE=1)"
+    return
+  fi
+  mkdir -p "$(dirname "$OBSERVE_LOG")"
+  {
+    echo ""
+    echo "===== OBSERVER STARTED $(date -Iseconds) interval=${OBSERVE_INTERVAL}s ====="
+  } >> "$OBSERVE_LOG"
+  (
+    while true; do
+      sleep "$OBSERVE_INTERVAL"
+      [ -f .ralph-stop ] && exit 0
+      run_observer_once
+    done
+  ) &
+  OBSERVER_PID=$!
+  echo "[observer] started (PID $OBSERVER_PID, interval ${OBSERVE_INTERVAL}s, log $OBSERVE_LOG)"
+}
+
+stop_observer() {
+  if [ -n "${OBSERVER_PID:-}" ]; then
+    kill "$OBSERVER_PID" 2>/dev/null || true
+    wait "$OBSERVER_PID" 2>/dev/null || true
+  fi
+}
+
+cleanup_all() {
+  stop_observer
+  [ -n "${tmpfile:-}" ] && rm -f "$tmpfile"
+}
+trap cleanup_all EXIT INT TERM
+
+start_observer
+
 for ((i=1; i<=$ITERATIONS; i++)); do
   if [ -f .ralph-stop ]; then
     echo ""
@@ -48,7 +140,6 @@ for ((i=1; i<=$ITERATIONS; i++)); do
   fi
 
   tmpfile=$(mktemp)
-  trap "rm -f $tmpfile" EXIT
 
   echo ""
   echo "======= ITERATION $i of $ITERATIONS ($PRD_NAME) ======="
