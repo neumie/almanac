@@ -1,6 +1,7 @@
 ---
 name: agents-md-audit
 description: Use when auditing a CLAUDE.md or AGENTS.md file. Scores six metrics (0-100), cites issues, suggests fixes. Codebase scan first, falls back to file-only when no codebase available.
+disable-model-invocation: true
 ---
 
 # Audit Agent Instruction Files

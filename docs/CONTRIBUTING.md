@@ -22,7 +22,7 @@ Step-by-step instructions for the agent...
 
 3. **Description**: max 1024 chars. Include both what the skill does and when to trigger it. Be specific — agents tend to under-trigger, so err on the side of being explicit about trigger conditions.
 
-4. **Optional frontmatter**: `license`, `compatibility` (max 500 chars), `metadata` (key-value map), `allowed-tools`
+4. **Optional frontmatter**: `license`, `compatibility` (max 500 chars), `metadata` (key-value map), `allowed-tools`, `disable-model-invocation` (bool — strips skill from auto-listing; user-invocable via `/almanac:<name>`; orchestrators can still load it via path)
 
 5. **Optional directories**: `scripts/` (executable code), `references/` (docs loaded on demand), `assets/` (templates, data)
 

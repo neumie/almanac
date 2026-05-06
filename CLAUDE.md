@@ -8,6 +8,8 @@
 
 **Description length.** Hard cap **220 chars** (validator enforces). State the trigger once — do **not** restate it as `Use this whenever the user says X, Y, Z, or wants to A`. Mechanism details (subagent counts, internal modes, scoring rubrics) belong in the SKILL.md body, not frontmatter. The aggregated skills listing is loaded into every Claude session — bloated descriptions burn tokens and risk getting truncated/dropped.
 
+**Manual-only skills.** Set `disable-model-invocation: true` in frontmatter to strip a skill from the auto-listing entirely (saves ~200 chars/skill in the listing). The skill stays user-invocable via `/almanac:<name>` and orchestrators can still load it by path. Use for: orchestrator-only deps with no own natural-language trigger (e.g. `branch-name` is only ever called by `ship`/`task-start`). Don't use for skills with their own user-facing trigger phrase (`commit`, `push`, `ship`, `diagnose`, `tdd`, etc.) — those need to auto-fire.
+
 ## Decision Framework: New Skill vs Extend
 
 Before creating a new skill: (1) check if an existing skill covers the trigger, (2) if it overlaps an orchestrator (`ship`, `task-start`), extend the orchestrator instead of adding a sibling.

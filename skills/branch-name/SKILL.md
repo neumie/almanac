@@ -1,6 +1,7 @@
 ---
 name: branch-name
 description: Use when naming or renaming the current git branch from its contents. Triggers: name this branch, rename branch, or working on default branch (main) with uncommitted work.
+disable-model-invocation: true
 ---
 
 # Branch Name
