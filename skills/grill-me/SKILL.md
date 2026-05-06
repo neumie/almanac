@@ -1,6 +1,7 @@
 ---
 name: grill-me
 description: Use when stress-testing a plan, design, or architecture through relentless questioning. Walks each branch of the decision tree, writes crystallized decisions to plans/brief.md.
+disable-model-invocation: true
 metadata:
   upstream: mattpocock/skills/grill-me
   upstream-sha: f1543a9113277dd442fc84fab929321703df1fc7

@@ -1,6 +1,7 @@
 ---
 name: agents-md-map
 description: Use when mapping where CLAUDE.md or AGENTS.md files should exist. Scans for non-obvious complexity, evaluates existing files, identifies gaps. Run before agents-md-audit on each flagged file.
+disable-model-invocation: true
 ---
 
 # Map Agent Instruction Files

@@ -1,6 +1,7 @@
 ---
 name: client-update-email
 description: Use when writing a client-facing email summarizing project work. Reads git history + code, drafts a tiered outline by client impact, outputs markdown with optional HTML/screenshots.
+disable-model-invocation: true
 ---
 
 # Client Update Email

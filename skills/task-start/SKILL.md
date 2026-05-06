@@ -1,6 +1,7 @@
 ---
 name: task-start
 description: Use when starting a NEW task not yet explored. Assesses complexity, routes execution depth (trivial→solve, moderate→steps, complex→plan). Skip if task already discussed/planned.
+disable-model-invocation: true
 metadata:
   dependencies:
     - complexity-assess

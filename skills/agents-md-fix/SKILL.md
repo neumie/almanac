@@ -1,6 +1,7 @@
 ---
 name: agents-md-fix
 description: Use when iteratively raising a CLAUDE.md or AGENTS.md to a target audit score. Spawns blind reviewer + fixer subagents per loop (target hidden, prevents score gaming).
+disable-model-invocation: true
 metadata:
   dependencies:
     - agents-md-audit
