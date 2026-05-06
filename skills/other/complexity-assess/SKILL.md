@@ -1,7 +1,6 @@
 ---
 name: complexity-assess
 description: Use when scoring how complex a task is before starting. Rates scope, clarity, risk, novelty into a tier (trivial/moderate/complex). Triggers: complexity check, how hard is this.
-disable-model-invocation: true
 ---
 
 # Complexity Assessment
