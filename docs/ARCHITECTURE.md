@@ -7,7 +7,7 @@ Two-layer design: provider-agnostic core + provider-specific adapters.
 ### `skills/`
 The open standard. Each skill is a directory with a `SKILL.md` file following the [Agent Skills Open Standard](https://agentskills.io/specification). Skills are natively discovered by Claude Code, OpenCode, Cursor, Codex, and 25+ compatible agents.
 
-Skills are organized by category — `skills/git/`, `skills/other/` — for filesystem hygiene. The category is purely organizational; install-time symlinks flatten everything to `~/.claude/skills/almanac/<name>` because Claude Code's skill discovery only scans direct children of the skills root. Names must be unique across the whole tree (validator enforces).
+Skills are organized by category — `git/`, `agents-md/`, `loop/`, `comms/`, `other/` — for filesystem hygiene. The category is purely organizational; install-time symlinks flatten everything to `~/.claude/skills/almanac/<name>` because Claude Code's skill discovery only scans direct children of the skills root. Names must be unique across the whole tree (validator enforces).
 
 Skills use progressive disclosure:
 1. **Metadata** (~100 tokens) — name + description, loaded at startup

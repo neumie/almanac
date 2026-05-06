@@ -2,7 +2,7 @@
 
 ## Adding a Skill
 
-1. Pick a category — `git/` for skills that run git/`gh`, `other/` for everything else. Create `skills/<category>/<name>/SKILL.md`:
+1. Pick a category — `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (PRD/issues/autonomous ralph-loop), `comms/` (client/team-facing comms), or `other/`. Add a new category freely if none fit. Create `skills/<category>/<name>/SKILL.md`:
 
 ```yaml
 ---

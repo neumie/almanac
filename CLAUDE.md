@@ -4,7 +4,7 @@
 
 **Naming.** `noun-verb` (`pr-create`, `ci-fix`, `session-recap`). Never `verb-noun` — breaks alphabetical grouping by topic. Lowercase alphanumeric + hyphens, no `--`, no leading/trailing `-`. Name must match directory exactly.
 
-**Categories.** Skills live nested at `skills/<category>/<name>/SKILL.md`. Two categories: `git/` (anything that runs git or `gh`) and `other/`. Names must be unique across the whole tree — validator hard-fails on collisions. The category is purely organizational; install-time symlinks flatten everything to `~/.claude/skills/almanac/<name>` because Claude Code skill discovery is flat (only direct children of the skills dir are scanned).
+**Categories.** Skills live nested at `skills/<category>/<name>/SKILL.md`. Current categories: `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (PRD → issues → autonomous ralph-loop), `comms/` (client/team-facing comms — emails, release notes, etc.), `other/`. Add new categories freely — validator just walks the tree. Names must be unique across the whole tree (validator hard-fails on collisions). The category is purely organizational; install-time symlinks flatten everything to `~/.claude/skills/almanac/<name>` because Claude Code skill discovery is flat (only direct children of the skills dir are scanned).
 
 **Format.** Description must start with `Use when` and state the trigger explicitly — agents under-trigger otherwise. Body under 500 lines; move detail to `references/`. Full frontmatter schema: `docs/CONTRIBUTING.md`.
 
