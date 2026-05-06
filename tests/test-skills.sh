@@ -11,7 +11,12 @@ FAIL=0
 
 echo "=== Skill Format Tests ==="
 
-for skill_dir in "$ROOT"/skills/*/; do
+# Tree-wide uniqueness check — must run before per-skill validation.
+if ! almanac_validate_unique_names; then
+  exit 1
+fi
+
+while IFS= read -r skill_dir; do
   [ -d "$skill_dir" ] || continue
   skill_name=$(basename "$skill_dir")
 
@@ -22,7 +27,7 @@ for skill_dir in "$ROOT"/skills/*/; do
     echo "  FAIL: $skill_name"
     FAIL=$((FAIL + 1))
   fi
-done
+done < <(almanac_list_skills)
 
 if [ "$PASS" -eq 0 ] && [ "$FAIL" -eq 0 ]; then
   echo "  No skills found"

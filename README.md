@@ -10,6 +10,8 @@ Skills are portable instruction sets that teach coding agents *how* to do things
 
 Run any skill as a slash command in your agent (e.g. `/commit`, `/ship`, `/ralph-loop`).
 
+Skills are organized by category in the repo (`skills/git/`, `skills/other/`) and flattened at install time so Claude Code's flat skill discovery finds them.
+
 ## Install
 
 ```bash

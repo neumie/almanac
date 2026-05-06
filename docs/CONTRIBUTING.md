@@ -2,7 +2,7 @@
 
 ## Adding a Skill
 
-1. Create `skills/<name>/SKILL.md`:
+1. Pick a category — `git/` for skills that run git/`gh`, `other/` for everything else. Create `skills/<category>/<name>/SKILL.md`:
 
 ```yaml
 ---
@@ -19,6 +19,7 @@ Step-by-step instructions for the agent...
    - 1-64 characters, lowercase alphanumeric + hyphens
    - No leading/trailing hyphens, no consecutive hyphens (`--`)
    - Must match the directory name exactly
+   - Must be unique across the whole tree — `skills/git/foo/` and `skills/other/foo/` collide (validator hard-fails)
 
 3. **Description**: max 1024 chars. Include both what the skill does and when to trigger it. Be specific — agents tend to under-trigger, so err on the side of being explicit about trigger conditions.
 

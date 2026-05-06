@@ -4,6 +4,8 @@
 
 **Naming.** `noun-verb` (`pr-create`, `ci-fix`, `session-recap`). Never `verb-noun` — breaks alphabetical grouping by topic. Lowercase alphanumeric + hyphens, no `--`, no leading/trailing `-`. Name must match directory exactly.
 
+**Categories.** Skills live nested at `skills/<category>/<name>/SKILL.md`. Two categories: `git/` (anything that runs git or `gh`) and `other/`. Names must be unique across the whole tree — validator hard-fails on collisions. The category is purely organizational; install-time symlinks flatten everything to `~/.claude/skills/almanac/<name>` because Claude Code skill discovery is flat (only direct children of the skills dir are scanned).
+
 **Format.** Description must start with `Use when` and state the trigger explicitly — agents under-trigger otherwise. Body under 500 lines; move detail to `references/`. Full frontmatter schema: `docs/CONTRIBUTING.md`.
 
 **Description length.** Hard cap **220 chars** (validator enforces). State the trigger once — do **not** restate it as `Use this whenever the user says X, Y, Z, or wants to A`. Mechanism details (subagent counts, internal modes, scoring rubrics) belong in the SKILL.md body, not frontmatter. The aggregated skills listing is loaded into every Claude session — bloated descriptions burn tokens and risk getting truncated/dropped.
@@ -39,18 +41,16 @@ Delegate with "Follow the `<skill-name>` skill" — never duplicate. Declare har
 
 ## Symlink Map
 
-Three symlinks exist — know which is which:
-
-- **In-repo:** `providers/claude-code/skills` → `../../skills`. Always edit at the canonical `skills/` path, never through the symlink — edits flow back but tooling and reviewers expect canonical paths.
-- **Install-time, per skill:** `~/.claude/commands/almanac/<name>.md` → each skill's `SKILL.md` (slash invocation, `almanac:` namespace). Never resolve `scripts/` or `references/` from this path — it's a single-file symlink and won't find sibling subdirs.
-- **Install-time, resources:** `~/.claude/skills/almanac` → `$ALMANAC_HOME/skills` (directory link). Always resolve runnable assets from here: `~/.claude/skills/almanac/<name>/scripts/...`.
+- **In-repo:** `providers/claude-code/skills` → `../../skills`. The plugin distribution path is no longer maintained (skills are now nested at `skills/<category>/<name>` and Claude Code's plugin loader expects flat). The symlink stays for backward-compat but the install CLI is the supported install path.
+- **Install-time, per skill (slash command):** `~/.claude/commands/almanac/<name>.md` → each skill's `SKILL.md`. Single-file symlink — never resolve `scripts/` or `references/` from this path.
+- **Install-time, per skill (resources):** `~/.claude/skills/almanac/<name>` → `$ALMANAC_HOME/skills/<category>/<name>` (directory symlink). One per skill, flattening the categorized layout. Always resolve runnable assets from here: `~/.claude/skills/almanac/<name>/scripts/...`.
 - **Install-time, global config:** `providers/claude-code/CLAUDE.md` → `~/.claude/CLAUDE.md` when user passes `--global-config`. Edits affect every Claude Code session globally — keep project-only rules in this file, not there.
 
-Changes to install symlink layout go in `cmd/install.sh` — don't fork the logic into another script.
+Changes to install symlink layout go in `cmd/install.sh` — don't fork the logic into another script. Helpers `almanac_list_skills`, `almanac_find_skill`, `almanac_validate_unique_names` (in `lib/almanac-core.sh`) are the only sanctioned ways to walk the skills tree — never `for d in skills/*/`.
 
 ## Skill Resources (scripts/, references/)
 
-**Always print absolute paths under `~/.claude/skills/almanac/<name>/scripts/...` in user-facing instructions. Never use `${CLAUDE_SKILL_DIR}/scripts/...`** — the commands path is a single-file symlink and won't resolve subdirs. Only the directory link at `~/.claude/skills/almanac` resolves.
+**Always print absolute paths under `~/.claude/skills/almanac/<name>/scripts/...` in user-facing instructions. Never use `${CLAUDE_SKILL_DIR}/scripts/...`** — the commands path is a single-file symlink and won't resolve subdirs. Only the per-skill directory symlinks at `~/.claude/skills/almanac/<name>` resolve.
 
 Existing offenders to NOT pattern-match from: `codebase-improve`, `diagnose`, `tdd`, `task-start`, `grill-me`, `agents-md-audit`, `ralph-loop` — all still reference `${CLAUDE_SKILL_DIR}/...`.
 

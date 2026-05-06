@@ -4,6 +4,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$ROOT/lib/almanac-core.sh"
 PASS=0
 FAIL=0
 
@@ -65,16 +66,18 @@ check "README.md"
 check "LICENSE"
 check ".gitignore"
 
-# Skills — dynamically check that every skill dir has a SKILL.md
+# Skills — dynamically check that every skill dir has a SKILL.md.
+# Tree layout: skills/<category>/<name>/SKILL.md
 echo ""
 echo "=== Skill Tests ==="
 skill_count=0
-for skill_dir in "$ROOT"/skills/*/; do
+while IFS= read -r skill_dir; do
   [ -d "$skill_dir" ] || continue
-  skill_name="$(basename "$skill_dir")"
-  check "skills/$skill_name/SKILL.md"
+  rel="${skill_dir#$ROOT/}"
+  rel="${rel%/}"
+  check "$rel/SKILL.md"
   skill_count=$((skill_count + 1))
-done
+done < <(almanac_list_skills)
 
 if [ "$skill_count" -eq 0 ]; then
   echo "  FAIL: no skills found"

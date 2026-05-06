@@ -122,22 +122,18 @@ almanac_validate_skill() {
   fi
 
   # --- Optional: metadata.dependencies validation ---
-  # Check that each dependency references an existing skill directory
-  local skills_root
-  skills_root="$(dirname "$skill_dir")"
+  # Resolve each dependency by name across the whole skills tree.
   local in_deps=0
   while IFS= read -r line; do
-    # Detect the start of the dependencies list
     if echo "$line" | grep -qE '^[[:space:]]+dependencies:'; then
       in_deps=1
       continue
     fi
-    # If we're in the dependencies list, read list items
     if [ "$in_deps" -eq 1 ]; then
       if echo "$line" | grep -qE '^[[:space:]]+-[[:space:]]'; then
         local dep
         dep=$(echo "$line" | sed 's/^[[:space:]]*-[[:space:]]*//')
-        if [ ! -d "$skills_root/$dep" ] || [ ! -f "$skills_root/$dep/SKILL.md" ]; then
+        if [ -z "$(almanac_find_skill "$dep")" ]; then
           echo "FAIL: dependency '$dep' not found (required by $(basename "$skill_dir"))" >&2
           errors=$((errors + 1))
         fi
@@ -150,11 +146,40 @@ almanac_validate_skill() {
   [ "$errors" -eq 0 ] && return 0 || return 1
 }
 
-# List all skill directories
+# List all skill directories — recurses skills/<category>/<name>/SKILL.md.
+# Echoes one absolute path per skill dir.
 almanac_list_skills() {
   local root
   root="$(almanac_root)"
-  for dir in "$root"/skills/*/; do
-    [ -d "$dir" ] && echo "$dir"
-  done
+  local f
+  while IFS= read -r f; do
+    echo "$(dirname "$f")/"
+  done < <(find "$root/skills" -mindepth 3 -maxdepth 3 -name SKILL.md -type f 2>/dev/null | sort)
+}
+
+# Find a skill directory by name. Echoes the dir path or empty string.
+almanac_find_skill() {
+  local name="$1"
+  local root
+  root="$(almanac_root)"
+  local match
+  match=$(find "$root/skills" -mindepth 2 -maxdepth 2 -type d -name "$name" 2>/dev/null | head -1)
+  [ -n "$match" ] && [ -f "$match/SKILL.md" ] && echo "$match"
+}
+
+# Validate uniqueness of skill names across the whole tree.
+# Returns 0 on success, 1 on collision (and prints offending names to stderr).
+almanac_validate_unique_names() {
+  local root
+  root="$(almanac_root)"
+  local dupes
+  dupes=$(find "$root/skills" -mindepth 3 -maxdepth 3 -name SKILL.md -type f 2>/dev/null \
+    | awk -F/ '{print $(NF-1)}' \
+    | sort | uniq -d)
+  if [ -n "$dupes" ]; then
+    echo "FAIL: skill names must be unique across the tree. Duplicates:" >&2
+    echo "$dupes" >&2
+    return 1
+  fi
+  return 0
 }

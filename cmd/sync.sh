@@ -27,7 +27,7 @@ up_to_date=0
 changed=0
 errors=0
 
-for skill_dir in "$ALMANAC_HOME"/skills/*/; do
+while IFS= read -r skill_dir; do
   [ -d "$skill_dir" ] || continue
   skill_file="$skill_dir/SKILL.md"
   [ -f "$skill_file" ] || continue
@@ -72,7 +72,7 @@ for skill_dir in "$ALMANAC_HOME"/skills/*/; do
       echo ""
     fi
   fi
-done
+done < <(almanac_list_skills)
 
 echo ""
 if [ "$found" -eq 0 ]; then

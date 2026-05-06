@@ -1,49 +1,59 @@
 #!/usr/bin/env bash
 # install.sh — Install almanac for a specific provider
 
+source "$ALMANAC_HOME/lib/almanac-core.sh"
+
 _install_claude_code() {
   local commands_dir="$HOME/.claude/commands/almanac"
-  local skills_link="$HOME/.claude/skills/almanac"
+  local skills_dir="$HOME/.claude/skills/almanac"
 
   [[ -d "$HOME/.claude" ]] || _die "~/.claude not found — is Claude Code installed?"
-  mkdir -p "$commands_dir"
-  mkdir -p "$HOME/.claude/skills"
+  mkdir -p "$commands_dir" "$skills_dir"
 
-  # Symlink each skill's SKILL.md into ~/.claude/commands/almanac/<name>.md
-  # (Provides slash invocation under the almanac: namespace.)
+  # Migrate from old layout: ~/.claude/skills/almanac as a single dir-symlink
+  # to skills/. Replace with a real directory of per-skill flat symlinks.
+  if [[ -L "$skills_dir" ]]; then
+    rm "$skills_dir"
+    mkdir -p "$skills_dir"
+  fi
+
+  almanac_validate_unique_names || _die "duplicate skill names — fix before installing"
+
+  # Per-skill flat symlinks. Skills live nested at skills/<category>/<name>/
+  # but install flat so Claude Code's flat skill discovery finds them.
   local count=0
-  for dir in "$ALMANAC_HOME"/skills/*/; do
+  while IFS= read -r dir; do
+    dir="${dir%/}"
     [ -f "$dir/SKILL.md" ] || continue
     local name
     name=$(basename "$dir")
-    local target="$commands_dir/$name.md"
 
-    # Remove existing (symlink or file)
-    [[ -L "$target" || -f "$target" ]] && rm "$target"
-
-    # Clean up legacy flat symlink from older installs
+    # Slash command symlink (per-file)
+    local cmd_target="$commands_dir/$name.md"
+    [[ -L "$cmd_target" || -f "$cmd_target" ]] && rm "$cmd_target"
     local legacy="$HOME/.claude/commands/$name.md"
     [[ -L "$legacy" ]] && rm "$legacy"
+    ln -s "$dir/SKILL.md" "$cmd_target"
 
-    ln -s "$dir/SKILL.md" "$target"
+    # Skill directory symlink (per-dir, so scripts/ + references/ resolve)
+    local skill_target="$skills_dir/$name"
+    [[ -L "$skill_target" || -e "$skill_target" ]] && rm -rf "$skill_target"
+    ln -s "$dir" "$skill_target"
+
     count=$((count + 1))
-  done
+  done < <(almanac_list_skills)
 
-  # Clean up dangling symlinks (from deleted skills)
+  # Clean up dangling slash-command symlinks (from deleted skills)
   for link in "$commands_dir"/*.md; do
     [[ -L "$link" ]] || continue
     [[ -e "$link" ]] || rm "$link"
   done
 
-  # Directory symlink so skills resolve their own scripts/ and references/
-  # subdirectories (the file-only commands/ symlink hides them from
-  # ${CLAUDE_SKILL_DIR}-relative paths).
-  if [[ -L "$skills_link" ]]; then
-    rm "$skills_link"
-  elif [[ -e "$skills_link" ]]; then
-    _die "$skills_link exists and is not a symlink — refusing to overwrite"
-  fi
-  ln -s "$ALMANAC_HOME/skills" "$skills_link"
+  # Clean up dangling skill-dir symlinks
+  for link in "$skills_dir"/*; do
+    [[ -L "$link" ]] || continue
+    [[ -e "$link" ]] || rm "$link"
+  done
 
   # Symlink global CLAUDE.md (only if no custom one exists)
   local claude_md="$ALMANAC_HOME/providers/claude-code/CLAUDE.md"
@@ -67,7 +77,7 @@ _install_claude_code() {
   fi
 
   _success "Installed $count skills into ~/.claude/commands/almanac/"
-  _success "Linked skill resources at ~/.claude/skills/almanac -> $ALMANAC_HOME/skills"
+  _success "Linked $count skill dirs at ~/.claude/skills/almanac/<name>"
   _info "Skills appear as almanac:<name> — start claude as usual"
 }
 

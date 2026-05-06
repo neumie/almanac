@@ -7,6 +7,8 @@ Two-layer design: provider-agnostic core + provider-specific adapters.
 ### `skills/`
 The open standard. Each skill is a directory with a `SKILL.md` file following the [Agent Skills Open Standard](https://agentskills.io/specification). Skills are natively discovered by Claude Code, OpenCode, Cursor, Codex, and 25+ compatible agents.
 
+Skills are organized by category — `skills/git/`, `skills/other/` — for filesystem hygiene. The category is purely organizational; install-time symlinks flatten everything to `~/.claude/skills/almanac/<name>` because Claude Code's skill discovery only scans direct children of the skills root. Names must be unique across the whole tree (validator enforces).
+
 Skills use progressive disclosure:
 1. **Metadata** (~100 tokens) — name + description, loaded at startup
 2. **Instructions** (<5000 tokens) — SKILL.md body, loaded on activation
@@ -36,10 +38,15 @@ Dispatcher pattern: `bin/almanac` resolves `ALMANAC_HOME`, sources `lib/core.sh`
 
 `almanac_validate_skill()` checks against the Agent Skills Open Standard:
 - Name format (regex, length, no consecutive hyphens, matches directory)
-- Description presence and length
+- Description presence + length (≤220 chars to keep auto-listing compact)
 - Frontmatter size
 - Optional field constraints (compatibility length)
 - Line count recommendation
+- `metadata.dependencies` resolved by name across the whole tree (categories are transparent to deps)
+
+`almanac_validate_unique_names()` runs once per test pass — fails if two skills under different categories share a name.
+
+`almanac_list_skills()` and `almanac_find_skill()` are the canonical tree walkers — every CLI/test that enumerates skills uses them. Layout assumption: `skills/<category>/<name>/SKILL.md` (depth 3 from `$ALMANAC_HOME`).
 
 ## Key Principle
 
