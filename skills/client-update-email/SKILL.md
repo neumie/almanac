@@ -1,6 +1,6 @@
 ---
 name: client-update-email
-description: Use when creating a client-facing email summarizing project work. Gathers changes from git history (typically deploy branch diffs), reads the actual code to understand each change, proposes a tiered outline grouped by client-perceived impact, and generates a markdown draft with HTML conversion and optional screenshot capture. Use this whenever the user says write client email, summarize what's new, client update, or what changed since last deploy.
+description: Use when writing a client-facing email summarizing project work. Reads git history + code, drafts a tiered outline by client impact, outputs markdown with optional HTML/screenshots.
 ---
 
 # Client Update Email

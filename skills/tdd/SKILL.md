@@ -1,6 +1,6 @@
 ---
 name: tdd
-description: Use when writing code test-first using red-green-refactor. Guides vertical-slice TDD where each cycle writes one failing test, then minimal code to pass. Use this whenever the user says TDD, test-first, red-green-refactor, or wants to develop a feature incrementally through tests.
+description: Use when writing code test-first via red-green-refactor. Vertical-slice TDD: one failing test, then minimal code to pass. Triggers: TDD, test-first, red-green-refactor.
 metadata:
   upstream: mattpocock/skills/tdd
   upstream-sha: 78f5077d6ec8c87a9cde9d485c098a149e5d5e2c

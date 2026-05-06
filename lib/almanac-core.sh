@@ -87,6 +87,11 @@ almanac_validate_skill() {
       echo "FAIL: description exceeds 1024 characters ($desc_len)" >&2
       errors=$((errors + 1))
     fi
+    # Cap at 220 chars to keep aggregated skills listing compact (token budget)
+    if [ "$desc_len" -gt 220 ]; then
+      echo "FAIL: description exceeds 220 characters ($desc_len) in $skill_dir — keep terse, drop redundant 'Use this whenever the user says...' restatements" >&2
+      errors=$((errors + 1))
+    fi
   fi
 
   # --- Frontmatter size check ---

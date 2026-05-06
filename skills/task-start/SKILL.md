@@ -1,6 +1,6 @@
 ---
 name: task-start
-description: Use when beginning work on a NEW task that hasn't been explored yet. Assesses complexity, then routes to the right execution depth — trivial tasks get solved immediately, moderate ones are broken into steps, complex ones get a plan first. Do NOT use when the task has already been discussed, explored, or planned in the current conversation — in that case just execute directly.
+description: Use when starting a NEW task not yet explored. Assesses complexity, routes execution depth (trivial→solve, moderate→steps, complex→plan). Skip if task already discussed/planned.
 metadata:
   dependencies:
     - complexity-assess

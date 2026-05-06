@@ -1,6 +1,6 @@
 ---
 name: push
-description: Use when pushing commits to a remote repository. Checks branch tracking, shows what will be pushed, sets upstream if needed, and handles diverged branches safely. Use this whenever the user says push, wants to send their work to the remote, or is preparing for a PR.
+description: Use when pushing commits to a remote. Checks tracking, shows what will be pushed, sets upstream if needed, handles diverged branches safely. Triggers: push, prepare for PR.
 ---
 
 # Push

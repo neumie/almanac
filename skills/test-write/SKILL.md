@@ -1,6 +1,6 @@
 ---
 name: test-write
-description: Use when backfilling tests on existing code. Analyzes code through public interfaces, detects the project's test framework, and writes behavior-focused regression tests. Supports targeted mode (specific files) and diff-based mode (changed files from git). Use this whenever the user says write tests, add tests, cover this, or wants regression tests for existing code.
+description: Use when backfilling tests on existing code. Detects test framework, writes behavior-focused regression tests via public interfaces. Modes: targeted (files) or diff-based (changed).
 ---
 
 # Test Write

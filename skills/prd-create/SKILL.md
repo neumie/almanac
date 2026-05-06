@@ -1,6 +1,6 @@
 ---
 name: prd-create
-description: Use when turning a conversation or idea into a PRD file. Synthesizes existing context into a structured product requirements document with user stories, module design, and testing decisions. Writes to plans/prd.md for use with the ralph-loop skill. Do NOT interview the user — just synthesize what you already know.
+description: Use when turning a conversation or idea into plans/prd.md. Synthesizes existing context into user stories, module design, testing decisions. Do NOT interview — just synthesize.
 metadata:
   upstream: mattpocock/skills/engineering/to-prd
   adapted-date: "2026-04-28"

@@ -1,6 +1,6 @@
 ---
 name: session-recap
-description: Use when the user wants a summary of what happened on the current branch or work session. Gathers git log, diff, branch name, PR status, and uncommitted changes to produce a concise recap. Use this whenever the user says recap, catch me up, what did I do, where was I, what happened, summarize this session, or wants to pick up where they left off.
+description: Use when summarizing the current branch or session. Gathers git log, diff, branch, PR status, uncommitted changes. Triggers: recap, catch me up, what did I do, where was I.
 ---
 
 # Session Recap

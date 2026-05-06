@@ -6,6 +6,8 @@
 
 **Format.** Description must start with `Use when` and state the trigger explicitly — agents under-trigger otherwise. Body under 500 lines; move detail to `references/`. Full frontmatter schema: `docs/CONTRIBUTING.md`.
 
+**Description length.** Hard cap **220 chars** (validator enforces). State the trigger once — do **not** restate it as `Use this whenever the user says X, Y, Z, or wants to A`. Mechanism details (subagent counts, internal modes, scoring rubrics) belong in the SKILL.md body, not frontmatter. The aggregated skills listing is loaded into every Claude session — bloated descriptions burn tokens and risk getting truncated/dropped.
+
 ## Decision Framework: New Skill vs Extend
 
 Before creating a new skill: (1) check if an existing skill covers the trigger, (2) if it overlaps an orchestrator (`ship`, `task-start`), extend the orchestrator instead of adding a sibling.

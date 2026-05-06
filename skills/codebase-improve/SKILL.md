@@ -1,6 +1,6 @@
 ---
 name: codebase-improve
-description: Use when finding architectural friction and deepening opportunities in a codebase. Surfaces shallow modules, proposes refactors that improve testability and AI-navigability, and grills on the design. Informed by CONTEXT.md vocabulary and ADRs.
+description: Use when finding architectural friction in a codebase. Surfaces shallow modules, proposes refactors for testability/AI-navigability, grills the design. Uses CONTEXT.md + ADRs.
 metadata:
   upstream: mattpocock/skills/engineering/improve-codebase-architecture
   adapted-date: "2026-04-28"

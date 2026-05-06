@@ -1,6 +1,6 @@
 ---
 name: commit
-description: Use when committing code changes. Analyzes changes, writes a conventional commit message, and commits immediately without asking for confirmation. Use this whenever the user says commit, wants to save their work, or is done with a change.
+description: Use when committing changes. Analyzes diff, writes a conventional commit message, commits immediately without confirmation. Triggers: commit, save my work, done with this change.
 ---
 
 # Commit

@@ -89,6 +89,11 @@ neg_test "missing name" "no-name" "---
 description: Use when testing
 ---"
 
+neg_test "description over 220 chars" "long-desc" "---
+name: long-desc
+description: Use when testing the description length cap. This description is intentionally padded with extra filler words to clearly exceed two hundred and twenty characters so that the validator must reject it as too long for the listing block.
+---"
+
 # Dependency validation negative test
 # Creates a skill that depends on a non-existent skill
 dep_neg_test() {

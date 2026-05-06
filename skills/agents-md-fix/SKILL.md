@@ -1,6 +1,6 @@
 ---
 name: agents-md-fix
-description: Use when iteratively improving a CLAUDE.md or AGENTS.md file until it meets a target audit score. Spawns a blind reviewer subagent (target hidden, preventing score gaming) and a separate fixer subagent each iteration. Use this whenever the user says fix CLAUDE.md, improve agents-md, raise audit score, loop audit and fix, or wants automated iteration on an instruction file.
+description: Use when iteratively raising a CLAUDE.md or AGENTS.md to a target audit score. Spawns blind reviewer + fixer subagents per loop (target hidden, prevents score gaming).
 metadata:
   dependencies:
     - agents-md-audit

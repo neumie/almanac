@@ -1,6 +1,6 @@
 ---
 name: interface-design
-description: Use when designing interfaces for dashboards, admin panels, SaaS apps, tools, and interactive products. NOT for marketing design (landing pages, marketing sites, campaigns). Use this whenever the user wants to build or improve an app interface, design a dashboard, create settings pages, or style data-heavy screens with craft and consistency.
+description: Use when designing dashboards, admin panels, SaaS apps, or interactive products. NOT for marketing (landing pages, campaigns). Triggers: build/improve app interface, dashboard, settings UI.
 metadata:
   upstream: Dammyjay93/interface-design/.claude/skills/interface-design
   upstream-sha: 9fe89c25f739eaee07d8a1aebe25e4ead8fabd7c

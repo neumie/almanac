@@ -1,6 +1,6 @@
 ---
 name: branch-name
-description: Use when naming or renaming the current git branch based on its contents. Use this whenever the user says name this branch, rename branch, needs a branch name, or is on a default/placeholder branch like main with uncommitted work.
+description: Use when naming or renaming the current git branch from its contents. Triggers: name this branch, rename branch, or working on default branch (main) with uncommitted work.
 ---
 
 # Branch Name

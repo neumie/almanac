@@ -1,6 +1,6 @@
 ---
 name: grill-me
-description: Use when stress-testing a plan, design, or architecture through relentless questioning. Walks down each branch of the decision tree, resolving dependencies one-by-one until reaching shared understanding. Writes decisions to plans/brief.md as they crystallize. Use this whenever the user says grill me, interview me, challenge my design, or wants to pressure-test their thinking.
+description: Use when stress-testing a plan, design, or architecture through relentless questioning. Walks each branch of the decision tree, writes crystallized decisions to plans/brief.md.
 metadata:
   upstream: mattpocock/skills/grill-me
   upstream-sha: f1543a9113277dd442fc84fab929321703df1fc7

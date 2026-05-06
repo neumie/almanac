@@ -1,6 +1,6 @@
 ---
 name: grill-plan
-description: Use when stress-testing a plan against the existing domain model and documented decisions. Challenges terminology, cross-references code, and updates CONTEXT.md and ADRs inline as decisions crystallize.
+description: Use when stress-testing a plan against the existing domain model + decisions. Challenges terminology, cross-references code, updates CONTEXT.md and ADRs inline as decisions crystallize.
 metadata:
   upstream: mattpocock/skills/engineering/grill-with-docs
   adapted-date: "2026-04-28"

@@ -1,6 +1,6 @@
 ---
 name: complexity-assess
-description: Use when evaluating how complex a task is before deciding on an approach. Scores scope, clarity, risk, and novelty to produce a complexity tier (trivial, moderate, complex). Use this whenever the user asks how hard something is, wants a complexity check, or before starting unfamiliar work.
+description: Use when scoring how complex a task is before starting. Rates scope, clarity, risk, novelty into a tier (trivial/moderate/complex). Triggers: complexity check, how hard is this.
 ---
 
 # Complexity Assessment

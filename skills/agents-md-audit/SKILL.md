@@ -1,6 +1,6 @@
 ---
 name: agents-md-audit
-description: Use when auditing a CLAUDE.md or AGENTS.md file for quality. Scores the file on six metrics (0-100 total), cites specific issues, and suggests improvements. Runs a codebase context scan first, falls back to file-only when no codebase is available.
+description: Use when auditing a CLAUDE.md or AGENTS.md file. Scores six metrics (0-100), cites issues, suggests fixes. Codebase scan first, falls back to file-only when no codebase available.
 ---
 
 # Audit Agent Instruction Files

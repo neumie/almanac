@@ -1,6 +1,6 @@
 ---
 name: ci-fix
-description: Use when GitHub Actions CI is failing on the current branch. Fetches the most recent failed run, reads the error logs, finds the root cause in the code, and fixes it. Use this whenever the user says fix CI, pipeline is broken, actions failing, checks failing, or build is red.
+description: Use when GitHub Actions CI is failing on the current branch. Fetches latest failed run, reads logs, finds root cause, fixes it. Triggers: fix CI, pipeline broken, build red.
 ---
 
 # Fix CI

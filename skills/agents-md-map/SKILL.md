@@ -1,6 +1,6 @@
 ---
 name: agents-md-map
-description: Use when mapping where CLAUDE.md or AGENTS.md files should exist in a project. Scans the codebase for non-obvious complexity, evaluates existing files, and identifies gaps. Run this first, then use agents-md-audit on each flagged file.
+description: Use when mapping where CLAUDE.md or AGENTS.md files should exist. Scans for non-obvious complexity, evaluates existing files, identifies gaps. Run before agents-md-audit on each flagged file.
 ---
 
 # Map Agent Instruction Files
