@@ -14,18 +14,64 @@ PRD_NAME="$1"
 ITERATIONS="$2"
 PROMPT="plans/prompt-${PRD_NAME}.md"
 
-# Model override: set RALPH_MODEL env var (e.g. RALPH_MODEL=claude-opus-4-7).
-# Unset = use Claude Code's default; the actual resolved model is logged from
-# each session init event.
+detect_provider() {
+  if [ -n "${RALPH_PROVIDER:-}" ]; then
+    echo "$RALPH_PROVIDER"
+  elif [ -n "${CODEX_THREAD_ID:-}" ] && command -v codex >/dev/null 2>&1; then
+    echo "codex"
+  elif command -v claude >/dev/null 2>&1; then
+    echo "claude"
+  elif command -v codex >/dev/null 2>&1; then
+    echo "codex"
+  else
+    echo "none"
+  fi
+}
+
+PROVIDER="$(detect_provider | tr '[:upper:]' '[:lower:]')"
+
+# Model override: set RALPH_MODEL env var. Unset = provider default.
 MODEL_ARG=()
 if [ -n "${RALPH_MODEL:-}" ]; then
   MODEL_ARG=(--model "$RALPH_MODEL")
 fi
+EFFORT_ARG=()
 
 if [ ! -f "$PROMPT" ]; then
   echo "Error: $PROMPT not found. Run /ralph-loop $PRD_NAME to set up first."
   exit 1
 fi
+
+case "$PROVIDER" in
+  claude)
+    if ! command -v claude >/dev/null 2>&1; then
+      echo "Error: RALPH_PROVIDER=claude but 'claude' is not on PATH."
+      exit 1
+    fi
+    PROVIDER_DISPLAY="Claude Code"
+    MODEL_DISPLAY="${RALPH_MODEL:-Claude Code default (resolved per session)}"
+    if [ -n "${RALPH_EFFORT:-}" ]; then
+      EFFORT_ARG=(--effort "$RALPH_EFFORT")
+    fi
+    EFFORT_DISPLAY="${RALPH_EFFORT:-provider default}"
+    ;;
+  codex)
+    if ! command -v codex >/dev/null 2>&1; then
+      echo "Error: RALPH_PROVIDER=codex but 'codex' is not on PATH."
+      exit 1
+    fi
+    PROVIDER_DISPLAY="Codex"
+    MODEL_DISPLAY="${RALPH_MODEL:-Codex default}"
+    if [ -n "${RALPH_EFFORT:-}" ]; then
+      EFFORT_ARG=(-c "model_reasoning_effort=\"$RALPH_EFFORT\"")
+    fi
+    EFFORT_DISPLAY="${RALPH_EFFORT:-provider default}"
+    ;;
+  *)
+    echo "Error: no supported agent found. Install Claude Code or Codex, or set RALPH_PROVIDER."
+    exit 1
+    ;;
+esac
 
 stream_text='
   if .type == "system" and .subtype == "init" and (.model // "") != "" then
@@ -37,6 +83,13 @@ stream_text='
   end
 '
 final_result='select(.type == "result").result // empty'
+codex_stream_text='
+  if .type == "event_msg" and .payload.type == "agent_message" then
+    .payload.message | . + "\n\n"
+  else
+    empty
+  end
+'
 
 push_ralph_commits() {
   if git remote get-url origin >/dev/null 2>&1; then
@@ -297,12 +350,38 @@ STEER: <one paragraph of concrete steering for next iteration, OR the literal wo
 
 Be conservative on DRIFT_LEVEL — only 'high' with clear evidence (the loop stops via .ralph-stop). Be conservative on STEER too — emit 'none' when agents are progressing fine."
 
-  local result
-  result=$(claude \
-    --print \
-    --permission-mode plan \
-    "${MODEL_ARG[@]}" \
-    "$overseer_prompt" 2>&1 || true)
+  local result overseer_result_file codex_overseer_prompt
+  case "$PROVIDER" in
+    claude)
+      result=$(claude \
+        --print \
+        --permission-mode plan \
+        "${MODEL_ARG[@]}" \
+        "${EFFORT_ARG[@]}" \
+        "$overseer_prompt" 2>&1 || true)
+      ;;
+    codex)
+      overseer_result_file=$(mktemp)
+      codex_overseer_prompt="PRD/iteration prompt contents from ${PROMPT}:
+$(cat "$PROMPT")
+
+${overseer_prompt}"
+      result=$(codex \
+        --ask-for-approval never \
+        exec \
+        --cd "$PWD" \
+        --sandbox read-only \
+        --color never \
+        --output-last-message "$overseer_result_file" \
+        "${MODEL_ARG[@]}" \
+        "${EFFORT_ARG[@]}" \
+        "$codex_overseer_prompt" 2>&1 || true)
+      if [ -s "$overseer_result_file" ]; then
+        result=$(cat "$overseer_result_file")
+      fi
+      rm -f "$overseer_result_file"
+      ;;
+  esac
 
   {
     echo ""
@@ -376,7 +455,6 @@ cleanup_all() {
 }
 trap cleanup_all EXIT INT TERM
 
-MODEL_DISPLAY="${RALPH_MODEL:-Claude Code default (resolved per session)}"
 if [ "${RALPH_NO_OVERSEE:-}" = "1" ]; then
   OVERSEER_DISPLAY="off (RALPH_NO_OVERSEE=1)"
 else
@@ -389,7 +467,9 @@ echo "======= RALPH AFK ======="
 echo "PRD:         $PRD_NAME"
 echo "Iterations:  $ITERATIONS"
 echo "Prompt:      $PROMPT"
+echo "Provider:    $PROVIDER_DISPLAY"
 echo "Model:       $MODEL_DISPLAY"
+echo "Effort:      $EFFORT_DISPLAY"
 echo "Overseer:    $OVERSEER_DISPLAY"
 echo "CI watch:    poll ${CI_POLL}s, timeout ${CI_TIMEOUT}s"
 echo "Overseer log: $OVERSEE_LOG"
@@ -423,17 +503,72 @@ for ((i=1; i<=$ITERATIONS; i++)); do
 
   prompt_prefix=$(build_prompt_prefix)
 
-  claude \
-    --print \
-    --output-format stream-json \
-    --verbose \
-    "${MODEL_ARG[@]}" \
-    "${prompt_prefix}@$PROMPT Previous RALPH commits: $ralph_commits" \
-  | grep --line-buffered '^{' \
-  | tee "$tmpfile" \
-  | jq --unbuffered -rj "$stream_text"
+  case "$PROVIDER" in
+    claude)
+      prompt="${prompt_prefix}@$PROMPT Previous RALPH commits: $ralph_commits"
+      claude \
+        --print \
+        --output-format stream-json \
+        --verbose \
+        "${MODEL_ARG[@]}" \
+        "${EFFORT_ARG[@]}" \
+        "$prompt" \
+      | grep --line-buffered '^{' \
+      | tee "$tmpfile" \
+      | jq --unbuffered -rj "$stream_text"
 
-  result=$(jq -r "$final_result" "$tmpfile")
+      result=$(jq -r "$final_result" "$tmpfile")
+      ;;
+    codex)
+      prompt="${prompt_prefix}# OUTPUT STYLE
+
+As you work, emit concise progress updates describing what you are doing and what you learned. Keep these updates short and useful. Do not manually paste command output; the runner logs raw tool output separately.
+
+$(cat "$PROMPT")
+
+Previous RALPH commits:
+$ralph_commits"
+      mkdir -p plans
+      codex_log="plans/ralph-codex-${PRD_NAME}-iteration-${i}.log"
+      echo "Codex session log: $codex_log"
+      if [ "${RALPH_CODEX_VERBOSE:-}" = "1" ]; then
+        codex \
+          --ask-for-approval never \
+          exec \
+          --cd "$PWD" \
+          --sandbox danger-full-access \
+          --color never \
+          --output-last-message "$tmpfile" \
+          "${MODEL_ARG[@]}" \
+          "${EFFORT_ARG[@]}" \
+          "$prompt"
+      else
+        set -o pipefail
+        if ! codex \
+          --ask-for-approval never \
+          exec \
+          --cd "$PWD" \
+          --sandbox danger-full-access \
+          --color never \
+          --json \
+          --output-last-message "$tmpfile" \
+          "${MODEL_ARG[@]}" \
+          "${EFFORT_ARG[@]}" \
+          "$prompt" 2>&1 \
+          | tee "$codex_log" \
+          | jq --unbuffered -rj "$codex_stream_text"; then
+          set +o pipefail
+          echo "Codex failed. Last log lines:"
+          tail -n 40 "$codex_log" || true
+          exit 1
+        fi
+        set +o pipefail
+        cat "$tmpfile"
+      fi
+
+      result=$(cat "$tmpfile")
+      ;;
+  esac
 
   if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then
     echo ""
