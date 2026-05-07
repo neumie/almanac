@@ -367,6 +367,27 @@ cleanup_all() {
 }
 trap cleanup_all EXIT INT TERM
 
+MODEL_DISPLAY="${RALPH_MODEL:-default (Claude Code default)}"
+if [ "${RALPH_NO_OVERSEE:-}" = "1" ]; then
+  OVERSEER_DISPLAY="off (RALPH_NO_OVERSEE=1)"
+else
+  OVERSEER_DISPLAY="on (interval ${OVERSEE_INTERVAL}s)"
+fi
+CI_POLL="${RALPH_CI_POLL_INTERVAL:-30}"
+CI_TIMEOUT="${RALPH_CI_WAIT_TIMEOUT:-1800}"
+
+echo "======= RALPH AFK ======="
+echo "PRD:         $PRD_NAME"
+echo "Iterations:  $ITERATIONS"
+echo "Prompt:      $PROMPT"
+echo "Model:       $MODEL_DISPLAY"
+echo "Overseer:    $OVERSEER_DISPLAY"
+echo "CI watch:    poll ${CI_POLL}s, timeout ${CI_TIMEOUT}s"
+echo "Overseer log: $OVERSEE_LOG"
+echo "Reports log: $REPORTS_LOG"
+echo "========================="
+echo ""
+
 # Pick up any pre-existing CI failure (e.g. from a prior AFK run or a manual
 # push) so iteration #1 can fix it before any new task work.
 check_ci_status

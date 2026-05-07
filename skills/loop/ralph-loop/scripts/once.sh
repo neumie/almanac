@@ -25,6 +25,16 @@ if [ ! -f "$PROMPT" ]; then
   exit 1
 fi
 
+MODEL_DISPLAY="${RALPH_MODEL:-default (Claude Code default)}"
+
+echo "======= RALPH ONCE ======="
+echo "PRD:         $PRD_NAME"
+echo "Prompt:      $PROMPT"
+echo "Model:       $MODEL_DISPLAY"
+echo "Permission:  acceptEdits"
+echo "=========================="
+echo ""
+
 ralph_commits=$(git log --grep="RALPH($PRD_NAME)" -n 10 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No RALPH commits found")
 
 claude --permission-mode acceptEdits "${MODEL_ARG[@]}" "@$PROMPT Previous RALPH commits: $ralph_commits"
