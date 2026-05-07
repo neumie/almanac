@@ -49,7 +49,7 @@ _ralph_push() {
   fi
 }
 
-# Observer-cadence push: pushes any unpushed local commits on the current
+# Overseer-cadence push: pushes any unpushed local commits on the current
 # branch so CI runs against the latest state. Returns 0 when a push happened,
 # 1 when there was nothing to push or push failed. Caller uses the return
 # value to decide whether to wait for CI.
@@ -61,24 +61,24 @@ push_if_unpushed() {
   if [ -z "$upstream" ]; then
     {
       echo ""
-      echo "===== OBSERVER PUSH $(date -Iseconds) — setting upstream ====="
-    } >> "$OBSERVE_LOG"
-    if _ralph_push >> "$OBSERVE_LOG" 2>&1; then
+      echo "===== OVERSEER PUSH $(date -Iseconds) — setting upstream ====="
+    } >> "$OVERSEE_LOG"
+    if _ralph_push >> "$OVERSEE_LOG" 2>&1; then
       return 0
     fi
-    echo "[observer] initial push failed" >> "$OBSERVE_LOG"
+    echo "[overseer] initial push failed" >> "$OVERSEE_LOG"
     return 1
   fi
   ahead=$(git rev-list --count "${upstream}..HEAD" 2>/dev/null || echo 0)
   [ "$ahead" -gt 0 ] || return 1
   {
     echo ""
-    echo "===== OBSERVER PUSH $(date -Iseconds) — $ahead commit(s) ahead of $upstream ====="
-  } >> "$OBSERVE_LOG"
-  if _ralph_push >> "$OBSERVE_LOG" 2>&1; then
+    echo "===== OVERSEER PUSH $(date -Iseconds) — $ahead commit(s) ahead of $upstream ====="
+  } >> "$OVERSEE_LOG"
+  if _ralph_push >> "$OVERSEE_LOG" 2>&1; then
     return 0
   fi
-  echo "[observer] push failed" >> "$OBSERVE_LOG"
+  echo "[overseer] push failed" >> "$OVERSEE_LOG"
   return 1
 }
 
@@ -102,7 +102,7 @@ wait_for_ci() {
   {
     echo ""
     echo "===== CI WAIT $(date -Iseconds) sha=${target_sha:0:8} timeout=${timeout}s ====="
-  } >> "$OBSERVE_LOG"
+  } >> "$OVERSEE_LOG"
 
   while [ "$elapsed" -lt "$timeout" ]; do
     [ -f .ralph-stop ] && return 0
@@ -121,7 +121,7 @@ wait_for_ci() {
         *)
           {
             echo "===== CI RESOLVED $(date -Iseconds) status=$status after ${elapsed}s ====="
-          } >> "$OBSERVE_LOG"
+          } >> "$OVERSEE_LOG"
           return 0
           ;;
       esac
@@ -132,7 +132,7 @@ wait_for_ci() {
 
   {
     echo "===== CI WAIT TIMEOUT $(date -Iseconds) (${timeout}s) — proceeding without resolution ====="
-  } >> "$OBSERVE_LOG"
+  } >> "$OVERSEE_LOG"
 }
 
 # CI monitor: checks the latest GitHub Actions run on the current branch via
@@ -170,7 +170,7 @@ check_ci_status() {
           echo ""
           echo "===== CI GREEN $(date -Iseconds) — clearing .ralph-ci-failed ====="
           echo "url=$url"
-        } >> "$OBSERVE_LOG"
+        } >> "$OVERSEE_LOG"
         rm -f .ralph-ci-failed
       fi
       ;;
@@ -190,7 +190,7 @@ EOF
         echo ""
         echo "===== CI FAIL $(date -Iseconds) — wrote .ralph-ci-failed ====="
         echo "conclusion=$conclusion url=$url"
-      } >> "$OBSERVE_LOG"
+      } >> "$OVERSEE_LOG"
       ;;
   esac
 }
@@ -224,9 +224,9 @@ EOF
   fi
 
   if [ -f .ralph-steer ]; then
-    echo "# OBSERVER STEER — read before picking a task"
+    echo "# OVERSEER STEER — read before picking a task"
     echo ""
-    echo "The observer reviewed recent agent reports and commits and emitted this directive for you. Treat it as authoritative steering — adjust your task selection or approach accordingly."
+    echo "The overseer reviewed recent agent reports and commits and emitted this directive for you. Treat it as authoritative steering — adjust your task selection or approach accordingly."
     echo ""
     cat .ralph-steer
     echo ""
@@ -239,19 +239,19 @@ EOF
   return 0
 }
 
-# Observer: periodic drift detection. Runs in a background subshell, polls every
-# RALPH_OBSERVE_INTERVAL seconds (default 900 = 15min). On HIGH drift, writes
-# .ralph-stop so the next iteration exits gracefully. Set RALPH_NO_OBSERVE=1 to
+# Overseer: periodic drift detection. Runs in a background subshell, polls every
+# RALPH_OVERSEE_INTERVAL seconds (default 900 = 15min). On HIGH drift, writes
+# .ralph-stop so the next iteration exits gracefully. Set RALPH_NO_OVERSEE=1 to
 # disable.
-OBSERVE_INTERVAL="${RALPH_OBSERVE_INTERVAL:-900}"
-OBSERVE_LOG="plans/observer-${PRD_NAME}.log"
+OVERSEE_INTERVAL="${RALPH_OVERSEE_INTERVAL:-900}"
+OVERSEE_LOG="plans/overseer-${PRD_NAME}.log"
 REPORTS_LOG="plans/agent-reports-${PRD_NAME}.log"
-OBSERVER_PID=""
+OVERSEER_PID=""
 
-run_observer_once() {
+run_overseer_once() {
   local recent_commits recent_reports
   recent_commits=$(git log --grep="RALPH(${PRD_NAME})" -n 10 --format="%h %ad %s%n%b---" --date=short 2>/dev/null || echo "No RALPH commits yet")
-  # Tail the last ~8KB of agent reports — bounded so the observer prompt
+  # Tail the last ~8KB of agent reports — bounded so the overseer prompt
   # doesn't balloon. Reports are appended by iteration agents under headers
   # like `===== sha=<sha> ts=<iso> =====`.
   if [ -f "$REPORTS_LOG" ]; then
@@ -260,8 +260,8 @@ run_observer_once() {
     recent_reports="(no agent reports yet)"
   fi
 
-  local observer_prompt
-  observer_prompt="Read the PRD context at @${PROMPT}. You are an observer watching an autonomous coding loop named ralph(${PRD_NAME}).
+  local overseer_prompt
+  overseer_prompt="Read the PRD context at @${PROMPT}. You are an overseer watching an autonomous coding loop named ralph(${PRD_NAME}).
 
 Recent RALPH commits (last 10):
 ${recent_commits}
@@ -293,18 +293,18 @@ Be conservative on DRIFT_LEVEL — only 'high' with clear evidence (the loop sto
     --print \
     --permission-mode plan \
     "${MODEL_ARG[@]}" \
-    "$observer_prompt" 2>&1 || true)
+    "$overseer_prompt" 2>&1 || true)
 
   {
     echo ""
-    echo "===== OBSERVE $(date -Iseconds) ====="
+    echo "===== OVERSEE $(date -Iseconds) ====="
     echo "$result"
-  } >> "$OBSERVE_LOG"
+  } >> "$OVERSEE_LOG"
 
   if echo "$result" | grep -qiE '^[[:space:]]*DRIFT_LEVEL:[[:space:]]*high'; then
     {
       echo ""
-      echo "======= OBSERVER: HIGH DRIFT DETECTED — writing .ralph-stop ======="
+      echo "======= OVERSEER: HIGH DRIFT DETECTED — writing .ralph-stop ======="
       echo "$result"
     } >&2
     touch .ralph-stop
@@ -323,23 +323,23 @@ Be conservative on DRIFT_LEVEL — only 'high' with clear evidence (the loop sto
       echo ""
       echo "===== STEER WRITTEN $(date -Iseconds) ====="
       echo "$steer"
-    } >> "$OBSERVE_LOG"
+    } >> "$OVERSEE_LOG"
   fi
 }
 
-start_observer() {
-  if [ "${RALPH_NO_OBSERVE:-}" = "1" ]; then
-    echo "[observer] disabled (RALPH_NO_OBSERVE=1)"
+start_overseer() {
+  if [ "${RALPH_NO_OVERSEE:-}" = "1" ]; then
+    echo "[overseer] disabled (RALPH_NO_OVERSEE=1)"
     return
   fi
-  mkdir -p "$(dirname "$OBSERVE_LOG")"
+  mkdir -p "$(dirname "$OVERSEE_LOG")"
   {
     echo ""
-    echo "===== OBSERVER STARTED $(date -Iseconds) interval=${OBSERVE_INTERVAL}s ====="
-  } >> "$OBSERVE_LOG"
+    echo "===== OVERSEER STARTED $(date -Iseconds) interval=${OVERSEE_INTERVAL}s ====="
+  } >> "$OVERSEE_LOG"
   (
     while true; do
-      sleep "$OBSERVE_INTERVAL"
+      sleep "$OVERSEE_INTERVAL"
       [ -f .ralph-stop ] && exit 0
       # Sequential tick: push -> wait for CI to resolve (only if we pushed) ->
       # record CI verdict (writes/clears .ralph-ci-failed) -> spawn drift agent.
@@ -347,22 +347,22 @@ start_observer() {
         wait_for_ci "$(git rev-parse HEAD)"
       fi
       check_ci_status
-      run_observer_once
+      run_overseer_once
     done
   ) &
-  OBSERVER_PID=$!
-  echo "[observer] started (PID $OBSERVER_PID, interval ${OBSERVE_INTERVAL}s, log $OBSERVE_LOG)"
+  OVERSEER_PID=$!
+  echo "[overseer] started (PID $OVERSEER_PID, interval ${OVERSEE_INTERVAL}s, log $OVERSEE_LOG)"
 }
 
-stop_observer() {
-  if [ -n "${OBSERVER_PID:-}" ]; then
-    kill "$OBSERVER_PID" 2>/dev/null || true
-    wait "$OBSERVER_PID" 2>/dev/null || true
+stop_overseer() {
+  if [ -n "${OVERSEER_PID:-}" ]; then
+    kill "$OVERSEER_PID" 2>/dev/null || true
+    wait "$OVERSEER_PID" 2>/dev/null || true
   fi
 }
 
 cleanup_all() {
-  stop_observer
+  stop_overseer
   [ -n "${tmpfile:-}" ] && rm -f "$tmpfile"
 }
 trap cleanup_all EXIT INT TERM
@@ -371,7 +371,7 @@ trap cleanup_all EXIT INT TERM
 # push) so iteration #1 can fix it before any new task work.
 check_ci_status
 
-start_observer
+start_overseer
 
 for ((i=1; i<=$ITERATIONS; i++)); do
   if [ -f .ralph-stop ]; then

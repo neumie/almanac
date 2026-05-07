@@ -113,7 +113,7 @@ Keep it concise but informative for the next iteration.
 
 # REPORT
 
-After committing, append a self-report to `plans/agent-reports-<name>.log`. The observer reads recent reports each tick and may emit steering directives based on what you flag. Be honest — concerns and uncertainties are more useful than reassurance.
+After committing, append a self-report to `plans/agent-reports-<name>.log`. The overseer reads recent reports each tick and may emit steering directives based on what you flag. Be honest — concerns and uncertainties are more useful than reassurance.
 
 Append exactly this block (replace `<HEAD-sha>` with the SHA of the commit you just made, e.g. `git rev-parse HEAD`):
 
@@ -127,7 +127,7 @@ Append exactly this block (replace `<HEAD-sha>` with the SHA of the commit you j
 - <PRD ambiguities, missing context, or assumptions you made and want validated; or "(none)">
 ```
 
-If the iteration was a CI fix or a steered iteration, mention that in concerns so the observer has context.
+If the iteration was a CI fix or a steered iteration, mention that in concerns so the overseer has context.
 
 # FINAL RULES
 
@@ -174,34 +174,34 @@ Fully autonomous. Runs N iterations, each in a fresh Claude context. Stops when:
 - A task is blocked (`<promise>ABORT</promise>`)
 - Iteration limit reached
 - `.ralph-stop` file exists in the working directory (graceful stop — see below)
-- Observer detects HIGH drift (writes `.ralph-stop` automatically — see Observer below)
+- Overseer detects HIGH drift (writes `.ralph-stop` automatically — see Overseer below)
 
 **Model override:** set `RALPH_MODEL` (e.g. `RALPH_MODEL=claude-opus-4-7 bash afk.sh <name> 10`); unset uses Claude Code's default.
 
-**Auto-push:** the observer pushes any unpushed RALPH commits to `origin` at the start of each tick (default 15 min, configurable via `RALPH_OBSERVE_INTERVAL`). This batches commits so CI runs at observer cadence rather than per-iteration — avoids clogging CI when iterations are minutes apart. End-of-loop also pushes as a safety net. Sets upstream automatically on first push.
+**Auto-push:** the overseer pushes any unpushed RALPH commits to `origin` at the start of each tick (default 15 min, configurable via `RALPH_OVERSEE_INTERVAL`). This batches commits so CI runs at overseer cadence rather than per-iteration — avoids clogging CI when iterations are minutes apart. End-of-loop also pushes as a safety net. Sets upstream automatically on first push.
 
-**Observer:** a parallel process wakes every `RALPH_OBSERVE_INTERVAL` seconds (default 900 = 15 min) and runs a sequential tick:
+**Overseer:** a parallel process wakes every `RALPH_OVERSEE_INTERVAL` seconds (default 900 = 15 min) and runs a sequential tick:
 
-1. **Push** (shell). Pushes any local commits ahead of upstream. Logs to `plans/observer-<name>.log`.
+1. **Push** (shell). Pushes any local commits ahead of upstream. Logs to `plans/overseer-<name>.log`.
 
-2. **Wait for CI** (shell, only if step 1 actually pushed). Polls `gh run list` every `RALPH_CI_POLL_INTERVAL` seconds (default 30) for the run matching the pushed `headSha`, blocking until status leaves `in_progress|queued|waiting|requested|pending`. Times out after `RALPH_CI_WAIT_TIMEOUT` seconds (default 1800 = 30 min). Exits early on `.ralph-stop`. While the observer waits, main-loop iterations keep running — only the observer thread is blocked.
+2. **Wait for CI** (shell, only if step 1 actually pushed). Polls `gh run list` every `RALPH_CI_POLL_INTERVAL` seconds (default 30) for the run matching the pushed `headSha`, blocking until status leaves `in_progress|queued|waiting|requested|pending`. Times out after `RALPH_CI_WAIT_TIMEOUT` seconds (default 1800 = 30 min). Exits early on `.ralph-stop`. While the overseer waits, main-loop iterations keep running — only the overseer thread is blocked.
 
 3. **CI verdict** (shell, no Claude call). Reads `gh run list --limit 1`. On `conclusion=failure|cancelled|timed_out|action_required|startup_failure`, writes `.ralph-ci-failed` (run URL, ID, workflow name, branch, timestamp). On `conclusion=success`, clears the marker. Also runs once at script start to pick up pre-existing failures from prior sessions or manual pushes.
 
 4. **Drift review** (Claude call). Reviews recent `RALPH(<name>)` commits **and the tail of `plans/agent-reports-<name>.log`** (last ~8KB of agent self-reports — concerns, errors, uncertainties) against the PRD. Detects repeated tasks, off-PRD work, ABORT loops, vague commits, scope creep, test rot, recurring concerns the agents aren't solving on their own, etc. Outputs `DRIFT_LEVEL: low|medium|high`, `REASON: …`, `STEER: …`. On HIGH drift writes `.ralph-stop`. When `STEER` is non-`none`, writes the directive to `.ralph-steer`.
 
-Effective drift-review cadence is `RALPH_OBSERVE_INTERVAL + (CI duration if pushed)`. Steps 2-3 silently no-op if `gh` is missing, the repo has no remote, or no run materialized for the pushed SHA.
+Effective drift-review cadence is `RALPH_OVERSEE_INTERVAL + (CI duration if pushed)`. Steps 2-3 silently no-op if `gh` is missing, the repo has no remote, or no run materialized for the pushed SHA.
 
-Disable the whole observer with `RALPH_NO_OBSERVE=1` — that also disables observer-cadence push, CI wait, CI monitoring, and steer; only the end-of-loop push remains.
+Disable the whole overseer with `RALPH_NO_OVERSEE=1` — that also disables overseer-cadence push, CI wait, CI monitoring, and steer; only the end-of-loop push remains.
 
 **Iteration prompt prefixes:** at the start of each iteration, `afk.sh` may prepend up to two directives to the iteration prompt:
 
-- **Fix-CI** — when `.ralph-ci-failed` exists. The spawned agent is told to skip new task work, read the marker, fetch logs via `gh run view`, repair, and commit with `RALPH(<name>): fix CI — …`. Persistent: cleared automatically by the next observer tick once CI is green again.
-- **Observer steer** — when `.ralph-steer` exists. The spawned agent is told the observer reviewed recent reports + commits and emitted concrete advice (wrong assumption, scope correction, alternate approach, etc.). One-shot: `afk.sh` removes the file after consumption. The observer can re-emit it next tick if the underlying issue persists.
+- **Fix-CI** — when `.ralph-ci-failed` exists. The spawned agent is told to skip new task work, read the marker, fetch logs via `gh run view`, repair, and commit with `RALPH(<name>): fix CI — …`. Persistent: cleared automatically by the next overseer tick once CI is green again.
+- **Overseer steer** — when `.ralph-steer` exists. The spawned agent is told the overseer reviewed recent reports + commits and emitted concrete advice (wrong assumption, scope correction, alternate approach, etc.). One-shot: `afk.sh` removes the file after consumption. The overseer can re-emit it next tick if the underlying issue persists.
 
 Both can stack — a steered fix-CI iteration is valid.
 
-**Agent self-reports:** the iteration prompt template instructs the spawned agent to append a structured block to `plans/agent-reports-<name>.log` after committing — `concerns`, `errors`, `uncertainties` per iteration. This is the primary signal the observer uses to decide whether to issue a steer beyond what the commits alone reveal. Agents are told to be honest — flagged uncertainties are more useful than reassurance.
+**Agent self-reports:** the iteration prompt template instructs the spawned agent to append a structured block to `plans/agent-reports-<name>.log` after committing — `concerns`, `errors`, `uncertainties` per iteration. This is the primary signal the overseer uses to decide whether to issue a steer beyond what the commits alone reveal. Agents are told to be honest — flagged uncertainties are more useful than reassurance.
 
 ### HITL Mode (`once.sh`)
 
