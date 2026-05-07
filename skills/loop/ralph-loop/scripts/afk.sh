@@ -15,7 +15,8 @@ ITERATIONS="$2"
 PROMPT="plans/prompt-${PRD_NAME}.md"
 
 # Model override: set RALPH_MODEL env var (e.g. RALPH_MODEL=claude-opus-4-7).
-# Unset = use Claude Code's default (currently Sonnet).
+# Unset = use Claude Code's default; the actual resolved model is logged from
+# each session init event.
 MODEL_ARG=()
 if [ -n "${RALPH_MODEL:-}" ]; then
   MODEL_ARG=(--model "$RALPH_MODEL")
@@ -26,7 +27,15 @@ if [ ! -f "$PROMPT" ]; then
   exit 1
 fi
 
-stream_text='select(.type == "assistant").message.content[]? | select(.type == "text").text // empty | gsub("\n"; "\r\n") | . + "\r\n\n"'
+stream_text='
+  if .type == "system" and .subtype == "init" and (.model // "") != "" then
+    "Claude model: \(.model)\r\n\n"
+  elif .type == "assistant" then
+    .message.content[]? | select(.type == "text").text // empty | gsub("\n"; "\r\n") | . + "\r\n\n"
+  else
+    empty
+  end
+'
 final_result='select(.type == "result").result // empty'
 
 push_ralph_commits() {
@@ -367,7 +376,7 @@ cleanup_all() {
 }
 trap cleanup_all EXIT INT TERM
 
-MODEL_DISPLAY="${RALPH_MODEL:-default (Claude Code default)}"
+MODEL_DISPLAY="${RALPH_MODEL:-Claude Code default (resolved per session)}"
 if [ "${RALPH_NO_OVERSEE:-}" = "1" ]; then
   OVERSEER_DISPLAY="off (RALPH_NO_OVERSEE=1)"
 else
