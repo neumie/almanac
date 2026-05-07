@@ -195,11 +195,15 @@ EOF
   esac
 }
 
-# Build a prompt prefix injected before the iteration template. Currently
-# only used to redirect the next agent to fix CI when .ralph-ci-failed exists.
+# Build a prompt prefix injected before the iteration template. Two markers
+# can be present and stack: .ralph-ci-failed (persistent — cleared by
+# check_ci_status when CI is green) and .ralph-steer (one-shot — consumed
+# and removed here).
 build_prompt_prefix() {
-  [ -f .ralph-ci-failed ] || return 0
-  cat <<'EOF'
+  local emitted=0
+
+  if [ -f .ralph-ci-failed ]; then
+    cat <<'EOF'
 # CI FAILURE — FIX BEFORE ANY NEW TASK WORK
 
 The previous push broke CI. Do NOT pick a new PRD task this iteration.
@@ -216,6 +220,23 @@ Skip the TASK SELECTION / EXPLORATION / EXECUTION steps below for this iteration
 ---
 
 EOF
+    emitted=1
+  fi
+
+  if [ -f .ralph-steer ]; then
+    echo "# OBSERVER STEER — read before picking a task"
+    echo ""
+    echo "The observer reviewed recent agent reports and commits and emitted this directive for you. Treat it as authoritative steering — adjust your task selection or approach accordingly."
+    echo ""
+    cat .ralph-steer
+    echo ""
+    echo "---"
+    echo ""
+    rm -f .ralph-steer
+    emitted=1
+  fi
+
+  return 0
 }
 
 # Observer: periodic drift detection. Runs in a background subshell, polls every
@@ -224,17 +245,29 @@ EOF
 # disable.
 OBSERVE_INTERVAL="${RALPH_OBSERVE_INTERVAL:-900}"
 OBSERVE_LOG="plans/observer-${PRD_NAME}.log"
+REPORTS_LOG="plans/agent-reports-${PRD_NAME}.log"
 OBSERVER_PID=""
 
 run_observer_once() {
-  local recent_commits
+  local recent_commits recent_reports
   recent_commits=$(git log --grep="RALPH(${PRD_NAME})" -n 10 --format="%h %ad %s%n%b---" --date=short 2>/dev/null || echo "No RALPH commits yet")
+  # Tail the last ~8KB of agent reports — bounded so the observer prompt
+  # doesn't balloon. Reports are appended by iteration agents under headers
+  # like `===== sha=<sha> ts=<iso> =====`.
+  if [ -f "$REPORTS_LOG" ]; then
+    recent_reports=$(tail -c 8192 "$REPORTS_LOG")
+  else
+    recent_reports="(no agent reports yet)"
+  fi
 
   local observer_prompt
   observer_prompt="Read the PRD context at @${PROMPT}. You are an observer watching an autonomous coding loop named ralph(${PRD_NAME}).
 
 Recent RALPH commits (last 10):
 ${recent_commits}
+
+Recent agent self-reports (concerns / errors / uncertainties they flagged after each iteration):
+${recent_reports}
 
 Detect drift. Drift includes (non-exhaustive):
 - Repeated tasks or task ping-pong
@@ -243,13 +276,17 @@ Detect drift. Drift includes (non-exhaustive):
 - Vague 'no real progress' commits
 - Scope creep beyond the PRD
 - Test rot or growing failures
+- Recurring concerns or errors in agent self-reports that indicate confusion, wrong assumptions, or a blocker the agents aren't solving on their own
 - Anything else that suggests wasted effort
 
-Output exactly two lines, no preamble:
-DRIFT_LEVEL: <low|medium|high>
-REASON: <one paragraph explaining the assessment>
+Decide whether the next iteration would benefit from a steering directive — concrete advice that redirects the agent (e.g. 'the assumption about X in the last 3 iterations is wrong, see file Y', 'stop adding tests for Z, the PRD scopes that out', 'try approach A instead of B'). Only emit a steer if you have specific, actionable advice grounded in the commits or reports — vague encouragement is not a steer.
 
-Be conservative. Only output 'high' with clear evidence — when 'high', the loop will be stopped via .ralph-stop."
+Output exactly in this format, no preamble:
+DRIFT_LEVEL: <low|medium|high>
+REASON: <one paragraph>
+STEER: <one paragraph of concrete steering for next iteration, OR the literal word 'none'>
+
+Be conservative on DRIFT_LEVEL — only 'high' with clear evidence (the loop stops via .ralph-stop). Be conservative on STEER too — emit 'none' when agents are progressing fine."
 
   local result
   result=$(claude \
@@ -271,6 +308,22 @@ Be conservative. Only output 'high' with clear evidence — when 'high', the loo
       echo "$result"
     } >&2
     touch .ralph-stop
+  fi
+
+  # Extract STEER directive — everything after `STEER:` until EOF, trimmed.
+  # If it's empty or literally 'none' (case-insensitive), do nothing.
+  local steer
+  steer=$(echo "$result" | awk '
+    /^[[:space:]]*STEER:[[:space:]]*/ { sub(/^[[:space:]]*STEER:[[:space:]]*/, ""); capture=1; print; next }
+    capture { print }
+  ' | sed -e 's/[[:space:]]*$//' -e '/^$/d')
+  if [ -n "$steer" ] && ! echo "$steer" | grep -qiE '^none[[:space:]]*$'; then
+    printf '%s\n' "$steer" > .ralph-steer
+    {
+      echo ""
+      echo "===== STEER WRITTEN $(date -Iseconds) ====="
+      echo "$steer"
+    } >> "$OBSERVE_LOG"
   fi
 }
 

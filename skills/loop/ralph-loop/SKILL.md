@@ -102,6 +102,24 @@ Make a git commit. The commit message must:
 
 Keep it concise but informative for the next iteration.
 
+# REPORT
+
+After committing, append a self-report to `plans/agent-reports-<name>.log`. The observer reads recent reports each tick and may emit steering directives based on what you flag. Be honest — concerns and uncertainties are more useful than reassurance.
+
+Append exactly this block (replace `<HEAD-sha>` with the SHA of the commit you just made, e.g. `git rev-parse HEAD`):
+
+```
+===== sha=<HEAD-sha> ts=<ISO-8601-timestamp> =====
+## concerns
+- <anything about the code, tests, or approach that feels off; or "(none)">
+## errors
+- <runtime errors, test failures, lint issues, or retries you hit; or "(none)">
+## uncertainties
+- <PRD ambiguities, missing context, or assumptions you made and want validated; or "(none)">
+```
+
+If the iteration was a CI fix or a steered iteration, mention that in concerns so the observer has context.
+
 # FINAL RULES
 
 ONLY WORK ON A SINGLE TASK.
@@ -161,13 +179,20 @@ Fully autonomous. Runs N iterations, each in a fresh Claude context. Stops when:
 
 3. **CI verdict** (shell, no Claude call). Reads `gh run list --limit 1`. On `conclusion=failure|cancelled|timed_out|action_required|startup_failure`, writes `.ralph-ci-failed` (run URL, ID, workflow name, branch, timestamp). On `conclusion=success`, clears the marker. Also runs once at script start to pick up pre-existing failures from prior sessions or manual pushes.
 
-4. **Drift review** (Claude call). Reviews recent `RALPH(<name>)` commits + the PRD for repeated tasks, off-PRD work, ABORT loops, vague commits, scope creep, test rot, etc. Logs `DRIFT_LEVEL: low|medium|high` + reasoning. On HIGH drift writes `.ralph-stop`, which makes the loop exit gracefully at the next iteration boundary.
+4. **Drift review** (Claude call). Reviews recent `RALPH(<name>)` commits **and the tail of `plans/agent-reports-<name>.log`** (last ~8KB of agent self-reports — concerns, errors, uncertainties) against the PRD. Detects repeated tasks, off-PRD work, ABORT loops, vague commits, scope creep, test rot, recurring concerns the agents aren't solving on their own, etc. Outputs `DRIFT_LEVEL: low|medium|high`, `REASON: …`, `STEER: …`. On HIGH drift writes `.ralph-stop`. When `STEER` is non-`none`, writes the directive to `.ralph-steer`.
 
 Effective drift-review cadence is `RALPH_OBSERVE_INTERVAL + (CI duration if pushed)`. Steps 2-3 silently no-op if `gh` is missing, the repo has no remote, or no run materialized for the pushed SHA.
 
-Disable the whole observer with `RALPH_NO_OBSERVE=1` — that also disables observer-cadence push, CI wait, and CI monitoring; only the end-of-loop push remains.
+Disable the whole observer with `RALPH_NO_OBSERVE=1` — that also disables observer-cadence push, CI wait, CI monitoring, and steer; only the end-of-loop push remains.
 
-**Fix-CI preamble:** when `.ralph-ci-failed` exists at the start of an iteration, `afk.sh` prepends a directive to the iteration prompt instructing the spawned agent to skip new task work and fix CI instead (read the marker file, fetch logs via `gh run view`, repair, commit with `RALPH(<name>): fix CI — …`). The fix is pushed at the next observer tick, and the marker auto-clears once CI is green again.
+**Iteration prompt prefixes:** at the start of each iteration, `afk.sh` may prepend up to two directives to the iteration prompt:
+
+- **Fix-CI** — when `.ralph-ci-failed` exists. The spawned agent is told to skip new task work, read the marker, fetch logs via `gh run view`, repair, and commit with `RALPH(<name>): fix CI — …`. Persistent: cleared automatically by the next observer tick once CI is green again.
+- **Observer steer** — when `.ralph-steer` exists. The spawned agent is told the observer reviewed recent reports + commits and emitted concrete advice (wrong assumption, scope correction, alternate approach, etc.). One-shot: `afk.sh` removes the file after consumption. The observer can re-emit it next tick if the underlying issue persists.
+
+Both can stack — a steered fix-CI iteration is valid.
+
+**Agent self-reports:** the iteration prompt template instructs the spawned agent to append a structured block to `plans/agent-reports-<name>.log` after committing — `concerns`, `errors`, `uncertainties` per iteration. This is the primary signal the observer uses to decide whether to issue a steer beyond what the commits alone reveal. Agents are told to be honest — flagged uncertainties are more useful than reassurance.
 
 ### HITL Mode (`once.sh`)
 
