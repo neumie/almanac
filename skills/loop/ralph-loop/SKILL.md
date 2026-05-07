@@ -227,7 +227,7 @@ Fully autonomous. Runs N iterations, each in a fresh agent context. Stops when:
 
 **Interactive launcher:** run `almanac ralph` (or `ralph.sh` directly) to select PRD, mode, provider, model, thinking level, iteration count, and overseer behavior from prompts. It delegates to `once.sh` or `afk.sh` with the corresponding `RALPH_PROVIDER`, `RALPH_MODEL`, `RALPH_EFFORT`, and `RALPH_NO_OVERSEE` environment values.
 
-**Auto-push:** the overseer pushes any unpushed RALPH commits to `origin` at the start of each tick (default 15 min, configurable via `RALPH_OVERSEE_INTERVAL`). This batches commits so CI runs at overseer cadence rather than per-iteration — avoids clogging CI when iterations are minutes apart. End-of-loop also pushes as a safety net. Sets upstream automatically on first push.
+**Auto-push:** the overseer pushes any unpushed RALPH commits to `origin` at the start of each tick (default 15 min, configurable via `RALPH_OVERSEE_INTERVAL`). This batches commits so CI runs at overseer cadence rather than per-iteration — avoids clogging CI when iterations are minutes apart. End-of-loop also pushes as a safety net. Sets upstream automatically on first push and repairs mismatched upstreams such as `origin/main`.
 
 **Overseer:** a parallel process wakes every `RALPH_OVERSEE_INTERVAL` seconds (default 900 = 15 min) and runs a sequential tick:
 
