@@ -14,18 +14,29 @@ PRD_NAME="$1"
 PROMPT="plans/prompt-${PRD_NAME}.md"
 
 # Model override: set RALPH_MODEL env var (e.g. RALPH_MODEL=claude-opus-4-7).
-# Unset = use Claude Code's default (currently Sonnet).
+# Unset = use Claude Code's default; the actual resolved model is logged from
+# the session init event.
 MODEL_ARG=()
 if [ -n "${RALPH_MODEL:-}" ]; then
   MODEL_ARG=(--model "$RALPH_MODEL")
 fi
+
+stream_text='
+  if .type == "system" and .subtype == "init" and (.model // "") != "" then
+    "Claude model: \(.model)\r\n\n"
+  elif .type == "assistant" then
+    .message.content[]? | select(.type == "text").text // empty | gsub("\n"; "\r\n") | . + "\r\n\n"
+  else
+    empty
+  end
+'
 
 if [ ! -f "$PROMPT" ]; then
   echo "Error: $PROMPT not found. Run /ralph-loop $PRD_NAME to set up first."
   exit 1
 fi
 
-MODEL_DISPLAY="${RALPH_MODEL:-default (Claude Code default)}"
+MODEL_DISPLAY="${RALPH_MODEL:-Claude Code default (resolved on session start)}"
 
 echo "======= RALPH ONCE ======="
 echo "PRD:         $PRD_NAME"
@@ -37,4 +48,12 @@ echo ""
 
 ralph_commits=$(git log --grep="RALPH($PRD_NAME)" -n 10 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No RALPH commits found")
 
-claude --permission-mode acceptEdits "${MODEL_ARG[@]}" "@$PROMPT Previous RALPH commits: $ralph_commits"
+claude \
+  --print \
+  --output-format stream-json \
+  --verbose \
+  --permission-mode acceptEdits \
+  "${MODEL_ARG[@]}" \
+  "@$PROMPT Previous RALPH commits: $ralph_commits" \
+| grep --line-buffered '^{' \
+| jq --unbuffered -rj "$stream_text"
