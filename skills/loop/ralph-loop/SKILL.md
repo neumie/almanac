@@ -151,9 +151,23 @@ Fully autonomous. Runs N iterations, each in a fresh Claude context. Stops when:
 
 **Model override:** set `RALPH_MODEL` (e.g. `RALPH_MODEL=claude-opus-4-7 bash afk.sh <name> 10`); unset uses Claude Code's default.
 
-**Auto-push:** when the loop ends (any reason above), accumulated `RALPH(<name>)` commits are pushed to `origin` automatically — no manual `git push` needed after AFK runs.
+**Auto-push:** the observer pushes any unpushed RALPH commits to `origin` at the start of each tick (default 15 min, configurable via `RALPH_OBSERVE_INTERVAL`). This batches commits so CI runs at observer cadence rather than per-iteration — avoids clogging CI when iterations are minutes apart. End-of-loop also pushes as a safety net. Sets upstream automatically on first push.
 
-**Observer:** a parallel Claude process wakes every 15 minutes (configurable via `RALPH_OBSERVE_INTERVAL`, in seconds) and reviews recent `RALPH(<name>)` commits + the PRD for drift — repeated tasks, off-PRD work, ABORT loops, vague commits, scope creep, test rot, etc. Each check is logged to `plans/observer-<name>.log` with `DRIFT_LEVEL: low|medium|high` + reasoning. On HIGH drift the observer writes `.ralph-stop`, which makes the loop exit gracefully at the next iteration boundary. Disable with `RALPH_NO_OBSERVE=1`.
+**Observer:** a parallel process wakes every `RALPH_OBSERVE_INTERVAL` seconds (default 900 = 15 min) and runs a sequential tick:
+
+1. **Push** (shell). Pushes any local commits ahead of upstream. Logs to `plans/observer-<name>.log`.
+
+2. **Wait for CI** (shell, only if step 1 actually pushed). Polls `gh run list` every `RALPH_CI_POLL_INTERVAL` seconds (default 30) for the run matching the pushed `headSha`, blocking until status leaves `in_progress|queued|waiting|requested|pending`. Times out after `RALPH_CI_WAIT_TIMEOUT` seconds (default 1800 = 30 min). Exits early on `.ralph-stop`. While the observer waits, main-loop iterations keep running — only the observer thread is blocked.
+
+3. **CI verdict** (shell, no Claude call). Reads `gh run list --limit 1`. On `conclusion=failure|cancelled|timed_out|action_required|startup_failure`, writes `.ralph-ci-failed` (run URL, ID, workflow name, branch, timestamp). On `conclusion=success`, clears the marker. Also runs once at script start to pick up pre-existing failures from prior sessions or manual pushes.
+
+4. **Drift review** (Claude call). Reviews recent `RALPH(<name>)` commits + the PRD for repeated tasks, off-PRD work, ABORT loops, vague commits, scope creep, test rot, etc. Logs `DRIFT_LEVEL: low|medium|high` + reasoning. On HIGH drift writes `.ralph-stop`, which makes the loop exit gracefully at the next iteration boundary.
+
+Effective drift-review cadence is `RALPH_OBSERVE_INTERVAL + (CI duration if pushed)`. Steps 2-3 silently no-op if `gh` is missing, the repo has no remote, or no run materialized for the pushed SHA.
+
+Disable the whole observer with `RALPH_NO_OBSERVE=1` — that also disables observer-cadence push, CI wait, and CI monitoring; only the end-of-loop push remains.
+
+**Fix-CI preamble:** when `.ralph-ci-failed` exists at the start of an iteration, `afk.sh` prepends a directive to the iteration prompt instructing the spawned agent to skip new task work and fix CI instead (read the marker file, fetch logs via `gh run view`, repair, commit with `RALPH(<name>): fix CI — …`). The fix is pushed at the next observer tick, and the marker auto-clears once CI is green again.
 
 ### HITL Mode (`once.sh`)
 
