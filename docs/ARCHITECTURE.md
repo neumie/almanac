@@ -28,7 +28,7 @@ Full local plugin:
 - `agents/` — extensible directory
 
 ### `providers/{opencode,cursor,codex}/`
-Setup stubs with symlink instructions for each provider's skill discovery path.
+Setup stubs with symlink instructions for each provider's skill discovery path. Codex also has a first-class installer that links skill directories into `~/.agents/skills/almanac/<name>` for `$skill` invocation and `/skills` browsing.
 
 ## CLI (`bin/almanac`)
 

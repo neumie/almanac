@@ -31,6 +31,8 @@ almanac install cursor
 almanac install codex
 ```
 
+`almanac install codex` links skills into `~/.agents/skills/almanac/<name>`, so skills can be invoked as `$ship`, `$commit`, etc. or browsed from `/skills` after restarting Codex.
+
 Or manually symlink:
 
 ```bash
