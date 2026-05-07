@@ -183,6 +183,10 @@ Print:
 ```
 Ralph loop ready for <name>.
 
+  Interactive CLI:
+    almanac ralph
+    # or: bash {{SKILL_SCRIPTS}}/ralph.sh
+
   Single iteration (HITL):
     bash {{SKILL_SCRIPTS}}/once.sh <name>
 
@@ -195,24 +199,33 @@ Ralph loop ready for <name>.
 
 Where `{{SKILL_SCRIPTS}}` is the absolute path to this skill's scripts. Resolve in this order:
 
-1. `~/.claude/skills/almanac/ralph-loop/scripts` — set by `almanac install claude-code` (recommended; works on any provider that installs via the `~/.claude/skills/` directory symlink).
-2. `${CLAUDE_SKILL_DIR}/scripts` — fallback if the host agent populates `CLAUDE_SKILL_DIR` from the resolved skill directory.
-3. `$ALMANAC_HOME/skills/ralph-loop/scripts` — fallback when invoked outside an installed Claude Code provider.
+1. `~/.agents/skills/almanac/ralph-loop/scripts` — set by `almanac install codex`; use this when running in Codex.
+2. `~/.claude/skills/almanac/ralph-loop/scripts` — set by `almanac install claude-code`; use this when running in Claude Code.
+3. `${CLAUDE_SKILL_DIR}/scripts` — fallback if the host agent populates `CLAUDE_SKILL_DIR` from the resolved skill directory.
+4. `$ALMANAC_HOME/skills/ralph-loop/scripts` — fallback when invoked outside an installed provider.
 
-Print the literal `~/.claude/skills/almanac/ralph-loop/scripts/...` paths in the user-facing instructions so they work regardless of how the host agent resolves `${CLAUDE_SKILL_DIR}`.
+Print the literal provider install path in user-facing instructions (`~/.agents/...` for Codex, `~/.claude/...` for Claude Code) so users can run the scripts directly.
 
 ## Modes
 
 ### AFK Mode (`afk.sh`)
 
-Fully autonomous. Runs N iterations, each in a fresh Claude context. Stops when:
+Fully autonomous. Runs N iterations, each in a fresh agent context. Stops when:
 - All tasks complete (`<promise>COMPLETE</promise>`)
 - A task is blocked (`<promise>ABORT</promise>`)
 - Iteration limit reached
 - `.ralph-stop` file exists in the working directory (graceful stop — see below)
 - Overseer detects HIGH drift (writes `.ralph-stop` automatically — see Overseer below)
 
-**Model override:** set `RALPH_MODEL` (e.g. `RALPH_MODEL=claude-opus-4-7 bash afk.sh <name> 10`); unset uses Claude Code's default.
+**Provider selection:** set `RALPH_PROVIDER=codex` or `RALPH_PROVIDER=claude` to force an agent. If unset, the scripts use Codex when running inside Codex, otherwise Claude Code when available, otherwise Codex.
+
+**Model override:** set `RALPH_MODEL` (e.g. `RALPH_PROVIDER=codex RALPH_MODEL=gpt-5.5 bash afk.sh <name> 10` or `RALPH_MODEL=claude-opus-4-7 bash afk.sh <name> 10`); unset uses the selected provider's default.
+
+**Thinking override:** set `RALPH_EFFORT` to control model thinking level. Codex receives this as `model_reasoning_effort`; Claude Code receives it as `--effort`. Supported common values: `low`, `medium`, `high`, `xhigh`; Claude Code also supports `max`.
+
+**Codex output:** Codex raw session output is quiet by default and written to `plans/ralph-codex-<name>-*.log`; the terminal shows concise agent progress messages, the final assistant message, and the log path. Set `RALPH_CODEX_VERBOSE=1` to stream Codex's full session output.
+
+**Interactive launcher:** run `almanac ralph` (or `ralph.sh` directly) to select PRD, mode, provider, model, thinking level, iteration count, and overseer behavior from prompts. It delegates to `once.sh` or `afk.sh` with the corresponding `RALPH_PROVIDER`, `RALPH_MODEL`, `RALPH_EFFORT`, and `RALPH_NO_OVERSEE` environment values.
 
 **Auto-push:** the overseer pushes any unpushed RALPH commits to `origin` at the start of each tick (default 15 min, configurable via `RALPH_OVERSEE_INTERVAL`). This batches commits so CI runs at overseer cadence rather than per-iteration — avoids clogging CI when iterations are minutes apart. End-of-loop also pushes as a safety net. Sets upstream automatically on first push.
 
@@ -224,7 +237,7 @@ Fully autonomous. Runs N iterations, each in a fresh Claude context. Stops when:
 
 3. **CI verdict** (shell, no Claude call). Reads `gh run list --limit 1`. On `conclusion=failure|cancelled|timed_out|action_required|startup_failure`, writes `.ralph-ci-failed` (run URL, ID, workflow name, branch, timestamp). On `conclusion=success`, clears the marker. Also runs once at script start to pick up pre-existing failures from prior sessions or manual pushes.
 
-4. **Drift review** (Claude call). Reviews recent `RALPH(<name>)` commits, **the tail of `plans/agent-reports-<name>.log`** (last ~8KB of agent self-reports — concerns, errors, uncertainties), **and any task queue** (slice files in `plans/issues/<name>/` or open GitHub issues with the `ralph(<name>)` label) against the PRD. Detects:
+4. **Drift review** (selected agent call). Reviews recent `RALPH(<name>)` commits, **the tail of `plans/agent-reports-<name>.log`** (last ~8KB of agent self-reports — concerns, errors, uncertainties), **and any task queue** (slice files in `plans/issues/<name>/` or open GitHub issues with the `ralph(<name>)` label) against the PRD. Detects:
 
    - Repeated tasks, off-PRD work, ABORT loops, vague commits, scope creep, test rot, recurring concerns the agents aren't solving on their own.
    - **Queue overclaim** — checkboxes flipped to `[x]` (or `status: done` set, or issues closed) without the corresponding code in those commits. For each recently-flipped checkbox, the overseer reads the slice/issue criterion and the commits that flipped it, and judges whether the diff actually fulfills the criterion. If not, the steer directs the next iteration to roll back the checkbox / status / issue closure.
