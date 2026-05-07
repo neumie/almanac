@@ -58,7 +58,13 @@ Iterate until the user approves the breakdown.
 
 ### 5. Create the GitHub issues
 
-For each approved slice, create a GitHub issue using `gh issue create`. Use the issue body template below.
+Pick a queue label of the form `ralph(<short-name>)` (e.g. `ralph(auth-system)`). This label is what `ralph-loop` uses to find issues belonging to this work — without it, the loop can't see the queue. Create the label once if it doesn't exist:
+
+```bash
+gh label create "ralph(<short-name>)" --color FBCA04 --description "Ralph loop task queue" 2>/dev/null || true
+```
+
+For each approved slice, create a GitHub issue using `gh issue create --label "ralph(<short-name>)"`. Use the issue body template below.
 
 Create issues in dependency order (blockers first) so you can reference real issue numbers in the "Blocked by" field.
 
