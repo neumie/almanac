@@ -60,7 +60,24 @@ Pull @{{PRD_FILE}} into your context.
 
 You've been passed the last 10 RALPH commits (SHA, date, full message). Review these to understand what work has been done.
 
+# TASK QUEUE
+
+Before decomposing the PRD, check whether an explicit queue exists. Detect in this order:
+
+1. **Local slice files.** If `plans/issues/<name>/` contains `*.md` files, that directory is your queue. Each file has frontmatter (`status`, `blocked-by`, `type`) and an `## Acceptance criteria` checklist of `- [ ]` items.
+2. **GitHub issues.** Else if `gh issue list --state open --label "ralph(<name>)"` returns at least one issue, that's your queue. Each issue body contains an `## Acceptance criteria` section with `- [ ]` items.
+3. **No queue.** Skip to TASK BREAKDOWN below and decompose the PRD yourself.
+
+If a queue is present:
+
+- Pick the **lowest-numbered** open slice file (or **oldest** open issue) whose `blocked-by` references are all `status: done` (or closed). That slice/issue is your task.
+- Its `## What to build` and `## Acceptance criteria` define your scope. The PRD is reference; the slice/issue is the spec.
+- Do NOT decompose the PRD again — TASK BREAKDOWN below is for the no-queue case only.
+- If every queued task is blocked by something incomplete, output `<promise>ABORT</promise>`.
+
 # TASK BREAKDOWN
+
+(Run this section ONLY if TASK QUEUE found no queue. Otherwise the slice/issue you picked IS your task; skip ahead to EXPLORATION.)
 
 Break down the PRD into tasks.
 
@@ -73,7 +90,7 @@ If you can't articulate a behavior the task pins, you're mid-refactor — bundle
 
 # TASK SELECTION
 
-Pick the next task that hasn't been completed (check RALPH commits for completed work).
+If TASK QUEUE found a task, that's your task. Otherwise pick the next task from your TASK BREAKDOWN that hasn't been completed (check RALPH commits for completed work).
 
 If all tasks are complete, output <promise>COMPLETE</promise>.
 
@@ -101,7 +118,26 @@ Before committing, run ALL feedback loops. Fix any failures before proceeding.
 
 # COMMIT
 
-Make a git commit. The commit message must:
+If you used a queued task, update the queue using the **strict checkbox protocol** before committing.
+
+**Strict means:** flip a `- [ ]` to `- [x]` ONLY for an acceptance criterion that THIS commit's actual code changes demonstrably fulfill. Do not flip a checkbox for something "almost", "implicitly", or "previously" done. The overseer audits these flips against the diff and rolls back overclaims.
+
+**Local slice file:**
+
+1. Edit the slice file: flip `- [ ]` → `- [x]` for each criterion this commit fulfills.
+2. Append a line under `## Progress` (create the section if it doesn't exist): `- <ISO-date>: <one-line summary> — fulfills criteria N[, M…]`.
+3. If every `- [ ]` in `## Acceptance criteria` is now `- [x]`, also flip frontmatter `status: open` → `status: done`.
+4. Stage the slice-file edits as part of this commit.
+
+**GitHub issue:**
+
+1. Fetch current body: `gh issue view <num> --json body -q .body > /tmp/issue-body.md`.
+2. Edit `/tmp/issue-body.md` to flip the relevant `- [ ]` → `- [x]`.
+3. After committing the code, push the body update: `gh issue edit <num> --body-file /tmp/issue-body.md`.
+4. Post a comment with the commit SHA: `gh issue comment <num> --body "<sha>: <summary> — fulfills criteria N[, M…]"`.
+5. If every checkbox is now `- [x]`, also `gh issue close <num>`.
+
+Then make the git commit. The commit message must:
 
 1. Start with `RALPH(<name>):` prefix (e.g. `RALPH(auth-system):`)
 2. Include task completed + PRD reference
@@ -188,7 +224,13 @@ Fully autonomous. Runs N iterations, each in a fresh Claude context. Stops when:
 
 3. **CI verdict** (shell, no Claude call). Reads `gh run list --limit 1`. On `conclusion=failure|cancelled|timed_out|action_required|startup_failure`, writes `.ralph-ci-failed` (run URL, ID, workflow name, branch, timestamp). On `conclusion=success`, clears the marker. Also runs once at script start to pick up pre-existing failures from prior sessions or manual pushes.
 
-4. **Drift review** (Claude call). Reviews recent `RALPH(<name>)` commits **and the tail of `plans/agent-reports-<name>.log`** (last ~8KB of agent self-reports — concerns, errors, uncertainties) against the PRD. Detects repeated tasks, off-PRD work, ABORT loops, vague commits, scope creep, test rot, recurring concerns the agents aren't solving on their own, etc. Outputs `DRIFT_LEVEL: low|medium|high`, `REASON: …`, `STEER: …`. On HIGH drift writes `.ralph-stop`. When `STEER` is non-`none`, writes the directive to `.ralph-steer`.
+4. **Drift review** (Claude call). Reviews recent `RALPH(<name>)` commits, **the tail of `plans/agent-reports-<name>.log`** (last ~8KB of agent self-reports — concerns, errors, uncertainties), **and any task queue** (slice files in `plans/issues/<name>/` or open GitHub issues with the `ralph(<name>)` label) against the PRD. Detects:
+
+   - Repeated tasks, off-PRD work, ABORT loops, vague commits, scope creep, test rot, recurring concerns the agents aren't solving on their own.
+   - **Queue overclaim** — checkboxes flipped to `[x]` (or `status: done` set, or issues closed) without the corresponding code in those commits. For each recently-flipped checkbox, the overseer reads the slice/issue criterion and the commits that flipped it, and judges whether the diff actually fulfills the criterion. If not, the steer directs the next iteration to roll back the checkbox / status / issue closure.
+   - **Queue staleness** — criteria clearly fulfilled by recent commits but checkbox still `[ ]`.
+
+   Outputs `DRIFT_LEVEL: low|medium|high`, `REASON: …`, `STEER: …`. On HIGH drift writes `.ralph-stop`. When `STEER` is non-`none`, writes the directive to `.ralph-steer`.
 
 Effective drift-review cadence is `RALPH_OVERSEE_INTERVAL + (CI duration if pushed)`. Steps 2-3 silently no-op if `gh` is missing, the repo has no remote, or no run materialized for the pushed SHA.
 

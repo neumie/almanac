@@ -109,11 +109,11 @@ Wrote 5 slices to plans/issues/auth-system/:
   05-session-expiry-design.md   (HITL)
 ```
 
-Then point the user at `/ralph-loop <prd>` to start working through them. Ralph reads the PRD directly today; the local issue files serve as a manual checklist and as a place to mark slices `status: done` as you go.
+Then point the user at `/ralph-loop <prd>` to start working through them. ralph-loop reads these files as its task queue: it picks the lowest-numbered open slice whose blockers are all `status: done`, uses the slice's acceptance criteria as the task spec, flips checkboxes commit-by-commit (strict — only criteria fulfilled by that commit), and flips `status: open → done` automatically when the last `- [ ]` becomes `- [x]`. The overseer audits each flip against the diff and rolls back overclaims.
 
 ## Status updates
 
-When a slice is finished, edit its frontmatter `status: open` → `status: done`. To list remaining work:
+ralph-loop iterations maintain `status` and acceptance-criteria checkboxes automatically under the strict checkbox protocol — no manual flips needed during AFK runs. The overseer reconciles overclaims and stale checkboxes on its tick. To list remaining work at a glance:
 
 ```bash
 grep -L "status: done" plans/issues/<prd>/*.md
