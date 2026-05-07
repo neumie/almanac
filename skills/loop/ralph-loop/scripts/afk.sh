@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/ralph-git.sh"
+
 if [ -z "$1" ] || [ -z "$2" ]; then
   echo "Usage: $0 <prd-name> <iterations>"
   echo "Example: $0 auth-system 10"
@@ -102,13 +105,7 @@ push_ralph_commits() {
 # Push current branch, setting upstream if needed. Used both per-iteration
 # (to trigger CI) and end-of-loop (safety net in case a per-iter push failed).
 _ralph_push() {
-  local branch
-  branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || return 1
-  if [ -z "$(git config "branch.${branch}.remote" 2>/dev/null)" ]; then
-    git push -u origin "$branch" 2>&1
-  else
-    git push 2>&1
-  fi
+  ralph_push_current_branch
 }
 
 # Overseer-cadence push: pushes any unpushed local commits on the current

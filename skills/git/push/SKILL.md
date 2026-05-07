@@ -24,6 +24,7 @@ From the output:
 - Warn if there are uncommitted changes (dirty working tree)
 - Note the current branch name and recent commits
 - If `@{u}` returned a tracking branch, note it
+- If the tracking branch is not `origin/<current-branch>`, treat it like a mismatched upstream that must be repaired on push
 - If `@{u}` was empty, upstream will be set on push
 - If `gh pr view` returned an open PR, you'll update its description after pushing
 
@@ -42,8 +43,8 @@ From the output:
 
 ### Step 1: Push
 
-- If tracking exists: `git push`
-- If no tracking: `git push -u origin <branch-name>`
+- If tracking is exactly `origin/<branch-name>`: `git push`
+- If no tracking exists, or tracking points somewhere else such as `origin/main`: `git push -u origin HEAD:refs/heads/<branch-name>`
 - If user confirmed force (non-main): `git push --force-with-lease`
 
 ### Step 2: Update PR description (if open PR exists)
