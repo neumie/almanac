@@ -1,6 +1,6 @@
 ---
 name: commits-squash
-description: Use when squashing commits on the current branch into fewer logical commits. Triggers: squash, clean up commits, combine commits, tidy history before push or PR.
+description: "Use when squashing commits on the current branch into fewer logical commits. Triggers: squash, clean up commits, combine commits, tidy history before push or PR."
 ---
 
 # Commits Squash

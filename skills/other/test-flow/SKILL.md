@@ -1,6 +1,6 @@
 ---
 name: test-flow
-description: Use when locking down user paths as E2E regression tests. Explores UI in browser, proposes flows, writes Playwright/Cypress tests, runs until green. Triggers: test flow, test journey.
+description: "Use when locking down user paths as E2E regression tests. Explores UI in browser, proposes flows, writes Playwright/Cypress tests, runs until green. Triggers: test flow, test journey."
 disable-model-invocation: true
 ---
 

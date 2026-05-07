@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Use when shipping work end-to-end. Names branch, commits, pushes, creates PR — no confirmation. Triggers: ship, ship it, send it, go from uncommitted changes to open PR.
+description: "Use when shipping work end-to-end. Names branch, commits, pushes, creates PR — no confirmation. Triggers: ship, ship it, send it, go from uncommitted changes to open PR."
 metadata:
   dependencies:
     - branch-name

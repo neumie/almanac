@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # uninstall.sh — Remove almanac from a specific provider
 
+source "$ALMANAC_HOME/lib/almanac-core.sh"
+
 _uninstall_claude_code() {
   local commands_dir="$HOME/.claude/commands/almanac"
 
   # Remove skill symlinks from ~/.claude/commands/almanac/
   local count=0
-  for dir in "$ALMANAC_HOME"/skills/*/; do
+  while IFS= read -r dir; do
     [ -f "$dir/SKILL.md" ] || continue
     local name
     name=$(basename "$dir")
@@ -20,7 +22,7 @@ _uninstall_claude_code() {
     # Also clean up legacy flat symlink
     local legacy="$HOME/.claude/commands/$name.md"
     [[ -L "$legacy" ]] && rm "$legacy"
-  done
+  done < <(almanac_list_skills)
 
   # Remove almanac directory if empty
   [[ -d "$commands_dir" ]] && rmdir "$commands_dir" 2>/dev/null || true
@@ -95,6 +97,63 @@ open('$rc', 'w').write(''.join(out))
   _success "Uninstalled almanac from Claude Code"
 }
 
+_uninstall_codex() {
+  local skills_dir="$HOME/.agents/skills/almanac"
+  local legacy_skills_dir="$HOME/.codex/skills/almanac"
+  local prompts_dir="$HOME/.codex/prompts"
+
+  if [[ -L "$skills_dir" ]] && [[ "$(readlink "$skills_dir")" == *almanac* ]]; then
+    rm "$skills_dir"
+    _info "Removed legacy skill resource link ~/.agents/skills/almanac"
+  fi
+
+  if [[ -L "$legacy_skills_dir" ]] && [[ "$(readlink "$legacy_skills_dir")" == *almanac* ]]; then
+    rm "$legacy_skills_dir"
+    _info "Removed legacy skill resource link ~/.codex/skills/almanac"
+  fi
+
+  local count=0
+  for target in "$skills_dir"/*; do
+    [[ -L "$target" ]] || continue
+    [[ "$(readlink "$target")" == *almanac* ]] || continue
+    rm "$target"
+    count=$((count + 1))
+  done
+
+  [[ -d "$skills_dir" ]] && rmdir "$skills_dir" 2>/dev/null || true
+
+  _info "Removed $count skill symlinks from ~/.agents/skills/almanac/"
+
+  local legacy_count=0
+  for target in "$legacy_skills_dir"/*; do
+    [[ -L "$target" ]] || continue
+    [[ "$(readlink "$target")" == *almanac* ]] || continue
+    rm "$target"
+    legacy_count=$((legacy_count + 1))
+  done
+
+  [[ -d "$legacy_skills_dir" ]] && rmdir "$legacy_skills_dir" 2>/dev/null || true
+  [[ "$legacy_count" -gt 0 ]] && _info "Removed $legacy_count legacy skill symlinks from ~/.codex/skills/almanac/"
+
+  local prompt_count=0
+  while IFS= read -r dir; do
+    [ -f "$dir/SKILL.md" ] || continue
+    local name
+    name=$(basename "$dir")
+    local target="$prompts_dir/$name.md"
+
+    [[ -L "$target" ]] || continue
+    [[ "$(readlink "$target")" == *almanac* ]] || continue
+    rm "$target"
+    prompt_count=$((prompt_count + 1))
+  done < <(almanac_list_skills)
+
+  [[ -d "$prompts_dir" ]] && rmdir "$prompts_dir" 2>/dev/null || true
+
+  _info "Removed $prompt_count slash prompt symlinks from ~/.codex/prompts/"
+  _success "Uninstalled almanac from Codex"
+}
+
 # --- main ---
 
 PROVIDER="${1:-}"
@@ -106,6 +165,9 @@ PROVIDER_DIR="$ALMANAC_HOME/providers/$PROVIDER"
 case "$PROVIDER" in
   claude-code)
     _uninstall_claude_code
+    ;;
+  codex)
+    _uninstall_codex
     ;;
   *)
     _warn "No uninstaller for $PROVIDER — remove manually"

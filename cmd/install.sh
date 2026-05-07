@@ -93,6 +93,62 @@ _install_symlink() {
   fi
 }
 
+_install_codex() {
+  local skills_dir="$HOME/.agents/skills/almanac"
+  local legacy_skills_dir="$HOME/.codex/skills/almanac"
+  local legacy_prompts_dir="$HOME/.codex/prompts"
+
+  [[ -d "$HOME/.codex" ]] || _die "~/.codex not found — is Codex installed?"
+  mkdir -p "$skills_dir"
+
+  # Migrate from old layout: ~/.agents/skills/almanac as a single dir-symlink
+  # to skills/. Replace with a real directory of per-skill flat symlinks.
+  if [[ -L "$skills_dir" ]]; then
+    rm "$skills_dir"
+    mkdir -p "$skills_dir"
+  fi
+
+  almanac_validate_unique_names || _die "duplicate skill names — fix before installing"
+
+  local count=0
+  while IFS= read -r dir; do
+    dir="${dir%/}"
+    [ -f "$dir/SKILL.md" ] || continue
+    local name
+    name=$(basename "$dir")
+
+    local skill_target="$skills_dir/$name"
+    [[ -L "$skill_target" || -e "$skill_target" ]] && rm -rf "$skill_target"
+    ln -s "$dir" "$skill_target"
+
+    count=$((count + 1))
+  done < <(almanac_list_skills)
+
+  # Clean up dangling skill-dir symlinks from deleted skills.
+  for link in "$skills_dir"/*; do
+    [[ -L "$link" ]] || continue
+    [[ -e "$link" ]] || rm "$link"
+  done
+
+  # Clean up legacy Codex install locations from older almanac versions.
+  for link in "$legacy_skills_dir"/*; do
+    [[ -L "$link" ]] || continue
+    [[ "$(readlink "$link")" == *almanac* ]] || continue
+    rm "$link"
+  done
+  [[ -d "$legacy_skills_dir" ]] && rmdir "$legacy_skills_dir" 2>/dev/null || true
+
+  for link in "$legacy_prompts_dir"/*.md; do
+    [[ -L "$link" ]] || continue
+    [[ "$(readlink "$link")" == *almanac* ]] || continue
+    rm "$link"
+  done
+  [[ -d "$legacy_prompts_dir" ]] && rmdir "$legacy_prompts_dir" 2>/dev/null || true
+
+  _success "Linked $count skill dirs at ~/.agents/skills/almanac/<name>"
+  _info "Skills can be invoked as \$<name> or from /skills — restart codex to reload"
+}
+
 # --- main ---
 
 GLOBAL_CONFIG=false
@@ -115,7 +171,11 @@ case "$PROVIDER" in
     _install_claude_code
     ;;
   opencode|cursor|codex)
-    _install_symlink "$PROVIDER"
+    if [[ "$PROVIDER" == "codex" ]]; then
+      _install_codex
+    else
+      _install_symlink "$PROVIDER"
+    fi
     ;;
   *)
     _die "No installer for provider: $PROVIDER"

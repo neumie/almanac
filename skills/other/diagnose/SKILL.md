@@ -1,6 +1,6 @@
 ---
 name: diagnose
-description: Use when debugging hard bugs or perf regressions. Disciplined loop — reproduce, minimise, hypothesise, instrument, fix, regression-test. Triggers: debug this, broken, throwing, failing.
+description: "Use when debugging hard bugs or perf regressions. Disciplined loop — reproduce, minimise, hypothesise, instrument, fix, regression-test. Triggers: debug this, broken, throwing, failing."
 metadata:
   upstream: mattpocock/skills/engineering/diagnose
   upstream-sha: 49cec7be019bc408e87b77670f3d442f536da254

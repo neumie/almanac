@@ -1,6 +1,6 @@
 ---
 name: pr-watch
-description: Use when waiting for CI checks on a PR. Watches status, auto-fixes failures via ci-fix (max 2 retries), reports merge-ready. Triggers: watch PR, watch CI, wait for checks.
+description: "Use when waiting for CI checks on a PR. Watches status, auto-fixes failures via ci-fix (max 2 retries), reports merge-ready. Triggers: watch PR, watch CI, wait for checks."
 metadata:
   dependencies:
     - ci-fix
