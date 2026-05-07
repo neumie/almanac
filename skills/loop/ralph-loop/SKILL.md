@@ -1,6 +1,6 @@
 ---
 name: ralph-loop
-description: Use when autonomously implementing a PRD task-by-task. Each loop iteration picks one task, TDDs it, commits, exits. Progress persists in git. Triggers: ralph, AFK mode, autonomous loop.
+description: "Use when autonomously implementing a PRD task-by-task. Each loop iteration picks one task, TDDs it, commits, exits. Progress persists in git. Triggers: ralph, AFK mode, autonomous loop."
 disable-model-invocation: true
 metadata:
   upstream: mattpocock/ralph-workshop-repo-001

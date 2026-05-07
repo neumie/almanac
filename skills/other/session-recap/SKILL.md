@@ -1,6 +1,6 @@
 ---
 name: session-recap
-description: Use when summarizing the current branch or session. Gathers git log, diff, branch, PR status, uncommitted changes. Triggers: recap, catch me up, what did I do, where was I.
+description: "Use when summarizing the current branch or session. Gathers git log, diff, branch, PR status, uncommitted changes. Triggers: recap, catch me up, what did I do, where was I."
 disable-model-invocation: true
 ---
 

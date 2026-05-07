@@ -1,6 +1,6 @@
 ---
 name: rebase
-description: Use when rebasing the current branch onto main or another base. Auto-detects base, handles conflicts, supports squashing. Triggers: rebase, sync with main, clean history before PR.
+description: "Use when rebasing the current branch onto main or another base. Auto-detects base, handles conflicts, supports squashing. Triggers: rebase, sync with main, clean history before PR."
 ---
 
 # Rebase
