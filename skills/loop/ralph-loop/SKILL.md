@@ -64,7 +64,12 @@ You've been passed the last 10 RALPH commits (SHA, date, full message). Review t
 
 Break down the PRD into tasks.
 
-Make each task the smallest possible unit of work. We don't want to outrun our headlights. Aim for one small change per task.
+Pick the smallest unit of work that pins one meaningful behavior. Don't outrun your headlights — but don't underrun them either.
+
+- **Behavior changes** (new features, schema, business logic): one task = one behavior, written test-first.
+- **Mechanical refactors** (renames, threading a parameter through callers, search-and-replace across many files): the whole refactor is ONE task. Batch all related edits across all affected files into a single commit. The existing test suite is the verification — don't split a rename into one commit per call site.
+
+If you can't articulate a behavior the task pins, you're mid-refactor — bundle it.
 
 # TASK SELECTION
 
@@ -78,11 +83,15 @@ Explore the repo and fill your context window with relevant information that wil
 
 # EXECUTION
 
-Complete the task using test-driven development:
+Complete the task.
+
+For behavior changes, use TDD:
 1. Write one failing test for the behavior
 2. Write minimal code to pass
 3. Refactor if needed
 4. Repeat for the next behavior within this task
+
+For mechanical refactors, skip TDD: make the change across all affected files in one pass, then run the feedback loops. Existing tests verify correctness; don't write new ones to pin the refactor itself.
 
 # FEEDBACK LOOPS
 
