@@ -18,6 +18,17 @@ Every resulting commit must satisfy: `git revert <sha>` produces a working codeb
 
 Group by **code dependency**, not just by topic or file proximity. Read the actual diffs to trace what depends on what.
 
+## Critical: anchor on the merge-base, never on `origin/<base>`
+
+If `origin/<base>` has moved forward since the branch was created, the branch is **diverged**. In that case:
+
+- `git diff origin/<base>..HEAD` shows main's new files as **deletions** in your branch — they were never on the branch, but they exist on main.
+- `git reset --soft origin/<base>` followed by a commit would commit those deletions, **wiping out work that was merged into main while the branch existed.**
+
+Always compute the **merge-base** of the branch and `origin/<base>` first, and use that SHA as the anchor for the diff, log range, and soft-reset. The merge-base is the point where the branch actually started; squashing onto it preserves exactly the work your branch contributed and touches nothing else.
+
+If you want the squashed branch to also be up-to-date with `origin/<base>`, that is a **rebase**, not a squash — run the `rebase` skill after squashing.
+
 ## Phase 1 — Analyze
 
 These commands run automatically when the skill loads — output replaces each line below:
@@ -27,14 +38,20 @@ These commands run automatically when the skill loads — output replaces each l
 - origin/master exists: !`git rev-parse --verify origin/master 2>/dev/null && echo origin/master || true`
 - Working tree status: !`git status`
 - Branch commits: !`git log "origin/$(gh pr view --json baseRefName -q '.baseRefName' 2>/dev/null || (git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master))..HEAD" --oneline 2>/dev/null || true`
+- Divergence (ahead/behind base): !`git fetch origin "$(gh pr view --json baseRefName -q '.baseRefName' 2>/dev/null || (git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master))" --quiet 2>/dev/null; git rev-list --left-right --count "origin/$(gh pr view --json baseRefName -q '.baseRefName' 2>/dev/null || (git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master))...HEAD" 2>/dev/null || true`
+- Merge-base SHA: !`git merge-base "origin/$(gh pr view --json baseRefName -q '.baseRefName' 2>/dev/null || (git rev-parse --verify origin/main >/dev/null 2>&1 && echo main || echo master))" HEAD 2>/dev/null || true`
 
-### Step 1: Determine base
+### Step 1: Determine base and anchor
 
 Pick `<base>` from the pre-run output:
 
 1. PR base if `gh pr view` returned one
 2. Otherwise `main` if it exists
 3. Otherwise `master`
+
+Then **set `<anchor>` to the Merge-base SHA** from the pre-run output. Every command in the rest of the skill — diff, log range, reset — uses `<anchor>`, not `origin/<base>`. If the divergence line shows `0` on the left (base hasn't moved), `<anchor>` equals `origin/<base>` and behavior is unchanged; if it shows a non-zero left count, using `<anchor>` is what prevents data loss.
+
+If Merge-base SHA is empty (no shared history), **STOP** and report — the branch is not based on `<base>` and squashing is unsafe.
 
 ### Step 2: Check prerequisites
 
@@ -44,7 +61,8 @@ Pick `<base>` from the pre-run output:
 
 ### Step 3: Gather context
 
-- Read all commits with full diffs: `git log origin/<base>..HEAD --format='%H %s' --reverse` then `git show <sha>` for each
+- Read all commits with full diffs: `git log <anchor>..HEAD --format='%H %s' --reverse` then `git show <sha>` for each
+- Sanity-check scope: `git diff --stat <anchor>..HEAD` — this is the exact set of changes the squash must preserve. Compare it to your mental model of the branch; if files appear that you don't recognize as part of this branch's work, investigate before proceeding.
 - Map which files and symbols each commit touches
 - Trace dependencies: if commit A adds a function and commit B calls it, they're linked
 
@@ -64,11 +82,13 @@ If all commits are already logically clean and independently revertable, report 
 
 ## Phase 3 — Execute
 
-Use the soft-reset pattern since interactive rebase is unavailable. Process groups from oldest to newest:
+Use the soft-reset pattern since interactive rebase is unavailable. Reset onto `<anchor>` (the merge-base SHA from Phase 1) — **never** onto `origin/<base>` directly, or you risk committing deletions of work that landed on the base while the branch existed.
+
+Process groups from oldest to newest:
 
 ```bash
-# Reset all commits
-git reset --soft origin/<base>
+# Reset all commits to the merge-base anchor (NOT origin/<base>)
+git reset --soft <anchor>
 
 # Unstage everything
 git reset HEAD .
@@ -85,7 +105,7 @@ git commit -m "type(scope): summary for group 2"
 If all commits collapse into a single group, the simpler pattern works:
 
 ```bash
-git reset --soft origin/<base>
+git reset --soft <anchor>
 git commit -m "type(scope): summary"
 ```
 
@@ -101,7 +121,8 @@ git commit -m "type(scope): summary"
 
 ### Step 1: Diff integrity
 
-- `git diff --stat origin/<base>..HEAD` — must match Phase 1 output exactly. If not, **STOP** — something was lost.
+- `git diff --stat <anchor>..HEAD` — must match the Phase 1 Step 3 sanity-check output exactly. If not, **STOP** — something was lost or extra was pulled in.
+- Also run `git diff --stat origin/<base>...HEAD` (three dots) as a cross-check — it should match too, since three-dot diff is also anchored on the merge-base.
 
 ### Step 2: Revertability check
 
@@ -115,8 +136,9 @@ If a commit fails this check, go back and regroup.
 
 ### Step 3: Report
 
-- `git log origin/<base>..HEAD --oneline` — show new commit history
+- `git log <anchor>..HEAD --oneline` — show new commit history
 - Report: **"Squashed N commits into M"**
+- If divergence was non-zero, also report: **"Branch is still behind `<base>` by X commits — run `rebase` skill if you want to catch up."**
 
 ## Edge Cases
 
@@ -126,3 +148,5 @@ If a commit fails this check, go back and regroup.
 - **Already pushed:** Warn that squashing will require force-push to update remote. Proceed — the `push` skill handles force-push safely.
 - **Merge commits on branch:** Warn that squash will flatten merge history. Proceed.
 - **All commits already clean:** Report and stop — don't squash for the sake of it.
+- **Branch diverged from base (base moved forward):** Handled by anchoring on the merge-base — do **not** mix in a rebase. If the user wants the branch caught up to `<base>`, hand off to the `rebase` skill after squashing.
+- **No merge-base found:** Branch has no shared history with `<base>`. **STOP** and report — likely the wrong base.
