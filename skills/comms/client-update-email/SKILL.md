@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Client Update Email
 
-Generate a client-facing email summarizing project work. Five phases: gather → outline → draft → screenshots → output.
+Generate a client-facing email summarizing project work. Six phases: gather → outline → fact-check → draft → screenshots → output.
 
 ## Inputs
 
@@ -96,6 +96,34 @@ Tell the user they can:
 
 Wait for the user to approve the outline before proceeding to Phase 3.
 
+## Phase 2.5 — Fact-Check Before Drafting
+
+Before writing any client-facing draft, fact-check the approved outline against source evidence.
+
+### Claim ledger
+
+Create a claim ledger for every substantive statement you plan to put in the email:
+
+```
+Claim: [exact user-facing claim]
+Evidence: [file:line, PR text, issue, screenshot, config, or user-provided fact]
+Confidence: high | medium | low
+Action: keep | narrow wording | remove | ask user
+```
+
+Rules:
+
+- Every claim about a UI label, button, badge, icon, role, route, page, filter, automation, or workflow must have direct evidence from code, PR metadata, screenshots, docs, or explicit user confirmation.
+- Inspect the actual rendering component, not only shared label files. A label string existing in code does not prove it appears on the page being described.
+- Prefer exact surfaces over broad phrasing. Say "main activity calendar" only if that specific page is verified; do not say "calendars" unless every relevant calendar is verified.
+- For role/permission claims, read the role guard or permission helper and name only verified roles.
+- For filtering/visibility claims, inspect both the list/page query and the detail/project view that supposedly remains visible.
+- Do not mention tests, backend side effects, performance, refactors, CI, or internal stabilization unless the user asked to include them or they are client-visible.
+- If a claim has no evidence or only weak inference, narrow it to what is proven or remove it before drafting.
+- If the user corrects a claim, treat that as a required fact and re-check the affected section before continuing.
+
+After the ledger is clean, write the markdown draft. Do not write a draft with unresolved low-confidence claims.
+
 ## Phase 3 — Draft Generation
 
 Create the output directory:
@@ -153,6 +181,15 @@ Follow this structure exactly. Apply the user's chosen **tone** and **language**
 - Small changes: bullet list only. No screenshots, no "where to find it."
 - No emojis unless the chosen tone calls for them.
 - Screenshot placeholders use the format: `[Screenshot: filename.png — description of what to capture]`
+
+### Draft fact-check
+
+Before showing the draft to the user:
+
+1. Read the generated markdown line by line.
+2. Match each substantive sentence back to the claim ledger.
+3. Remove or rewrite anything broader than the evidence.
+4. Verify screenshot placeholder wording against actual UI states; avoid saying "badge", "tab", "button", "modal", or a specific label unless that exact UI exists.
 
 After writing the draft, show it to the user. Wait for approval or edits before proceeding to Phase 4.
 
