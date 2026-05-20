@@ -36,22 +36,23 @@ _uninstall_claude_code() {
     _info "Removed skill resource link ~/.claude/skills/almanac"
   fi
 
-  # Remove CLAUDE.md symlink if it points to AGENTS.md or almanac
+  # Remove CLAUDE.md symlink if it's ours (direct -> almanac, or legacy hop -> AGENTS.md)
   local claude_md="$HOME/.claude/CLAUDE.md"
   if [[ -L "$claude_md" ]]; then
     local link
     link="$(readlink "$claude_md")"
-    if [[ "$link" == "AGENTS.md" || "$link" == *almanac* ]]; then
+    if [[ "$link" == *almanac* || "$link" == "AGENTS.md" ]]; then
       rm "$claude_md"
       _info "Removed CLAUDE.md symlink from ~/.claude/"
     fi
   fi
 
-  # Remove AGENTS.md symlink if it points to almanac
-  local agents_md="$HOME/.claude/AGENTS.md"
-  if [[ -L "$agents_md" ]] && [[ "$(readlink "$agents_md")" == *almanac* ]]; then
-    rm "$agents_md"
-    _info "Removed AGENTS.md symlink from ~/.claude/"
+  # Migration: older almanac versions also installed ~/.claude/AGENTS.md as a
+  # symlink-hop intermediary. Remove it if present and points to almanac.
+  local legacy_agents_md="$HOME/.claude/AGENTS.md"
+  if [[ -L "$legacy_agents_md" ]] && [[ "$(readlink "$legacy_agents_md")" == *almanac* ]]; then
+    rm "$legacy_agents_md"
+    _info "Removed legacy AGENTS.md symlink from ~/.claude/"
   fi
 
   # Clean up legacy plugin registry entries (from older installs)
@@ -162,6 +163,14 @@ _uninstall_codex() {
   [[ -d "$prompts_dir" ]] && rmdir "$prompts_dir" 2>/dev/null || true
 
   _info "Removed $prompt_count slash prompt symlinks from ~/.codex/prompts/"
+
+  # Remove global AGENTS.md symlink if it points to almanac
+  local agents_md="$HOME/.codex/AGENTS.md"
+  if [[ -L "$agents_md" ]] && [[ "$(readlink "$agents_md")" == *almanac* ]]; then
+    rm "$agents_md"
+    _info "Removed AGENTS.md symlink from ~/.codex/"
+  fi
+
   _success "Uninstalled almanac from Codex"
 }
 
