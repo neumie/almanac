@@ -45,11 +45,15 @@ ln -s ~/.almanac/skills ~/.agents/skills/almanac             # Codex
 
 ### Global config
 
-The installer symlinks a versioned `~/.claude/AGENTS.md` (canonical, cross-tool standard) and points `~/.claude/CLAUDE.md` at it, so the same instructions apply across Claude Code, Codex, Cursor, and OpenCode:
+The installer symlinks a versioned global instruction file into each provider, all pointing at the same canonical source (`providers/_shared/AGENTS.md`):
+
+- `claude-code` → `~/.claude/CLAUDE.md`
+- `codex` → `~/.codex/AGENTS.md`
 
 ```bash
-almanac install claude-code                  # skips if you have a custom AGENTS.md/CLAUDE.md
+almanac install claude-code                  # skips if you have a custom CLAUDE.md
 almanac install claude-code --global-config  # replaces with almanac's version
+almanac install codex                        # same, for ~/.codex/AGENTS.md
 ```
 
 ## CLI
