@@ -9,13 +9,13 @@ if [ -z "$1" ] || [ -z "$2" ]; then
   echo "Example: $0 auth-system 10"
   echo ""
   echo "Available PRDs:"
-  ls plans/*.md 2>/dev/null | grep -v prompt | grep -v brief | sed 's|plans/||;s|\.md||' | sed 's/^/  /'
+  ls docs/plans/*.md 2>/dev/null | grep -v prompt | grep -v brief | sed 's|docs/plans/||;s|\.md||' | sed 's/^/  /'
   exit 1
 fi
 
 PRD_NAME="$1"
 ITERATIONS="$2"
-PROMPT="plans/prompt-${PRD_NAME}.md"
+PROMPT="docs/plans/prompt-${PRD_NAME}.md"
 
 detect_provider() {
   if [ -n "${RALPH_PROVIDER:-}" ]; then
@@ -303,8 +303,8 @@ EOF
 # .ralph-stop so the next iteration exits gracefully. Set RALPH_NO_OVERSEE=1 to
 # disable.
 OVERSEE_INTERVAL="${RALPH_OVERSEE_INTERVAL:-900}"
-OVERSEE_LOG="plans/overseer-${PRD_NAME}.log"
-REPORTS_LOG="plans/agent-reports-${PRD_NAME}.log"
+OVERSEE_LOG="docs/plans/overseer-${PRD_NAME}.log"
+REPORTS_LOG="docs/plans/agent-reports-${PRD_NAME}.log"
 OVERSEER_PID=""
 
 run_overseer_once() {
@@ -526,7 +526,7 @@ $(cat "$PROMPT")
 Previous RALPH commits:
 $ralph_commits"
       mkdir -p plans
-      codex_log="plans/ralph-codex-${PRD_NAME}-iteration-${i}.log"
+      codex_log="docs/plans/ralph-codex-${PRD_NAME}-iteration-${i}.log"
       echo "Codex session log: $codex_log"
       if [ "${RALPH_CODEX_VERBOSE:-}" = "1" ]; then
         codex \

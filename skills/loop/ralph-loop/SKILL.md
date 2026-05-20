@@ -15,7 +15,7 @@ Autonomous implementation loop. Each iteration gets fresh context, picks one tas
 
 These commands run automatically when the skill loads — output replaces each line below:
 
-- Available PRDs: !`ls plans/*.md 2>/dev/null | grep -v prompt | grep -v brief || true`
+- Available PRDs: !`ls docs/plans/*.md 2>/dev/null | grep -v prompt | grep -v brief || true`
 - Project files: !`ls package.json Makefile Cargo.toml go.mod pyproject.toml setup.py 2>/dev/null || true`
 - Tests directory: !`ls tests/ 2>/dev/null || true`
 
@@ -23,7 +23,7 @@ These commands run automatically when the skill loads — output replaces each l
 
 From the PRD list:
 
-- If the user passed a name (e.g. `/ralph-loop auth-system`), use `plans/auth-system.md`
+- If the user passed a name (e.g. `/ralph-loop auth-system`), use `docs/plans/auth-system.md`
 - If there's exactly one PRD, use it
 - If there are multiple, ask the user which one to use
 - If there are none, tell the user to run `/prd-create` first
@@ -51,7 +51,7 @@ mkdir -p plans
 
 ### 4. Generate the prompt
 
-Write `plans/prompt-<name>.md` (e.g. `plans/prompt-auth-system.md`) using the template below, filling in the detected feedback loops and the PRD path:
+Write `docs/plans/prompt-<name>.md` (e.g. `docs/plans/prompt-auth-system.md`) using the template below, filling in the detected feedback loops and the PRD path:
 
 ```markdown
 # INPUTS
@@ -64,7 +64,7 @@ You've been passed the last 10 RALPH commits (SHA, date, full message). Review t
 
 Before decomposing the PRD, check whether an explicit queue exists. Detect in this order:
 
-1. **Local slice files.** If `plans/issues/<name>/` contains `*.md` files, that directory is your queue. Each file has frontmatter (`status`, `blocked-by`, `type`) and an `## Acceptance criteria` checklist of `- [ ]` items.
+1. **Local slice files.** If `docs/plans/issues/<name>/` contains `*.md` files, that directory is your queue. Each file has frontmatter (`status`, `blocked-by`, `type`) and an `## Acceptance criteria` checklist of `- [ ]` items.
 2. **GitHub issues.** Else if `gh issue list --state open --label "ralph(<name>)"` returns at least one issue, that's your queue. Each issue body contains an `## Acceptance criteria` section with `- [ ]` items.
 3. **No queue.** Skip to TASK BREAKDOWN below and decompose the PRD yourself.
 
@@ -149,7 +149,7 @@ Keep it concise but informative for the next iteration.
 
 # REPORT
 
-After committing, append a self-report to `plans/agent-reports-<name>.log`. The overseer reads recent reports each tick and may emit steering directives based on what you flag. Be honest — concerns and uncertainties are more useful than reassurance.
+After committing, append a self-report to `docs/plans/agent-reports-<name>.log`. The overseer reads recent reports each tick and may emit steering directives based on what you flag. Be honest — concerns and uncertainties are more useful than reassurance.
 
 Append exactly this block (replace `<HEAD-sha>` with the SHA of the commit you just made, e.g. `git rev-parse HEAD`):
 
@@ -223,7 +223,7 @@ Fully autonomous. Runs N iterations, each in a fresh agent context. Stops when:
 
 **Thinking override:** set `RALPH_EFFORT` to control model thinking level. Codex receives this as `model_reasoning_effort`; Claude Code receives it as `--effort`. Supported common values: `low`, `medium`, `high`, `xhigh`; Claude Code also supports `max`.
 
-**Codex output:** Codex raw session output is quiet by default and written to `plans/ralph-codex-<name>-*.log`; the terminal shows concise agent progress messages, the final assistant message, and the log path. Set `RALPH_CODEX_VERBOSE=1` to stream Codex's full session output.
+**Codex output:** Codex raw session output is quiet by default and written to `docs/plans/ralph-codex-<name>-*.log`; the terminal shows concise agent progress messages, the final assistant message, and the log path. Set `RALPH_CODEX_VERBOSE=1` to stream Codex's full session output.
 
 **Interactive launcher:** run `almanac ralph` (or `ralph.sh` directly) to select PRD, mode, provider, model, thinking level, iteration count, and overseer behavior from prompts. It delegates to `once.sh` or `afk.sh` with the corresponding `RALPH_PROVIDER`, `RALPH_MODEL`, `RALPH_EFFORT`, and `RALPH_NO_OVERSEE` environment values.
 
@@ -231,13 +231,13 @@ Fully autonomous. Runs N iterations, each in a fresh agent context. Stops when:
 
 **Overseer:** a parallel process wakes every `RALPH_OVERSEE_INTERVAL` seconds (default 900 = 15 min) and runs a sequential tick:
 
-1. **Push** (shell). Pushes any local commits ahead of upstream. Logs to `plans/overseer-<name>.log`.
+1. **Push** (shell). Pushes any local commits ahead of upstream. Logs to `docs/plans/overseer-<name>.log`.
 
 2. **Wait for CI** (shell, only if step 1 actually pushed). Polls `gh run list` every `RALPH_CI_POLL_INTERVAL` seconds (default 30) for the run matching the pushed `headSha`, blocking until status leaves `in_progress|queued|waiting|requested|pending`. Times out after `RALPH_CI_WAIT_TIMEOUT` seconds (default 1800 = 30 min). Exits early on `.ralph-stop`. While the overseer waits, main-loop iterations keep running — only the overseer thread is blocked.
 
 3. **CI verdict** (shell, no Claude call). Reads `gh run list --limit 1`. On `conclusion=failure|cancelled|timed_out|action_required|startup_failure`, writes `.ralph-ci-failed` (run URL, ID, workflow name, branch, timestamp). On `conclusion=success`, clears the marker. Also runs once at script start to pick up pre-existing failures from prior sessions or manual pushes.
 
-4. **Drift review** (selected agent call). Reviews recent `RALPH(<name>)` commits, **the tail of `plans/agent-reports-<name>.log`** (last ~8KB of agent self-reports — concerns, errors, uncertainties), **and any task queue** (slice files in `plans/issues/<name>/` or open GitHub issues with the `ralph(<name>)` label) against the PRD. Detects:
+4. **Drift review** (selected agent call). Reviews recent `RALPH(<name>)` commits, **the tail of `docs/plans/agent-reports-<name>.log`** (last ~8KB of agent self-reports — concerns, errors, uncertainties), **and any task queue** (slice files in `docs/plans/issues/<name>/` or open GitHub issues with the `ralph(<name>)` label) against the PRD. Detects:
 
    - Repeated tasks, off-PRD work, ABORT loops, vague commits, scope creep, test rot, recurring concerns the agents aren't solving on their own.
    - **Queue overclaim** — checkboxes flipped to `[x]` (or `status: done` set, or issues closed) without the corresponding code in those commits. For each recently-flipped checkbox, the overseer reads the slice/issue criterion and the commits that flipped it, and judges whether the diff actually fulfills the criterion. If not, the steer directs the next iteration to roll back the checkbox / status / issue closure.
@@ -256,7 +256,7 @@ Disable the whole overseer with `RALPH_NO_OVERSEE=1` — that also disables over
 
 Both can stack — a steered fix-CI iteration is valid.
 
-**Agent self-reports:** the iteration prompt template instructs the spawned agent to append a structured block to `plans/agent-reports-<name>.log` after committing — `concerns`, `errors`, `uncertainties` per iteration. This is the primary signal the overseer uses to decide whether to issue a steer beyond what the commits alone reveal. Agents are told to be honest — flagged uncertainties are more useful than reassurance.
+**Agent self-reports:** the iteration prompt template instructs the spawned agent to append a structured block to `docs/plans/agent-reports-<name>.log` after committing — `concerns`, `errors`, `uncertainties` per iteration. This is the primary signal the overseer uses to decide whether to issue a steer beyond what the commits alone reveal. Agents are told to be honest — flagged uncertainties are more useful than reassurance.
 
 ### HITL Mode (`once.sh`)
 

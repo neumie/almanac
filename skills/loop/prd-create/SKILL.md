@@ -1,6 +1,6 @@
 ---
 name: prd-create
-description: Use when turning a conversation or idea into plans/prd.md. Synthesizes existing context into user stories, module design, testing decisions. Do NOT interview — just synthesize.
+description: Use when turning a conversation or idea into docs/plans/prd.md. Synthesizes existing context into user stories, module design, testing decisions. Do NOT interview — just synthesize.
 disable-model-invocation: true
 metadata:
   upstream: mattpocock/skills/engineering/to-prd
@@ -13,7 +13,7 @@ Synthesize the current conversation context and codebase understanding into a PR
 
 These commands run automatically when the skill loads — output replaces each line below:
 
-- Existing brief: !`cat plans/brief.md 2>/dev/null || true`
+- Existing brief: !`cat docs/plans/brief.md 2>/dev/null || true`
 - CONTEXT.md: !`cat CONTEXT.md 2>/dev/null || true`
 
 1. If `Existing brief` content is present above, those are decisions from a grilling session — use them. If `CONTEXT.md` content is present, use its vocabulary throughout the PRD. Also explore the repo to understand the current state of the codebase, if you haven't already.
@@ -24,7 +24,7 @@ A deep module (as opposed to a shallow module) is one which encapsulates a lot o
 
 Check with the user that these modules match their expectations. Check with the user which modules they want tests written for.
 
-3. Derive a short kebab-case name for the PRD from the feature (e.g. `auth-system`, `dashboard-redesign`, `link-shortener`). Write the PRD using the template below and save it to `plans/<name>.md`:
+3. Derive a short kebab-case name for the PRD from the feature (e.g. `auth-system`, `dashboard-redesign`, `link-shortener`). Write the PRD using the template below and save it to `docs/plans/<name>.md`:
 
 ```bash
 mkdir -p plans

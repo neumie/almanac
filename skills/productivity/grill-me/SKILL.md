@@ -1,6 +1,6 @@
 ---
 name: grill-me
-description: Use when stress-testing a plan, design, or architecture through relentless questioning. Walks each branch of the decision tree, writes crystallized decisions to plans/brief.md.
+description: Use when stress-testing a plan, design, or architecture through relentless questioning. Walks each branch of the decision tree, writes crystallized decisions to docs/plans/brief.md.
 disable-model-invocation: true
 metadata:
   upstream: mattpocock/skills/grill-me
@@ -16,7 +16,7 @@ Interview the user relentlessly about every aspect of their plan until reaching 
 
 Pre-run on skill load — output replaces the line below:
 
-- Existing brief: !`cat plans/brief.md 2>/dev/null || true`
+- Existing brief: !`cat docs/plans/brief.md 2>/dev/null || true`
 
 If the content is present above, you're continuing a previous grilling session — acknowledge what's already decided and pick up from open questions. If empty, this is a fresh session.
 
@@ -34,15 +34,15 @@ mkdir -p plans
 
 ## Writing the Brief
 
-After each decision is resolved, update `plans/brief.md` immediately. Don't batch — capture as you go.
+After each decision is resolved, update `docs/plans/brief.md` immediately. Don't batch — capture as you go.
 
 Use the format in `${CLAUDE_SKILL_DIR}/references/brief-format.md`.
 
 ## Finishing
 
-When all branches are resolved (no open questions remain), update `plans/brief.md` one final time and tell the user:
+When all branches are resolved (no open questions remain), update `docs/plans/brief.md` one final time and tell the user:
 
 ```
-Grilling complete. Brief saved to plans/brief.md.
+Grilling complete. Brief saved to docs/plans/brief.md.
 Next step: /prd-create
 ```

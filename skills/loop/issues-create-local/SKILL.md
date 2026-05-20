@@ -3,7 +3,7 @@ name: issues-create-local
 description: Use when breaking a plan, spec, or PRD into local markdown task files as vertical-slice tracer bullets. No GitHub. Each slice gets its own file with status/blocked-by/type frontmatter.
 ---
 
-Break a plan into local markdown task files using vertical slices (tracer bullets). Same vertical-slice discipline as `issues-create`, but writes files to `plans/issues/<prd>/` instead of calling `gh issue create`.
+Break a plan into local markdown task files using vertical slices (tracer bullets). Same vertical-slice discipline as `issues-create`, but writes files to `docs/plans/issues/<prd>/` instead of calling `gh issue create`.
 
 ## When to use this vs `issues-create`
 
@@ -14,9 +14,9 @@ Break a plan into local markdown task files using vertical slices (tracer bullet
 
 ### 1. Gather context
 
-Work from whatever is already in the conversation. If the user passes a PRD path or name (e.g. `auth-system`), read `plans/auth-system.md`. If there's exactly one PRD in `plans/`, use it. If none, tell the user to run `/prd-create` first.
+Work from whatever is already in the conversation. If the user passes a PRD path or name (e.g. `auth-system`), read `docs/plans/auth-system.md`. If there's exactly one PRD in `docs/plans/`, use it. If none, tell the user to run `/prd-create` first.
 
-Derive `<prd>` — the kebab-case PRD basename without `.md` (e.g. `plans/auth-system.md` → `auth-system`). All issue files for this PRD go under `plans/issues/<prd>/`.
+Derive `<prd>` — the kebab-case PRD basename without `.md` (e.g. `docs/plans/auth-system.md` → `auth-system`). All issue files for this PRD go under `docs/plans/issues/<prd>/`.
 
 ### 2. Explore the codebase (optional)
 
@@ -61,13 +61,13 @@ Iterate until the user approves the breakdown.
 
 ### 5. Write the markdown files
 
-For each approved slice, write one file to `plans/issues/<prd>/NN-<slug>.md`.
+For each approved slice, write one file to `docs/plans/issues/<prd>/NN-<slug>.md`.
 
 - `NN` — two-digit zero-padded ordinal in dependency order (blockers first): `01`, `02`, …
 - `<slug>` — kebab-case version of the title (lowercase, hyphens, no punctuation), e.g. `add-login-form`
 
 ```bash
-mkdir -p plans/issues/<prd>
+mkdir -p docs/plans/issues/<prd>
 ```
 
 Use the file template below. Reference blockers by their filename basename (e.g. `01-add-login-form`) — that survives renames inside this directory better than absolute paths.
@@ -101,7 +101,7 @@ Any context, references, or open questions for the implementer.
 Print the list of files written, with paths relative to the repo root, e.g.:
 
 ```
-Wrote 5 slices to plans/issues/auth-system/:
+Wrote 5 slices to docs/plans/issues/auth-system/:
   01-add-login-form.md          (AFK)
   02-add-session-store.md       (AFK, blocked-by: 01)
   03-protect-dashboard-route.md (AFK, blocked-by: 02)
@@ -116,5 +116,5 @@ Then point the user at `/ralph-loop <prd>` to start working through them. ralph-
 ralph-loop iterations maintain `status` and acceptance-criteria checkboxes automatically under the strict checkbox protocol — no manual flips needed during AFK runs. The overseer reconciles overclaims and stale checkboxes on its tick. To list remaining work at a glance:
 
 ```bash
-grep -L "status: done" plans/issues/<prd>/*.md
+grep -L "status: done" docs/plans/issues/<prd>/*.md
 ```
