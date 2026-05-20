@@ -55,24 +55,47 @@ _install_claude_code() {
     [[ -e "$link" ]] || rm "$link"
   done
 
-  # Symlink global CLAUDE.md (only if no custom one exists)
-  local claude_md="$ALMANAC_HOME/providers/claude-code/CLAUDE.md"
+  # Symlink global AGENTS.md (canonical) + CLAUDE.md (symlink to AGENTS.md).
+  # AGENTS.md is the cross-tool standard (Codex/Cursor/OpenCode); Claude Code
+  # reads CLAUDE.md, so we point it at AGENTS.md for a single source of truth.
+  local agents_md="$ALMANAC_HOME/providers/_shared/AGENTS.md"
+  local agents_target="$HOME/.claude/AGENTS.md"
   local claude_target="$HOME/.claude/CLAUDE.md"
-  if [[ -f "$claude_md" ]]; then
-    if [[ ! -e "$claude_target" && ! -L "$claude_target" ]]; then
-      ln -s "$claude_md" "$claude_target"
-      _success "Installed global CLAUDE.md -> ~/.claude/CLAUDE.md"
-    elif [[ -L "$claude_target" ]] && readlink "$claude_target" | grep -q "almanac"; then
-      rm "$claude_target"
-      ln -s "$claude_md" "$claude_target"
-      _success "Updated global CLAUDE.md -> ~/.claude/CLAUDE.md"
+  if [[ -f "$agents_md" ]]; then
+    # 1. Install ~/.claude/AGENTS.md -> repo AGENTS.md
+    if [[ ! -e "$agents_target" && ! -L "$agents_target" ]]; then
+      ln -s "$agents_md" "$agents_target"
+      _success "Installed global AGENTS.md -> ~/.claude/AGENTS.md"
+    elif [[ -L "$agents_target" ]] && readlink "$agents_target" | grep -q "almanac"; then
+      rm "$agents_target"
+      ln -s "$agents_md" "$agents_target"
+      _success "Updated global AGENTS.md -> ~/.claude/AGENTS.md"
     elif [[ "$GLOBAL_CONFIG" == true ]]; then
-      [[ -f "$claude_target" ]] && _warn "Replacing custom ~/.claude/CLAUDE.md with almanac version"
-      [[ -L "$claude_target" || -f "$claude_target" ]] && rm "$claude_target"
-      ln -s "$claude_md" "$claude_target"
-      _success "Installed global CLAUDE.md -> ~/.claude/CLAUDE.md"
+      [[ -f "$agents_target" ]] && _warn "Replacing custom ~/.claude/AGENTS.md with almanac version"
+      [[ -L "$agents_target" || -f "$agents_target" ]] && rm "$agents_target"
+      ln -s "$agents_md" "$agents_target"
+      _success "Installed global AGENTS.md -> ~/.claude/AGENTS.md"
     else
-      _info "Skipped ~/.claude/CLAUDE.md — custom file exists (use --global-config to override)"
+      _info "Skipped ~/.claude/AGENTS.md — custom file exists (use --global-config to override)"
+    fi
+
+    # 2. Install ~/.claude/CLAUDE.md -> ~/.claude/AGENTS.md (only if AGENTS.md is ours)
+    if [[ -L "$agents_target" ]] && readlink "$agents_target" | grep -q "almanac"; then
+      if [[ ! -e "$claude_target" && ! -L "$claude_target" ]]; then
+        ln -s "AGENTS.md" "$claude_target"
+        _success "Linked ~/.claude/CLAUDE.md -> AGENTS.md"
+      elif [[ -L "$claude_target" ]] && { [[ "$(readlink "$claude_target")" == "AGENTS.md" ]] || readlink "$claude_target" | grep -q "almanac"; }; then
+        rm "$claude_target"
+        ln -s "AGENTS.md" "$claude_target"
+        _success "Updated ~/.claude/CLAUDE.md -> AGENTS.md"
+      elif [[ "$GLOBAL_CONFIG" == true ]]; then
+        [[ -f "$claude_target" ]] && _warn "Replacing custom ~/.claude/CLAUDE.md with symlink to AGENTS.md"
+        [[ -L "$claude_target" || -f "$claude_target" ]] && rm "$claude_target"
+        ln -s "AGENTS.md" "$claude_target"
+        _success "Linked ~/.claude/CLAUDE.md -> AGENTS.md"
+      else
+        _info "Skipped ~/.claude/CLAUDE.md — custom file exists (use --global-config to override)"
+      fi
     fi
   fi
 

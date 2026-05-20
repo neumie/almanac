@@ -36,11 +36,22 @@ _uninstall_claude_code() {
     _info "Removed skill resource link ~/.claude/skills/almanac"
   fi
 
-  # Remove CLAUDE.md symlink if it points to almanac
+  # Remove CLAUDE.md symlink if it points to AGENTS.md or almanac
   local claude_md="$HOME/.claude/CLAUDE.md"
-  if [[ -L "$claude_md" ]] && [[ "$(readlink "$claude_md")" == *almanac* ]]; then
-    rm "$claude_md"
-    _info "Removed CLAUDE.md symlink from ~/.claude/"
+  if [[ -L "$claude_md" ]]; then
+    local link
+    link="$(readlink "$claude_md")"
+    if [[ "$link" == "AGENTS.md" || "$link" == *almanac* ]]; then
+      rm "$claude_md"
+      _info "Removed CLAUDE.md symlink from ~/.claude/"
+    fi
+  fi
+
+  # Remove AGENTS.md symlink if it points to almanac
+  local agents_md="$HOME/.claude/AGENTS.md"
+  if [[ -L "$agents_md" ]] && [[ "$(readlink "$agents_md")" == *almanac* ]]; then
+    rm "$agents_md"
+    _info "Removed AGENTS.md symlink from ~/.claude/"
   fi
 
   # Clean up legacy plugin registry entries (from older installs)
