@@ -1,6 +1,6 @@
 ---
 name: grill-me
-description: Use when stress-testing a plan, design, or architecture through relentless questioning. Walks each branch of the decision tree, writes crystallized decisions to docs/plans/brief.md.
+description: Use when stress-testing a plan, design, or architecture through relentless questioning. Walks each branch of the decision tree, writes crystallized decisions to docs/plans/<name>/brief.md.
 disable-model-invocation: true
 metadata:
   upstream: mattpocock/skills/grill-me
@@ -16,12 +16,34 @@ Interview the user relentlessly about every aspect of their plan until reaching 
 
 Pre-run on skill load — output replaces the line below:
 
-- Existing brief: !`cat docs/plans/brief.md 2>/dev/null || true`
+- Current branch: !`git branch --show-current 2>/dev/null || true`
 
-If the content is present above, you're continuing a previous grilling session — acknowledge what's already decided and pick up from open questions. If empty, this is a fresh session.
+### Context detection (do this first, before anything else)
+
+Determine the feature `<name>` for this session:
+
+1. **If the skill was invoked with an argument** (e.g. `/grill-me auth-system`), use that as `<name>`.
+2. **Otherwise**, take the branch name from the pre-run above and strip a leading type prefix if present — `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`, `test/`, `ci/`, `perf/`. Whatever remains is `<name>`. Example: `feat/auth-system` → `auth-system`, `dashboard-redesign` → `dashboard-redesign`.
+3. **If the branch is `main`, `master`, or `develop`** (or empty after stripping), there is no usable name. Tell the user:
+
+   ```
+   No feature name available. Either pass an explicit name (e.g. /grill-me auth-system) or check out a feature branch first.
+   ```
+
+   Then stop. Do not proceed.
+
+Once `<name>` is known, run this command to load any existing brief:
 
 ```bash
-mkdir -p plans
+cat docs/plans/<name>/brief.md 2>/dev/null || true
+```
+
+If content is present, you're continuing a previous grilling session — acknowledge what's already decided and pick up from open questions. If empty (file missing or empty), this is a fresh session.
+
+Create the directory before the first write:
+
+```bash
+mkdir -p docs/plans/<name>
 ```
 
 ## Rules
@@ -34,15 +56,15 @@ mkdir -p plans
 
 ## Writing the Brief
 
-After each decision is resolved, update `docs/plans/brief.md` immediately. Don't batch — capture as you go.
+After each decision is resolved, update `docs/plans/<name>/brief.md` immediately. Don't batch — capture as you go.
 
 Use the format in `${CLAUDE_SKILL_DIR}/references/brief-format.md`.
 
 ## Finishing
 
-When all branches are resolved (no open questions remain), update `docs/plans/brief.md` one final time and tell the user:
+When all branches are resolved (no open questions remain), update `docs/plans/<name>/brief.md` one final time and tell the user:
 
 ```
-Grilling complete. Brief saved to docs/plans/brief.md.
+Grilling complete. Brief saved to docs/plans/<name>/brief.md.
 Next step: /prd-create
 ```

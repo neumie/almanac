@@ -10,7 +10,7 @@ Usage: ralph.sh [options]
 Interactive Ralph loop launcher.
 
 Options:
-  --prd <name>          PRD name from docs/plans/<name>.md
+  --prd <name>          PRD name from docs/plans/<name>/prd.md
   --mode <once|afk>     Run one iteration or autonomous mode
   --provider <name>     Agent provider: codex or claude
   --model <model>       Model name. Use "default" for provider default
@@ -106,13 +106,11 @@ choose_from_list() {
 }
 
 list_prds() {
-  local file name
-  for file in docs/plans/*.md; do
-    [ -f "$file" ] || continue
-    name="$(basename "$file" .md)"
-    case "$name" in
-      prompt-*|brief) continue ;;
-    esac
+  local dir name
+  for dir in docs/plans/*/; do
+    [ -d "$dir" ] || continue
+    [ -f "${dir}prd.md" ] || continue
+    name="$(basename "$dir")"
     echo "$name"
   done
 }
@@ -193,7 +191,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ ! -d plans ]; then
+if [ ! -d docs/plans ]; then
   die "docs/plans/ not found. Run this from the project root."
 fi
 
@@ -211,8 +209,8 @@ if [ -z "$PRD_NAME" ]; then
   fi
 fi
 
-[ -f "docs/plans/${PRD_NAME}.md" ] || die "docs/plans/${PRD_NAME}.md not found."
-[ -f "docs/plans/prompt-${PRD_NAME}.md" ] || die "docs/plans/prompt-${PRD_NAME}.md not found. Run /ralph-loop ${PRD_NAME} first."
+[ -f "docs/plans/${PRD_NAME}/prd.md" ] || die "docs/plans/${PRD_NAME}/prd.md not found."
+[ -f "docs/plans/${PRD_NAME}/prompt.md" ] || die "docs/plans/${PRD_NAME}/prompt.md not found. Run /ralph-loop ${PRD_NAME} first."
 
 if [ -z "$MODE" ]; then
   MODE="$(choose_from_list "Select mode:" once once afk)"

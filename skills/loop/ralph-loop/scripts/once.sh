@@ -6,12 +6,14 @@ if [ -z "$1" ]; then
   echo "Example: $0 auth-system"
   echo ""
   echo "Available PRDs:"
-  ls docs/plans/*.md 2>/dev/null | grep -v prompt | grep -v brief | sed 's|docs/plans/||;s|\.md||' | sed 's/^/  /'
+  for d in docs/plans/*/; do
+    [ -f "$d/prd.md" ] && basename "$d"
+  done 2>/dev/null | sed 's/^/  /'
   exit 1
 fi
 
 PRD_NAME="$1"
-PROMPT="docs/plans/prompt-${PRD_NAME}.md"
+PROMPT="docs/plans/${PRD_NAME}/prompt.md"
 
 detect_provider() {
   if [ -n "${RALPH_PROVIDER:-}" ]; then
@@ -126,8 +128,8 @@ $(cat "$PROMPT")
 
 Previous RALPH commits:
 $ralph_commits"
-    mkdir -p plans
-    codex_log="docs/plans/ralph-codex-${PRD_NAME}-once.log"
+    mkdir -p "docs/plans/${PRD_NAME}"
+    codex_log="docs/plans/${PRD_NAME}/ralph-codex-once.log"
     codex_result=$(mktemp)
     echo "Codex session log: $codex_log"
     if [ "${RALPH_CODEX_VERBOSE:-}" = "1" ]; then

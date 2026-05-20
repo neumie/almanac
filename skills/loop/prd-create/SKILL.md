@@ -1,6 +1,6 @@
 ---
 name: prd-create
-description: Use when turning a conversation or idea into docs/plans/prd.md. Synthesizes existing context into user stories, module design, testing decisions. Do NOT interview — just synthesize.
+description: Use when turning a conversation or idea into docs/plans/<name>/prd.md. Synthesizes existing context into user stories, module design, testing decisions. Do NOT interview — just synthesize.
 disable-model-invocation: true
 metadata:
   upstream: mattpocock/skills/engineering/to-prd
@@ -13,24 +13,38 @@ Synthesize the current conversation context and codebase understanding into a PR
 
 These commands run automatically when the skill loads — output replaces each line below:
 
-- Existing brief: !`cat docs/plans/brief.md 2>/dev/null || true`
+- Current branch: !`git branch --show-current 2>/dev/null || true`
 - CONTEXT.md: !`cat CONTEXT.md 2>/dev/null || true`
 
-1. If `Existing brief` content is present above, those are decisions from a grilling session — use them. If `CONTEXT.md` content is present, use its vocabulary throughout the PRD. Also explore the repo to understand the current state of the codebase, if you haven't already.
+### 0. Determine `<name>` and load the brief
 
-2. Sketch out the major modules you will need to build or modify to complete the implementation. Actively look for opportunities to extract deep modules that can be tested in isolation.
+Before anything else:
+
+1. If the user passed a name as an argument (e.g. `/prd-create auth-system`), use that as `<name>`.
+2. Otherwise derive `<name>` from the current branch above by stripping a leading type prefix (`feat/`, `fix/`, `chore/`, `docs/`, `refactor/`, `test/`, `ci/`, `perf/`). Example: `feat/auth-system` → `auth-system`.
+3. If on `main`/`master`/`develop` with no argument passed, ask the user for an explicit name before continuing.
+
+Then load any existing brief from a previous grilling session:
+
+```bash
+cat docs/plans/<name>/brief.md 2>/dev/null || true
+```
+
+If that brief has content, those are decisions from a grilling session — use them. If `CONTEXT.md` content is present, use its vocabulary throughout the PRD. Also explore the repo to understand the current state of the codebase, if you haven't already.
+
+1. Sketch out the major modules you will need to build or modify to complete the implementation. Actively look for opportunities to extract deep modules that can be tested in isolation.
 
 A deep module (as opposed to a shallow module) is one which encapsulates a lot of functionality in a simple, testable interface which rarely changes.
 
 Check with the user that these modules match their expectations. Check with the user which modules they want tests written for.
 
-3. Derive a short kebab-case name for the PRD from the feature (e.g. `auth-system`, `dashboard-redesign`, `link-shortener`). Write the PRD using the template below and save it to `docs/plans/<name>.md`:
+2. Write the PRD using the template below and save it to `docs/plans/<name>/prd.md`:
 
 ```bash
-mkdir -p plans
+mkdir -p docs/plans/<name>
 ```
 
-Report the file path so the user knows which PRD to pass to `/ralph-loop`.
+Report the file path (`docs/plans/<name>/prd.md`) so the user knows which PRD to pass to `/ralph-loop`.
 
 ## PRD Template
 
