@@ -1,7 +1,20 @@
 #!/bin/bash
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# --- snapshot-exec guard ---------------------------------------------------
+# Run from an immutable copy so a loop refactoring this runner cannot corrupt a
+# live run mid-iteration (bash re-reads the main script by offset). Re-exec once
+# — only when executed directly, never when sourced — from a temp copy; siblings
+# and libs still load from the real dir via RALPH_REAL_DIR. The snapshot is
+# removed by the EXIT trap (RALPH_SNAP_FILE).
+if [ -z "${RALPH_SNAPSHOT:-}" ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+  __real="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  __snap="$(mktemp "${TMPDIR:-/tmp}/almanac-runner.XXXXXX")"
+  cp "${BASH_SOURCE[0]}" "$__snap"
+  RALPH_SNAPSHOT=1 RALPH_REAL_DIR="$__real" RALPH_SNAP_FILE="$__snap" exec bash "$__snap" "$@"
+fi
+
+SCRIPT_DIR="${RALPH_REAL_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)}"
 source "$SCRIPT_DIR/ralph-run-registry.sh"
 
 if [ -z "$1" ]; then
@@ -83,7 +96,7 @@ case "$PROVIDER" in
 esac
 
 ralph_register_run "$PRD_NAME"
-trap 'ralph_finish_run "$?"' EXIT
+trap 'ralph_finish_run "$?"; rm -f "${RALPH_SNAP_FILE:-}"' EXIT
 
 echo "======= RALPH ONCE ======="
 echo "PRD:         $PRD_NAME"
