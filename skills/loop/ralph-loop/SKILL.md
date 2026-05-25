@@ -79,7 +79,7 @@ You've been passed the last 10 RALPH commits (SHA, date, full message). Review t
 Before decomposing the PRD, check whether an explicit queue exists. Detect in this order:
 
 1. **Local slice files.** If `docs/plans/<name>/issues/` contains `*.md` files, that directory is your queue. Each file has frontmatter (`status`, `blocked-by`, `type`) and an `## Acceptance criteria` checklist of `- [ ]` items.
-2. **GitHub issues.** Else if `gh issue list --state open --label "ralph(<name>)"` returns at least one issue, that's your queue. Each issue body contains an `## Acceptance criteria` section with `- [ ]` items.
+2. **GitHub issues.** Else if `gh issue list --search 'label:"ralph(<name>)" state:open'` returns at least one issue, that's your queue. (Use `--search`, not `--label` — the parenthesised label name breaks the `--label` filter.) Each issue body contains an `## Acceptance criteria` section with `- [ ]` items.
 3. **No queue.** Skip to TASK BREAKDOWN below and decompose the PRD yourself.
 
 If a queue is present:
