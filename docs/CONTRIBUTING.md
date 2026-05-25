@@ -2,7 +2,7 @@
 
 ## Adding a Skill
 
-1. Pick a category — `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (PRD/issues/autonomous ralph-loop), `comms/` (client/team-facing comms), or `other/`. Add a new category freely if none fit. Create `skills/<category>/<name>/SKILL.md`:
+1. Pick a category — `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (PRD/issues/autonomous loops — ralph-loop, harden-loop), `comms/` (client/team-facing comms), or `other/`. Add a new category freely if none fit. Create `skills/<category>/<name>/SKILL.md`:
 
 ```yaml
 ---
@@ -21,7 +21,7 @@ Step-by-step instructions for the agent...
    - Must match the directory name exactly
    - Must be unique across the whole tree — `skills/git/foo/` and `skills/other/foo/` collide (validator hard-fails)
 
-3. **Description**: max 1024 chars. Include both what the skill does and when to trigger it. Be specific — agents tend to under-trigger, so err on the side of being explicit about trigger conditions.
+3. **Description**: must start with `Use when` (validator-enforced; a leading YAML quote is allowed) and state the trigger explicitly — agents tend to under-trigger. Hard cap 220 chars (validator-enforced) to keep the aggregated listing compact.
 
 4. **Optional frontmatter**: `license`, `compatibility` (max 500 chars), `metadata` (key-value map), `allowed-tools`, `disable-model-invocation` (bool — strips skill from auto-listing; user-invocable via `/almanac:<name>`; orchestrators can still load it via path)
 

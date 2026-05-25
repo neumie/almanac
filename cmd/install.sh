@@ -82,6 +82,9 @@ _install_claude_code() {
   _success "Installed $count skills into ~/.claude/commands/almanac/"
   _success "Linked $count skill dirs at ~/.claude/skills/almanac/<name>"
   _info "Skills appear as almanac:<name> — start claude as usual"
+
+  # Report optional deps (gum styles the harden/ralph dashboards; optional).
+  almanac_report_gum
 }
 
 _install_symlink() {
@@ -150,6 +153,9 @@ _install_codex() {
 
   _success "Linked $count skill dirs at ~/.agents/skills/almanac/<name>"
   _info "Skills can be invoked as \$<name> or from /skills — restart codex to reload"
+
+  # Report optional deps (gum styles the harden/ralph dashboards; optional).
+  almanac_report_gum
 
   # Symlink global AGENTS.md (same canonical file used by claude-code).
   local agents_md="$ALMANAC_HOME/providers/_shared/AGENTS.md"

@@ -99,6 +99,11 @@ name: long-desc
 description: Use when testing the description length cap. This description is intentionally padded with extra filler words to clearly exceed two hundred and twenty characters so that the validator must reject it as too long for the listing block.
 ---"
 
+neg_test "description missing 'Use when' prefix" "no-prefix" "---
+name: no-prefix
+description: Does a thing without stating its trigger up front.
+---"
+
 # Dependency validation negative test
 # Creates a skill that depends on a non-existent skill
 dep_neg_test() {

@@ -19,4 +19,5 @@ echo "  harden <target> --watch  Redraw the live supervision dashboard for the l
 echo "  harden <target> --watch-worker <lens>  Stream one reviewer's live event log"
 echo "  update                 Update almanac (git pull)"
 echo "  sync                   Check adapted skills for upstream changes"
+echo "  doctor                 Report optional-dependency status (gum, gh, jq)"
 echo "  help                   Show this help"

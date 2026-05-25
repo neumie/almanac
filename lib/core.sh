@@ -26,6 +26,23 @@ almanac_providers() {
   done
 }
 
+# Optional-dependency detection. `gum` (Charm) styles the harden/ralph
+# dashboards and HITL prompts; it is optional — the CLI degrades to plain output
+# when absent. This is a pure binary-presence check (unlike the runtime
+# TTY-gated almanac_loop_ui_has_gum), so install/doctor can report it.
+almanac_gum_present() { command -v gum >/dev/null 2>&1; }
+
+# Report gum presence/absence with an actionable hint. Used by `almanac doctor`
+# and the installers so users learn the dashboard is gum-styled and optional.
+almanac_report_gum() {
+  if almanac_gum_present; then
+    _success "gum: installed ($(command -v gum)) — dashboards render styled"
+  else
+    _warn "gum: not found — harden/ralph dashboards degrade to plain output"
+    _info "Install gum (optional) for styled dashboards: https://github.com/charmbracelet/gum"
+  fi
+}
+
 # Check if a provider is installed (return 0 = yes, 1 = no)
 _is_installed() {
   local provider="$1"

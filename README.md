@@ -8,7 +8,7 @@ Skills follow the [Agent Skills Open Standard](https://agentskills.io/specificat
 
 Skills are portable instruction sets that teach coding agents *how* to do things — commit code, create PRs, run TDD, fix CI, and more. Each skill is a single Markdown file (`SKILL.md`) with YAML frontmatter. Agents discover and load them automatically.
 
-Run any skill as a slash command in your agent (e.g. `/commit`, `/ship`, `/ralph-loop`).
+Run any skill as a slash command in your agent (e.g. `/commit`, `/ship`, `/ralph-loop`, `/harden-loop`).
 
 Skills are organized by category in the repo (`skills/git/`, `skills/productivity/`, `skills/other/`, …) and flattened at install time so Claude Code's flat skill discovery finds them.
 
@@ -69,12 +69,18 @@ almanac harden <target> --goal "<goal>"
                              Draft a harden-loop rubric for a target
 almanac harden <target> --approve
                              Approve an edited harden-loop rubric
+almanac harden <target> --fix
+                             Run one sequential fixer over open blocking findings + feedback loops
+almanac harden <target> --loop [--rounds N]
+                             Run the convergence loop until converged or budget hit
+                             (HITL checkpoint each round: ship / continue / steer)
 almanac harden <target> --watch
                              Redraw the live supervision dashboard for the latest run
 almanac harden <target> --watch-worker <lens>
                              Stream one reviewer's live event log
 almanac update               Update almanac (git pull + re-install)
 almanac sync                 Check adapted skills for upstream changes
+almanac doctor               Report optional-dependency status (gum, gh, jq)
 almanac help                 Show help
 ```
 

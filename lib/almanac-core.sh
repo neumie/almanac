@@ -92,6 +92,19 @@ almanac_validate_skill() {
       echo "FAIL: description exceeds 220 characters ($desc_len) in $skill_dir — keep terse, drop redundant 'Use this whenever the user says...' restatements" >&2
       errors=$((errors + 1))
     fi
+    # Must start with "Use when" — agents under-trigger without an explicit
+    # trigger up front (project convention). Strip a leading YAML quote first,
+    # since descriptions may be quoted (description: "Use when ...").
+    local desc_text="$description"
+    desc_text="${desc_text#\"}"
+    desc_text="${desc_text#\'}"
+    case "$desc_text" in
+      "Use when"*) : ;;
+      *)
+        echo "FAIL: description must start with 'Use when' in $skill_dir — state the trigger explicitly" >&2
+        errors=$((errors + 1))
+        ;;
+    esac
   fi
 
   # --- Frontmatter size check ---
