@@ -39,6 +39,7 @@ check "cmd/ralph.sh"
 check "cmd/help.sh"
 check "cmd/sync.sh"
 check "install.sh"
+check "skills/loop/ralph-loop/scripts/prompt.sh"
 
 # Lib
 check "lib/core.sh"
@@ -58,6 +59,7 @@ check "providers/codex/README.md"
 check "tests/test-structure.sh"
 check "tests/test-skills.sh"
 check "tests/test-loop-core.sh"
+check "tests/test-ralph-prompt.sh"
 
 # Docs
 check "docs/ARCHITECTURE.md"

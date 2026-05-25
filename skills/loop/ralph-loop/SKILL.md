@@ -51,6 +51,20 @@ mkdir -p docs/plans/<name>
 
 ### 4. Generate the prompt
 
+Prefer the prompt generator script because it uses the shared loop engine's
+feedback detector:
+
+```bash
+bash skills/loop/ralph-loop/scripts/prompt.sh <name>
+```
+
+If running from an installed skill path, resolve `{{SKILL_SCRIPTS}}` as in
+step 5 and run `bash {{SKILL_SCRIPTS}}/prompt.sh <name>`.
+
+The script writes `docs/plans/<name>/prompt.md`, sources `lib/loop-core.sh`,
+and renders feedback commands from `almanac_loop_feedback_markdown()`.
+Use the template below only as a fallback when the script is unavailable.
+
 Write `docs/plans/<name>/prompt.md` (e.g. `docs/plans/auth-system/prompt.md`) using the template below, filling in the detected feedback loops and the PRD path:
 
 ```markdown
@@ -170,7 +184,8 @@ If the iteration was a CI fix or a steered iteration, mention that in concerns s
 ONLY WORK ON A SINGLE TASK.
 ```
 
-Replace `{{FEEDBACK_COMMANDS}}` with the detected commands as a markdown list, e.g.:
+Replace `{{FEEDBACK_COMMANDS}}` with the detected commands as a markdown list
+matching `almanac_loop_feedback_markdown()`, e.g.:
 ```markdown
 - `npm run test` to run the tests
 - `npm run typecheck` to run the type checker

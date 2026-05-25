@@ -14,9 +14,15 @@ Based on [Geoffrey Huntley's Ralph Wiggum loop](https://ghuntley.com/ralph/) and
 Run `/ralph-loop` inside your agent. It will:
 
 1. List available PRDs and ask which one to use (or accept a name as argument)
-2. Detect your project's feedback loops (test, typecheck, lint)
+2. Detect your project's feedback loops with the shared loop engine
 3. Generate `docs/plans/<name>/prompt.md` with the right commands
 4. Print the commands to start the loop
+
+From the repo, prompt generation can also be run directly:
+
+```bash
+bash skills/loop/ralph-loop/scripts/prompt.sh auth-system
+```
 
 ## Running
 
