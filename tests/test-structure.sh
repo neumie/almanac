@@ -43,6 +43,7 @@ check "install.sh"
 # Lib
 check "lib/core.sh"
 check "lib/almanac-core.sh"
+check "lib/loop-core.sh"
 
 # Claude Code adapter
 check "providers/claude-code/.claude-plugin/plugin.json"
@@ -56,6 +57,7 @@ check "providers/codex/README.md"
 # Tests
 check "tests/test-structure.sh"
 check "tests/test-skills.sh"
+check "tests/test-loop-core.sh"
 
 # Docs
 check "docs/ARCHITECTURE.md"
