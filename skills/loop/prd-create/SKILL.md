@@ -3,8 +3,9 @@ name: prd-create
 description: Use when turning a conversation or idea into docs/plans/<name>/prd.md. Synthesizes existing context into user stories, module design, testing decisions. Do NOT interview — just synthesize.
 disable-model-invocation: true
 metadata:
-  upstream: mattpocock/skills/engineering/to-prd
-  adapted-date: "2026-04-28"
+  upstream: mattpocock/skills/skills/engineering/to-prd
+  upstream-sha: 47a01d4e63cb4ba5b1ab020fd7efe6ab2a2c1d69
+  adapted-date: "2026-05-25"
 ---
 
 Synthesize the current conversation context and codebase understanding into a PRD. Do NOT interview the user — just synthesize what you already know.

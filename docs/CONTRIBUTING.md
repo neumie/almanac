@@ -35,11 +35,11 @@ Step-by-step instructions for the agent...
 
 When adapting from upstream sources (e.g. [mattpocock/skills](https://github.com/mattpocock/skills), [contember/agent-canvas](https://github.com/contember/agent-canvas)):
 
-1. Add upstream tracking metadata:
+1. Add upstream tracking metadata. The value is `owner/repo/path`; `sync` appends `/SKILL.md`. Note `mattpocock/skills` nests skills under a `skills/<category>/` dir, so the path repeats `skills/`:
 ```yaml
 metadata:
-  upstream: mattpocock/skills/skill-name
-  upstream-sha: <SHA from gh api repos/mattpocock/skills/contents/skill-name/SKILL.md --jq '.sha'>
+  upstream: mattpocock/skills/skills/<category>/<skill-name>
+  upstream-sha: <SHA from gh api repos/mattpocock/skills/contents/skills/<category>/<skill-name>/SKILL.md --jq '.sha'>
   adapted-date: "YYYY-MM-DD"
 ```
 

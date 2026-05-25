@@ -3,8 +3,9 @@ name: codebase-improve
 description: Use when finding architectural friction in a codebase. Surfaces shallow modules, proposes refactors for testability/AI-navigability, grills the design. Uses CONTEXT.md + ADRs.
 disable-model-invocation: true
 metadata:
-  upstream: mattpocock/skills/engineering/improve-codebase-architecture
-  adapted-date: "2026-04-28"
+  upstream: mattpocock/skills/skills/engineering/improve-codebase-architecture
+  upstream-sha: c12b263bed311d85cbcedcda7e36867eda541ddc
+  adapted-date: "2026-05-25"
 ---
 
 # Improve Codebase Architecture

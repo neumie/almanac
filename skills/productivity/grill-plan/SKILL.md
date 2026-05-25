@@ -3,8 +3,9 @@ name: grill-plan
 description: Use when stress-testing a plan against the existing domain model + decisions. Challenges terminology, cross-references code, updates CONTEXT.md and ADRs inline as decisions crystallize.
 disable-model-invocation: true
 metadata:
-  upstream: mattpocock/skills/engineering/grill-with-docs
-  adapted-date: "2026-04-28"
+  upstream: mattpocock/skills/skills/engineering/grill-with-docs
+  upstream-sha: 5ea0aa913629bec683690f371839bd10e588413d
+  adapted-date: "2026-05-25"
 ---
 
 Interview me relentlessly about every aspect of this plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.

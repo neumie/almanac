@@ -2,9 +2,9 @@
 name: tdd
 description: "Use when writing code test-first via red-green-refactor. Vertical-slice TDD: one failing test, then minimal code to pass. Triggers: TDD, test-first, red-green-refactor."
 metadata:
-  upstream: mattpocock/skills/tdd
-  upstream-sha: 78f5077d6ec8c87a9cde9d485c098a149e5d5e2c
-  adapted-date: "2026-03-25"
+  upstream: mattpocock/skills/skills/engineering/tdd
+  upstream-sha: 7a989411eb3c4d0879cb33b2d7d05831add27b84
+  adapted-date: "2026-05-25"
 ---
 
 # Test-Driven Development
@@ -47,6 +47,8 @@ RIGHT (vertical):
 ## Workflow
 
 ### 1. Planning
+
+When exploring the codebase, use `CONTEXT.md` vocabulary so test names + interface match the project's language; respect ADRs in the area you touch.
 
 Before writing any code:
 

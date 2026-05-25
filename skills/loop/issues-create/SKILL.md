@@ -3,8 +3,9 @@ name: issues-create
 description: Use when breaking a plan, spec, or PRD into independently-grabbable GitHub issues as vertical-slice tracer bullets. Each issue is a thin end-to-end slice verified on its own.
 disable-model-invocation: true
 metadata:
-  upstream: mattpocock/skills/engineering/to-issues
-  adapted-date: "2026-04-28"
+  upstream: mattpocock/skills/skills/engineering/to-issues
+  upstream-sha: 9f6efbfe5fb5fcb9a751482e333d2f54da173102
+  adapted-date: "2026-05-25"
 ---
 
 Break a plan into independently-grabbable GitHub issues using vertical slices (tracer bullets).

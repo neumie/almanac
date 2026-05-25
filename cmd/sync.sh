@@ -7,15 +7,21 @@ source "$ALMANAC_HOME/lib/almanac-core.sh"
 SHOW_DIFF=false
 [ "${1:-}" = "--diff" ] && SHOW_DIFF=true
 
-# Fetch SHA of a file from GitHub
+# Fetch SHA of a file from GitHub.
+# Emits ONLY a valid 40-char git blob SHA. On 404 / rate-limit, `gh api` prints
+# the JSON error body to stdout — without this guard that body gets captured and
+# mistaken for a SHA, so every skill falsely reports "changed".
 _fetch_sha() {
-  local api_path="$1"
+  local api_path="$1" raw=""
   if command -v gh &>/dev/null; then
-    gh api "$api_path" --jq '.sha' 2>/dev/null || true
+    raw=$(gh api "$api_path" --jq '.sha' 2>/dev/null || true)
   elif command -v curl &>/dev/null; then
-    curl -sL "https://api.github.com/$api_path" 2>/dev/null | grep '"sha"' | head -1 | sed 's/.*"sha":[[:space:]]*"\([^"]*\)".*/\1/' || true
+    raw=$(curl -sL "https://api.github.com/$api_path" 2>/dev/null | grep '"sha"' | head -1 | sed 's/.*"sha":[[:space:]]*"\([^"]*\)".*/\1/' || true)
   else
     _die "Neither gh nor curl available"
+  fi
+  if printf '%s' "$raw" | grep -Eq '^[0-9a-f]{40}$'; then
+    printf '%s' "$raw"
   fi
 }
 
@@ -25,6 +31,7 @@ echo ""
 found=0
 up_to_date=0
 changed=0
+unbaselined=0
 errors=0
 
 while IFS= read -r skill_dir; do
@@ -52,8 +59,14 @@ while IFS= read -r skill_dir; do
   current_sha=$(_fetch_sha "repos/$repo/contents/$skill_path/SKILL.md")
 
   if [ -z "$current_sha" ]; then
-    echo -e "  ${_RED}✗${_RESET} $skill_name: failed to fetch upstream"
+    echo -e "  ${_RED}✗${_RESET} $skill_name: failed to fetch upstream (bad path or API error)"
     errors=$((errors + 1))
+    continue
+  fi
+
+  if [ -z "$upstream_sha" ]; then
+    echo -e "  ${_YELLOW}⚠${_RESET} $skill_name: no baseline upstream-sha recorded (upstream now ${current_sha:0:12})"
+    unbaselined=$((unbaselined + 1))
     continue
   fi
 
@@ -78,7 +91,7 @@ echo ""
 if [ "$found" -eq 0 ]; then
   _info "No skills with upstream tracking found"
 else
-  echo "Results: $found tracked, $up_to_date up to date, $changed changed, $errors errors"
+  echo "Results: $found tracked, $up_to_date up to date, $changed changed, $unbaselined unbaselined, $errors errors"
   if [ "$changed" -gt 0 ] && [ "$SHOW_DIFF" = false ]; then
     _warn "Run 'almanac sync --diff' to see details"
   fi
