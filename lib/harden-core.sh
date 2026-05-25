@@ -142,6 +142,16 @@ almanac_harden_approve_rubric() {
   mv "$tmp" "$path"
 }
 
+# Return 0 when the rubric is approved (locked), non-zero otherwise — including
+# when it is still a draft or the file is absent. Pure read; the loop gates on
+# this so reviewers never run against a half-authored bar.
+almanac_harden_rubric_approved() {
+  local rubric_path="$1"
+
+  [ -f "$rubric_path" ] || return 1
+  grep -Eq '^Status: approved$' "$rubric_path"
+}
+
 # Emit the rubric's acceptance criteria — the bar reviewers and ratification work
 # against. Prints every bullet line under the `## Acceptance` heading up to the
 # next `## ` section. Empty when the rubric or section is absent. Pure read.
@@ -718,6 +728,14 @@ almanac_harden_fanout() {
   run_id="$(almanac_loop_run_id "harden" "$target")"
   ledger_path="$(almanac_harden_ledger_path "$root" "$target")"
   rubric_path="$(almanac_harden_rubric_path "$root" "$target")"
+
+  # The rubric is the contract; once one has been drafted it must be approved
+  # (locked) before the loop proceeds, so reviewers never run against a bar the
+  # human is still authoring. No rubric at all = an explicit ad-hoc run; proceed.
+  if [ -f "$rubric_path" ] && ! almanac_harden_rubric_approved "$rubric_path"; then
+    _die "Rubric not approved: ${rubric_path#"$root"/} — edit it, then: almanac harden $target --approve"
+  fi
+
   almanac_harden_ledger_init "$ledger_path"
 
   # The rubric is immutable to agents during the run. Snapshot it before any

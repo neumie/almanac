@@ -14,6 +14,8 @@ usage() {
   printf '%s\n' "With no flags, fans out one read-only reviewer per lens over the target,"
   printf '%s\n' "aggregates their findings into the ledger, and prints them. Configure the"
   printf '%s\n' "lens set via HARDEN_LENSES (comma- or space-separated; no enforced cap)."
+  printf '%s\n' "If a rubric has been drafted for the target, it must be approved first;"
+  printf '%s\n' "a target with no rubric runs ad-hoc."
   printf '%s\n' "With --goal, creates docs/plans/harden/<target-slug>/rubric.md in the repo."
   printf '%s\n' "With --approve, approves an edited draft rubric."
 }
@@ -67,7 +69,7 @@ if [ "$APPROVE" -eq 1 ]; then
 
   if almanac_harden_approve_rubric "$PWD" "$TARGET"; then
     _success "Rubric approved: $DISPLAY_PATH"
-    _info "Next harden-loop phase can require approved status before reviewers run."
+    _info "Contract locked — reviewers can now run: almanac harden $TARGET"
     exit 0
   else
     APPROVE_STATUS="$?"

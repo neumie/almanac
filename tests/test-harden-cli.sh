@@ -206,6 +206,48 @@ test_fanout_spawns_reviewer_per_lens_and_aggregates() {
   echo "  PASS: fan-out spawns one reviewer per lens and aggregates"
 }
 
+test_fanout_blocks_until_rubric_approved() {
+  local tmp fakebin spawn_dir output spawn_count ledger
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  mkdir -p "$tmp/src"
+  printf '%s\n' "code" > "$tmp/src/app.js"
+  fakebin="$tmp/bin"
+  spawn_dir="$tmp/spawns"
+  write_fake_fanout_codex "$fakebin" "$spawn_dir"
+
+  # Draft a rubric (Status: draft). A drafted-but-unlocked contract means the
+  # human is still authoring the bar; the loop must not run reviewers against it.
+  (cd "$tmp" && "$ALMANAC" harden src/app.js --goal "lock parse behavior" >/dev/null)
+
+  if output=$(cd "$tmp" && \
+      HARDEN_LENSES="correctness security perf" \
+      HARDEN_REVIEWER_PROVIDER=codex \
+      PATH="$fakebin:$PATH" "$ALMANAC" harden src/app.js 2>&1); then
+    fail "fan-out must refuse to run against an unapproved rubric"
+  fi
+  assert_contains "$output" "not approved" "harden should report the rubric is unapproved"
+
+  spawn_count="$(find "$spawn_dir" -type f 2>/dev/null | wc -l | tr -d ' ')"
+  [ "$spawn_count" -eq 0 ] || fail "no reviewer should spawn before the rubric is approved (got $spawn_count)"
+
+  # Lock the rubric, then the same bare run proceeds and aggregates.
+  (cd "$tmp" && "$ALMANAC" harden src/app.js --approve >/dev/null)
+
+  output="$(cd "$tmp" && \
+    HARDEN_LENSES="correctness security perf" \
+    HARDEN_REVIEWER_PROVIDER=codex \
+    PATH="$fakebin:$PATH" "$ALMANAC" harden src/app.js 2>&1)"
+
+  spawn_count="$(find "$spawn_dir" -type f | wc -l | tr -d ' ')"
+  [ "$spawn_count" -eq 3 ] || fail "an approved rubric should let reviewers fan out (got $spawn_count)"
+
+  ledger="$tmp/docs/plans/harden/src-app-js/findings.md"
+  [ -f "$ledger" ] || fail "an approved run should aggregate findings into the ledger"
+  echo "  PASS: fan-out blocks until the rubric is approved"
+}
+
 test_review_errors_on_missing_target() {
   local tmp output
   new_tmpdir
@@ -673,6 +715,7 @@ test_rubric_guard_reverts_agent_edit
 test_rubric_guard_keeps_untouched_rubric
 test_review_runs_single_reviewer_and_prints_findings
 test_fanout_spawns_reviewer_per_lens_and_aggregates
+test_fanout_blocks_until_rubric_approved
 test_review_errors_on_missing_target
 test_format_findings_skips_malformed_lines
 test_format_findings_reports_empty
