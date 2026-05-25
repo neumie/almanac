@@ -553,18 +553,25 @@ $ralph_commits"
       codex_log="docs/plans/${PRD_NAME}/ralph-codex-iteration-${i}.log"
       echo "Codex session log: $codex_log"
       if [ "${RALPH_CODEX_VERBOSE:-}" = "1" ]; then
-        # Raw-output mode stays inline: the shared seam is always --json, but
-        # verbose mode wants codex's plain output with no stream filter.
-        codex \
-          --ask-for-approval never \
-          exec \
-          --cd "$PWD" \
-          --sandbox danger-full-access \
-          --color never \
-          --output-last-message "$tmpfile" \
-          "${MODEL_ARG[@]}" \
-          "${EFFORT_ARG[@]}" \
-          "$prompt"
+        # Raw-output mode now routes through the shared agent_run seam too, via its
+        # raw passthrough mode (#66 crit 6 — no inline provider exec remains): raw
+        # runs codex WITHOUT --json so its native output streams straight to the
+        # terminal (no jq filter, no events capture); --output-last-message
+        # captures the final message to $tmpfile, so the <promise> extraction
+        # below reads it back unchanged. The role-resolved AGENT_MODEL/AGENT_EFFORT
+        # feed the seam, which propagates codex's exit (run marked failed on
+        # failure, as set -e did). (MODEL_ARG/EFFORT_ARG remain — the overseer
+        # still uses them.)
+        codex_prompt_file=$(mktemp)
+        printf '%s' "$prompt" > "$codex_prompt_file"
+        if ! almanac_loop_agent_run \
+          codex "$AGENT_MODEL" "$AGENT_EFFORT" danger-full-access \
+          "$codex_prompt_file" "$tmpfile" "" raw; then
+          rm -f "$codex_prompt_file"
+          echo "Codex failed."
+          exit 1
+        fi
+        rm -f "$codex_prompt_file"
       else
         # Default codex path routes through the shared agent_run seam in stream
         # mode rather than an inline codex exec (#66 — ralph migration onto the

@@ -519,23 +519,33 @@ almanac_loop_agent_run() {
   local events_file="${7:-}"
   local stream_mode="${8:-}"
   local merge_stderr="${9:-}"
-  local provider_key prompt stream=0 rc
+  local provider_key prompt stream=0 raw=0 rc
 
   [ -n "$provider" ] || return 2
   [ -f "$prompt_file" ] || return 2
 
+  # stream tees live assistant text to stdout (jq-filtered); raw is codex's native
+  # passthrough (no --json, no filter, no events capture) — ralph's
+  # RALPH_CODEX_VERBOSE path; default captures the raw event stream to the log.
   case "$stream_mode" in
     stream|live|on|1) stream=1 ;;
+    raw|passthrough)  raw=1 ;;
   esac
 
   provider_key="$(almanac_loop_agent_provider_key "$provider")"
   prompt="$(cat "$prompt_file")"
   sandbox="${sandbox:-danger-full-access}"
 
+  # Raw mode is codex-specific (it omits --json); any other provider falls back to
+  # its normal non-stream path so events capture still works.
+  [ "$provider_key" = "codex" ] || raw=0
+
   # Raw provider events stream to a JSONL log. The caller may pass its own path
   # (per-run events.jsonl); otherwise we allocate one. Either way the path is
-  # echoed back at the end so the caller can locate the stream.
-  if [ -z "$events_file" ]; then
+  # echoed back at the end so the caller can locate the stream. Raw mode captures
+  # no events log (codex's native output goes straight to the terminal), so it
+  # never allocates one.
+  if [ "$raw" -ne 1 ] && [ -z "$events_file" ]; then
     events_file="$(mktemp "${TMPDIR:-/tmp}/almanac-loop-events.XXXXXX")"
   fi
 
@@ -552,9 +562,14 @@ almanac_loop_agent_run() {
         --cd "$PWD"
         --sandbox "$sandbox"
         --color never
-        --json
-        --output-last-message "$result_file"
       )
+
+      # Raw mode wants codex's NATIVE output (ralph's RALPH_CODEX_VERBOSE); every
+      # other mode parses the structured --json event stream.
+      if [ "$raw" -ne 1 ]; then
+        codex_args+=(--json)
+      fi
+      codex_args+=(--output-last-message "$result_file")
 
       if [ -n "$model" ]; then
         codex_args+=(--model "$model")
@@ -564,7 +579,13 @@ almanac_loop_agent_run() {
         codex_args+=(-c "model_reasoning_effort=\"$effort\"")
       fi
 
-      if [ "$stream" -eq 1 ]; then
+      if [ "$raw" -eq 1 ]; then
+        # No --json, no filter, no events capture: codex's native output streams
+        # straight to the terminal; --output-last-message still writes the result.
+        # The direct exec keeps $? as codex's exit so a failure propagates.
+        codex "${codex_args[@]}" "$prompt" || return "$?"
+        return 0
+      elif [ "$stream" -eq 1 ]; then
         rc=0
         almanac_loop_agent_stream "codex" "$events_file" "$merge_stderr" \
           codex "${codex_args[@]}" "$prompt" || rc=$?

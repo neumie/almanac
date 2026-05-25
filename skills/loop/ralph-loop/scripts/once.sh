@@ -44,14 +44,11 @@ detect_provider() {
 PROVIDER="$(detect_provider | tr '[:upper:]' '[:lower:]')"
 
 # Model/effort overrides resolve through the same shared role-config helper.
-# Unset = provider default.
+# Unset = provider default. Both providers now route through the shared agent_run
+# seam (which takes these scalars directly), so once.sh no longer builds MODEL_ARG
+# /EFFORT_ARG arrays — that arg-shaping lives in the seam (#66 crit 6).
 AGENT_MODEL="$(almanac_loop_role_field ralph agent "" model "")"
 AGENT_EFFORT="$(almanac_loop_role_field ralph agent "" effort "")"
-MODEL_ARG=()
-if [ -n "$AGENT_MODEL" ]; then
-  MODEL_ARG=(--model "$AGENT_MODEL")
-fi
-EFFORT_ARG=()
 
 if [ ! -f "$PROMPT" ]; then
   echo "Error: $PROMPT not found. Run /ralph-loop $PRD_NAME to set up first."
@@ -66,9 +63,6 @@ case "$PROVIDER" in
     fi
     PROVIDER_DISPLAY="Claude Code"
     MODEL_DISPLAY="${AGENT_MODEL:-Claude Code default (resolved on session start)}"
-    if [ -n "$AGENT_EFFORT" ]; then
-      EFFORT_ARG=(--effort "$AGENT_EFFORT")
-    fi
     EFFORT_DISPLAY="${AGENT_EFFORT:-provider default}"
     PERMISSION_DISPLAY="acceptEdits"
     ;;
@@ -79,9 +73,6 @@ case "$PROVIDER" in
     fi
     PROVIDER_DISPLAY="Codex"
     MODEL_DISPLAY="${AGENT_MODEL:-Codex default}"
-    if [ -n "$AGENT_EFFORT" ]; then
-      EFFORT_ARG=(-c "model_reasoning_effort=\"$AGENT_EFFORT\"")
-    fi
     EFFORT_DISPLAY="${AGENT_EFFORT:-provider default}"
     PERMISSION_DISPLAY="approval never, sandbox danger-full-access"
     ;;
@@ -146,18 +137,22 @@ $ralph_commits"
     codex_result=$(mktemp)
     echo "Codex session log: $codex_log"
     if [ "${RALPH_CODEX_VERBOSE:-}" = "1" ]; then
-      # Raw-output mode stays inline: the shared seam is always --json, but
-      # verbose mode wants codex's plain output with no stream filter.
-      codex \
-        --ask-for-approval never \
-        exec \
-        --cd "$PWD" \
-        --sandbox danger-full-access \
-        --color never \
-        --output-last-message "$codex_result" \
-        "${MODEL_ARG[@]}" \
-        "${EFFORT_ARG[@]}" \
-        "$prompt"
+      # Raw-output mode now routes through the shared agent_run seam too, via its
+      # raw passthrough mode (#66 crit 6 — no inline provider exec remains): raw
+      # runs codex WITHOUT --json so its native output streams straight to the
+      # terminal (no jq filter, no events capture), while --output-last-message
+      # still captures the final message to $codex_result. The role-resolved
+      # AGENT_MODEL/AGENT_EFFORT feed the seam, which propagates codex's exit; on
+      # failure we clean up and exit so the run is marked failed (as set -e did).
+      codex_prompt_file=$(mktemp)
+      printf '%s' "$prompt" > "$codex_prompt_file"
+      if ! almanac_loop_agent_run \
+        codex "$AGENT_MODEL" "$AGENT_EFFORT" danger-full-access \
+        "$codex_prompt_file" "$codex_result" "" raw; then
+        rm -f "$codex_prompt_file" "$codex_result"
+        exit 1
+      fi
+      rm -f "$codex_prompt_file"
     else
       # Default codex path routes through the shared agent_run seam in stream mode
       # rather than an inline codex exec (#66 — ralph migration onto the engine).

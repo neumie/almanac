@@ -694,6 +694,41 @@ test_agent_runner_stream_merge_stderr_is_opt_in() {
   echo "  PASS: agent runner merge-stderr is opt-in"
 }
 
+# Raw passthrough mode (the stream_mode `raw`) is ralph's RALPH_CODEX_VERBOSE path
+# on the seam: codex runs WITHOUT --json so its native output streams straight to
+# stdout (no jq filter, no events capture), while --output-last-message still
+# captures the final result. It honors model/effort/sandbox like every other mode.
+# This is the substrate the criterion-6 fold needs (#66 — the last inline codex
+# exec ralph kept). No jq is required, since raw mode never filters.
+test_agent_runner_codex_raw_mode_passes_native_output_through() {
+  local tmp fakebin prompt result args out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  prompt="$tmp/prompt.md"
+  result="$tmp/result.txt"
+
+  printf '%s\n' "verbose target" > "$prompt"
+  write_fake_codex_agent "$fakebin" "$tmp/codex-args.txt"
+
+  out="$(PATH="$fakebin:$PATH" almanac_loop_agent_run "codex" "gpt-test" "high" "danger-full-access" "$prompt" "$result" "" raw)"
+
+  args="$(cat "$tmp/codex-args.txt")"
+  case "$args" in
+    *"--json"*) fail "raw mode must omit --json so codex emits its native output" ;;
+  esac
+  assert_contains "$args" "--output-last-message" "raw mode should still capture the provider final message"
+  assert_contains "$args" "--sandbox danger-full-access" "raw mode should pass the sandbox"
+  assert_contains "$args" "--model gpt-test" "raw mode should pass the model override"
+  assert_contains "$args" "model_reasoning_effort=\"high\"" "raw mode should pass the effort override"
+  # Native (unfiltered, un-redirected) provider output reaches stdout: the raw
+  # event_msg envelope appears only in raw mode — default mode redirects it to the
+  # events log, stream mode filters it out.
+  assert_contains "$out" "codex event" "raw mode should pass codex native output straight through (no jq filter, no redirect)"
+  assert_file_contains "$result" "codex final: verbose target" "raw mode should capture the provider final result"
+  echo "  PASS: agent runner codex raw mode passes native output through"
+}
+
 test_worker_start_tracks_background_agent() {
   local tmp fakebin prompt pid status_file events_file result_file args
   new_tmpdir
@@ -840,6 +875,7 @@ test_agent_runner_streams_claude_live_text
 test_agent_runner_streams_codex_live_text
 test_agent_runner_stream_mode_propagates_failure
 test_agent_runner_stream_merge_stderr_is_opt_in
+test_agent_runner_codex_raw_mode_passes_native_output_through
 test_worker_start_tracks_background_agent
 test_worker_health_classifies_states
 test_worker_health_of_reads_state

@@ -568,6 +568,75 @@ test_afk_claude_propagates_provider_failure() {
   echo "  PASS: afk claude propagates provider failure through the seam"
 }
 
+# RALPH_CODEX_VERBOSE=1 routes once.sh's codex through the shared agent_run seam's
+# raw passthrough mode (#66 crit 6 — no inline provider exec remains). Raw mode
+# runs codex WITHOUT --json so its native output passes straight through, while
+# still honoring model/effort/sandbox and capturing the final message. No jq is
+# needed, since raw mode never filters.
+test_once_codex_verbose_routes_through_seam_raw_mode() {
+  local tmp fakebin argv_file out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  argv_file="$tmp/codex-argv.txt"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_codex_recording "$fakebin"
+
+  out=$(cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex RALPH_CODEX_VERBOSE=1 \
+    RALPH_MODEL=fake-model RALPH_EFFORT=high FAKE_CODEX_ARGV="$argv_file" \
+    bash "$ONCE_SCRIPT" demo)
+
+  # The seam built once.sh's verbose codex invocation in raw mode: NO --json,
+  # honoring model/effort + sandbox, still capturing the final message.
+  [ -f "$argv_file" ] || fail "fake codex should have been invoked"
+  assert_file_lacks "$argv_file" "--json" "verbose codex should run raw (no --json) through the seam"
+  assert_file_contains "$argv_file" "--output-last-message" "verbose codex should still capture the final message"
+  assert_file_contains "$argv_file" "danger-full-access" "verbose codex sandbox should be danger-full-access"
+  assert_file_contains "$argv_file" "fake-model" "verbose codex should honor RALPH_MODEL via the seam"
+  assert_file_contains "$argv_file" "high" "verbose codex should honor RALPH_EFFORT via the seam"
+
+  # Native codex output passes straight through (the recording fake prints a raw
+  # JSON event line that raw mode does not filter).
+  printf '%s' "$out" | grep -Fq "FAKE_CODEX_STREAM_TEXT" \
+    || fail "verbose codex native output should reach stdout unfiltered"
+  echo "  PASS: once routes verbose codex through the shared seam raw mode"
+}
+
+# RALPH_CODEX_VERBOSE=1 routes afk.sh's codex through the seam's raw passthrough
+# mode too, and afk reads the seam's captured result back for <promise>
+# extraction (the result lands in $tmpfile via --output-last-message).
+test_afk_codex_verbose_routes_through_seam_raw_mode() {
+  local tmp fakebin argv_file out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  argv_file="$tmp/codex-argv.txt"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_codex_recording "$fakebin"
+
+  out=$(cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex RALPH_NO_OVERSEE=1 \
+    RALPH_CODEX_VERBOSE=1 RALPH_MODEL=fake-model RALPH_EFFORT=high \
+    FAKE_CODEX_ARGV="$argv_file" bash "$AFK_SCRIPT" demo 1)
+
+  [ -f "$argv_file" ] || fail "fake codex should have been invoked"
+  assert_file_lacks "$argv_file" "--json" "verbose codex should run raw (no --json) through the seam"
+  assert_file_contains "$argv_file" "--output-last-message" "verbose codex should still capture the final message"
+  assert_file_contains "$argv_file" "danger-full-access" "verbose codex sandbox should be danger-full-access"
+  assert_file_contains "$argv_file" "fake-model" "verbose codex should honor RALPH_MODEL via the seam"
+  assert_file_contains "$argv_file" "high" "verbose codex should honor RALPH_EFFORT via the seam"
+
+  # Native codex output passes straight through unfiltered.
+  printf '%s' "$out" | grep -Fq "FAKE_CODEX_STREAM_TEXT" \
+    || fail "verbose codex native output should reach stdout unfiltered"
+  echo "  PASS: afk routes verbose codex through the shared seam raw mode"
+}
+
 # once.sh resolves its iteration-agent model/effort through the shared role-config
 # helper (almanac_loop_role_field), so the per-role RALPH_AGENT_* keys override the
 # bare RALPH_* keys (#66 crit 3 — ralph uses the shared role config). The seam's
@@ -683,6 +752,8 @@ test_afk_emits_live_run_progress_contract
 test_afk_codex_routes_provider_invocation_through_seam
 test_afk_claude_routes_provider_invocation_through_seam
 test_afk_claude_propagates_provider_failure
+test_once_codex_verbose_routes_through_seam_raw_mode
+test_afk_codex_verbose_routes_through_seam_raw_mode
 test_once_resolves_agent_model_via_shared_role_config
 test_afk_resolves_agent_model_via_shared_role_config
 test_once_resolves_agent_provider_via_shared_role_config
