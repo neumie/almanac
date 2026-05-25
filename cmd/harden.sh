@@ -11,8 +11,9 @@ usage() {
   printf '%s\n' "  almanac harden <target> --goal <goal>"
   printf '%s\n' "  almanac harden <target> --approve"
   printf '%s\n' ""
-  printf '%s\n' "With no flags, runs a single read-only reviewer over the target and"
-  printf '%s\n' "prints its findings."
+  printf '%s\n' "With no flags, fans out one read-only reviewer per lens over the target,"
+  printf '%s\n' "aggregates their findings into the ledger, and prints them. Configure the"
+  printf '%s\n' "lens set via HARDEN_LENSES (comma- or space-separated; no enforced cap)."
   printf '%s\n' "With --goal, creates docs/plans/harden/<target-slug>/rubric.md in the repo."
   printf '%s\n' "With --approve, approves an edited draft rubric."
 }
@@ -100,5 +101,6 @@ if [ -n "$GOAL" ]; then
   exit 0
 fi
 
-# No --goal or --approve: run a single read-only reviewer over the target.
-almanac_harden_review "$PWD" "$TARGET"
+# No --goal or --approve: fan out N read-only reviewers (one per configured
+# lens) over the target and aggregate their findings into the ledger.
+almanac_harden_fanout "$PWD" "$TARGET"

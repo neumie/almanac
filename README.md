@@ -63,7 +63,8 @@ almanac install <provider>   Install for a provider
 almanac uninstall <provider> Remove from a provider
 almanac list                 List available providers and install status
 almanac ralph                Launch the interactive Ralph loop CLI
-almanac harden <target>      Run a read-only reviewer and print findings
+almanac harden <target>      Fan out read-only reviewers (one per lens) and aggregate findings
+                             (lens set via HARDEN_LENSES; default: correctness security perf edge-cases contracts)
 almanac harden <target> --goal "<goal>"
                              Draft a harden-loop rubric for a target
 almanac harden <target> --approve

@@ -118,13 +118,92 @@ test_review_runs_single_reviewer_and_prints_findings() {
   fakebin="$tmp/bin"
   write_fake_reviewer_codex "$fakebin" "$tmp/codex-args.txt"
 
-  output="$(cd "$tmp" && HARDEN_REVIEWER_PROVIDER=codex PATH="$fakebin:$PATH" "$ALMANAC" harden src/app.js 2>&1)"
+  # HARDEN_LENSES=correctness pins the fan-out to a single reviewer so the
+  # one-lens path is exercised (and the fake's single args log doesn't race).
+  output="$(cd "$tmp" && HARDEN_LENSES=correctness HARDEN_REVIEWER_PROVIDER=codex PATH="$fakebin:$PATH" "$ALMANAC" harden src/app.js 2>&1)"
 
   assert_contains "$output" "off-by-one in loop bound" "review should print the parsed finding claim"
   assert_contains "$output" "unused variable x" "review should print all parsed findings"
   args="$(cat "$tmp/codex-args.txt")"
   assert_contains "$args" "--sandbox read-only" "reviewer should run read-only via agent_run"
   echo "  PASS: review runs single reviewer and prints findings"
+}
+
+# Fake codex for fan-out: derives its lens from the reviewer prompt, records one
+# spawn file per invocation (so the test can count concurrent reviewers without
+# a shared-log race), and emits a lens-specific finding so aggregation across
+# reviewers is observable in the ledger.
+write_fake_fanout_codex() {
+  local fakebin="$1"
+  local spawn_dir="$2"
+
+  mkdir -p "$fakebin" "$spawn_dir"
+  cat > "$fakebin/codex" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+result_file=""
+sandbox=""
+prompt=""
+while [ "\$#" -gt 0 ]; do
+  case "\$1" in
+    --output-last-message) shift; result_file="\${1:-}" ;;
+    --sandbox) shift; sandbox="\${1:-}" ;;
+    -*) ;;
+    *) prompt="\$1" ;;
+  esac
+  shift || true
+done
+
+lens="\$(printf '%s\n' "\$prompt" | sed -n 's/.*Lens: \([a-z][a-z-]*\)\..*/\1/p' | head -n1)"
+[ -n "\$lens" ] || lens="unknown"
+
+spawn="\$(mktemp "$spawn_dir/call.XXXXXX")"
+printf 'lens=%s sandbox=%s\n' "\$lens" "\$sandbox" > "\$spawn"
+
+if [ -n "\$result_file" ]; then
+  printf '{"lens":"%s","severity":"high","location":"src/app.js:1","claim":"%s defect","demonstration":"%s repro"}\n' "\$lens" "\$lens" "\$lens" > "\$result_file"
+fi
+printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"reviewing"}}'
+EOF
+  chmod +x "$fakebin/codex"
+}
+
+test_fanout_spawns_reviewer_per_lens_and_aggregates() {
+  local tmp fakebin spawn_dir output ledger spawn_count ro_count wstatus
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  mkdir -p "$tmp/src"
+  printf '%s\n' "code" > "$tmp/src/app.js"
+  fakebin="$tmp/bin"
+  spawn_dir="$tmp/spawns"
+  write_fake_fanout_codex "$fakebin" "$spawn_dir"
+
+  output="$(cd "$tmp" && \
+    HARDEN_LENSES="correctness security perf" \
+    HARDEN_REVIEWER_PROVIDER=codex \
+    PATH="$fakebin:$PATH" "$ALMANAC" harden src/app.js 2>&1)"
+
+  spawn_count="$(find "$spawn_dir" -type f | wc -l | tr -d ' ')"
+  [ "$spawn_count" -eq 3 ] || fail "fan-out should spawn one reviewer per configured lens (got $spawn_count)"
+
+  ro_count="$(grep -l 'sandbox=read-only' "$spawn_dir"/* | wc -l | tr -d ' ')"
+  [ "$ro_count" -eq 3 ] || fail "every reviewer should run read-only (got $ro_count)"
+
+  ledger="$tmp/docs/plans/harden/src-app-js/findings.md"
+  [ -f "$ledger" ] || fail "fan-out should aggregate findings into the ledger"
+  assert_file_contains "$ledger" "correctness defect" "ledger should hold the correctness reviewer's finding"
+  assert_file_contains "$ledger" "security defect" "ledger should hold the security reviewer's finding"
+  assert_file_contains "$ledger" "perf defect" "ledger should hold the perf reviewer's finding"
+
+  # Worker orchestration must track each reviewer's per-worker status (pid/status).
+  wstatus="$(find "$tmp/.almanac/runs" -path '*/workers/reviewer-security/status.tsv' 2>/dev/null | head -n1)"
+  [ -n "$wstatus" ] && [ -f "$wstatus" ] || fail "worker orchestration should write per-reviewer status"
+  assert_file_contains "$wstatus" $'provider\tcodex' "worker status should record the reviewer's provider"
+  assert_file_contains "$wstatus" $'sandbox\tread-only' "worker status should record read-only sandbox"
+  assert_file_contains "$wstatus" $'status\tdone' "worker status should mark reviewer completion"
+  echo "  PASS: fan-out spawns one reviewer per lens and aggregates"
 }
 
 test_review_errors_on_missing_target() {
@@ -432,6 +511,7 @@ test_refuses_to_overwrite_existing_rubric
 test_approves_existing_draft_rubric
 test_approve_requires_existing_rubric
 test_review_runs_single_reviewer_and_prints_findings
+test_fanout_spawns_reviewer_per_lens_and_aggregates
 test_review_errors_on_missing_target
 test_format_findings_skips_malformed_lines
 test_format_findings_reports_empty

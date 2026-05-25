@@ -142,8 +142,16 @@ almanac_harden_approve_rubric() {
   mv "$tmp" "$path"
 }
 
-almanac_harden_default_lens() {
-  printf '%s\n' "correctness"
+# Emit the configured reviewer lens set, one lens per line. Defaults to the five
+# PRD lenses; override at runtime via HARDEN_LENSES (comma- or whitespace-
+# separated). The lens set determines the reviewer count — there is no enforced
+# cap, so adding lenses adds reviewers.
+almanac_harden_lenses() {
+  local raw="${HARDEN_LENSES:-correctness security perf edge-cases contracts}"
+
+  # Trailing newline matters: a `read` loop consumer drops a final line that
+  # lacks one, which would silently swallow the last lens.
+  printf '%s\n' "$raw" | tr -s ', \t' '\n' | sed '/^$/d'
 }
 
 # Build the fixed prompt for one read-only reviewer over a target, including the
@@ -528,17 +536,22 @@ almanac_harden_ratify() {
   fi
 }
 
-# Run a single read-only reviewer over a target via the shared agent runner and
-# print its findings. Resolves provider/model/effort through the shared role
-# config (HARDEN_REVIEWER[_<LENS>]_{PROVIDER,MODEL,EFFORT}). _die on a missing
-# target or a failed provider run.
-almanac_harden_review() {
+# Fan out one read-only reviewer per configured lens as a background worker via
+# the shared worker orchestration, then aggregate every reviewer's findings into
+# the ledger (deduped). Reviewers run concurrently and never write to the target
+# (read-only sandbox); the parent aggregates sequentially after they finish, so
+# there are no concurrent ledger writers. The lens set is configurable via
+# HARDEN_LENSES with no enforced cap. Each reviewer's provider/model/effort
+# resolves through the shared role config
+# (HARDEN_REVIEWER[_<LENS>]_{PROVIDER,MODEL,EFFORT}). _die on a missing target
+# before spawning anything.
+almanac_harden_fanout() {
   local root="$1"
   local target="$2"
-  local lens="${3:-}"
-  local target_path provider model effort prompt_file result_file rc
-
-  [ -n "$lens" ] || lens="$(almanac_harden_default_lens)"
+  local target_path run_id ledger_path lens provider model effort
+  local worker_id prompt_file pidfile pid result_file status_file wstatus
+  local added total_added i
+  local -a lenses=() worker_ids=() worker_pids=() prompt_files=()
 
   case "$target" in
     /*) target_path="$target" ;;
@@ -549,27 +562,76 @@ almanac_harden_review() {
     _die "Harden target not found: $target"
   fi
 
-  provider="$(almanac_loop_role_field "harden" "reviewer" "$lens" "provider" "claude")"
-  model="$(almanac_loop_role_field "harden" "reviewer" "$lens" "model" "")"
-  effort="$(almanac_loop_role_field "harden" "reviewer" "$lens" "effort" "")"
+  while IFS= read -r lens; do
+    [ -n "$lens" ] || continue
+    lenses+=("$lens")
+  done < <(almanac_harden_lenses)
 
-  prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-prompt.XXXXXX")"
-  result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-result.XXXXXX")"
+  [ "${#lenses[@]}" -gt 0 ] || _die "No reviewer lenses configured"
 
-  almanac_harden_reviewer_prompt "$target" "$lens" > "$prompt_file"
+  run_id="$(almanac_loop_run_id "harden" "$target")"
+  ledger_path="$(almanac_harden_ledger_path "$root" "$target")"
+  almanac_harden_ledger_init "$ledger_path"
 
-  _info "Reviewing $target (lens: $lens, provider: $provider, read-only)"
+  _info "Hardening $target — fanning out ${#lenses[@]} read-only reviewer(s)"
 
-  rc=0
-  almanac_loop_agent_run "$provider" "$model" "$effort" "read-only" "$prompt_file" "$result_file" >/dev/null || rc=$?
+  for lens in "${lenses[@]}"; do
+    provider="$(almanac_loop_role_field "harden" "reviewer" "$lens" "provider" "claude")"
+    model="$(almanac_loop_role_field "harden" "reviewer" "$lens" "model" "")"
+    effort="$(almanac_loop_role_field "harden" "reviewer" "$lens" "effort" "")"
 
-  if [ "$rc" -ne 0 ]; then
-    rm -f "$prompt_file" "$result_file"
-    _die "Reviewer ($provider) failed with exit $rc"
-  fi
+    worker_id="reviewer-$lens"
+    prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-prompt.XXXXXX")"
+    almanac_harden_reviewer_prompt "$target" "$lens" > "$prompt_file"
 
-  _info "Findings:"
-  almanac_harden_format_findings "$result_file"
+    # Capture the worker pid via a file (not $(...)): worker_start backgrounds
+    # the agent as a child of THIS shell, so it stays waitable. A command
+    # substitution would reparent it into a subshell and break the wait.
+    pidfile="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-pid.XXXXXX")"
+    almanac_loop_worker_start "$root" "$run_id" "$worker_id" \
+      "$provider" "$model" "$effort" "read-only" "$prompt_file" > "$pidfile"
+    pid="$(cat "$pidfile")"
+    rm -f "$pidfile"
 
-  rm -f "$prompt_file" "$result_file"
+    worker_ids+=("$worker_id")
+    worker_pids+=("$pid")
+    prompt_files+=("$prompt_file")
+    _info "  reviewer lens=$lens provider=$provider pid=$pid (read-only)"
+  done
+
+  # Reviewers run concurrently; block until every one finishes.
+  for pid in "${worker_pids[@]}"; do
+    wait "$pid" 2>/dev/null || true
+  done
+
+  total_added=0
+  i=0
+  for worker_id in "${worker_ids[@]}"; do
+    lens="${lenses[$i]}"
+    i=$((i + 1))
+    status_file="$(almanac_loop_worker_status_file "$root" "$run_id" "$worker_id")"
+    result_file="$(almanac_loop_worker_file "$root" "$run_id" "$worker_id" "result.txt")"
+
+    wstatus=""
+    if [ -f "$status_file" ]; then
+      wstatus="$(almanac_loop_status_field "$status_file" "status" || true)"
+    fi
+
+    if [ "$wstatus" = "failed" ]; then
+      _warn "reviewer lens=$lens failed; skipping its findings"
+      continue
+    fi
+
+    _info "Findings (lens: $lens):"
+    almanac_harden_format_findings "$result_file"
+
+    if [ -f "$result_file" ]; then
+      added="$(almanac_harden_ledger_record "$ledger_path" "$result_file" 1)"
+      total_added=$((total_added + added))
+    fi
+  done
+
+  [ "${#prompt_files[@]}" -eq 0 ] || rm -f "${prompt_files[@]}"
+
+  _success "Aggregated $total_added new finding(s) into ${ledger_path#"$root"/}"
 }
