@@ -132,6 +132,95 @@ EOF
   chmod +x "$fakebin/claude"
 }
 
+# Fake codex for the overseer routing tests. It distinguishes the iteration agent
+# (sandbox danger-full-access) from the overseer judge call (sandbox read-only,
+# the seam's read-only mapping). The overseer invocation records its argv to
+# $FAKE_OVERSEER_ARGV, signals it ran by touching $OVERSEER_FIRED, and writes a
+# benign low/none verdict; the iteration agent BLOCKS until the overseer has
+# fired (bounded fallback) so the overseer is guaranteed to run — and route
+# through the seam — before the single-iteration loop exits.
+write_fake_codex_overseer() {
+  local fakebin="$1"
+
+  mkdir -p "$fakebin"
+  cat > "$fakebin/codex" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+result_file=""
+sandbox=""
+args=("$@")
+n=${#args[@]}
+i=0
+while [ "$i" -lt "$n" ]; do
+  case "${args[$i]}" in
+    --output-last-message) i=$((i+1)); result_file="${args[$i]:-}" ;;
+    --sandbox)             i=$((i+1)); sandbox="${args[$i]:-}" ;;
+  esac
+  i=$((i+1))
+done
+
+if [ "$sandbox" = "read-only" ]; then
+  [ -n "${FAKE_OVERSEER_ARGV:-}" ] && printf '%s\n' "$@" > "$FAKE_OVERSEER_ARGV"
+  [ -n "${OVERSEER_FIRED:-}" ] && touch "$OVERSEER_FIRED"
+  [ -n "$result_file" ] && printf 'DRIFT_LEVEL: low\nREASON: fine\nSTEER: none\n' > "$result_file"
+  printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"overseer ok"}}'
+else
+  if [ -n "${OVERSEER_FIRED:-}" ]; then
+    j=0
+    while [ "$j" -lt 100 ] && [ ! -f "$OVERSEER_FIRED" ]; do sleep 0.1; j=$((j+1)); done
+  fi
+  [ -n "$result_file" ] && printf '%s\n' "iteration progress (no promise)" > "$result_file"
+  printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"iteration ok"}}'
+fi
+exit 0
+EOF
+  chmod +x "$fakebin/codex"
+}
+
+# Fake claude for the overseer routing tests. afk's iteration agent runs with the
+# `default` sandbox (no --permission-mode), while the overseer's read-only judge
+# call maps to --permission-mode plan, so the fake branches on that flag. The
+# overseer invocation records its argv to $FAKE_OVERSEER_ARGV, touches
+# $OVERSEER_FIRED, and emits a benign low/none verdict in its result event; the
+# iteration agent blocks until the overseer has fired, then emits a normal stream.
+write_fake_claude_overseer() {
+  local fakebin="$1"
+
+  mkdir -p "$fakebin"
+  cat > "$fakebin/claude" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+perm=""
+args=("$@")
+n=${#args[@]}
+i=0
+while [ "$i" -lt "$n" ]; do
+  case "${args[$i]}" in
+    --permission-mode) i=$((i+1)); perm="${args[$i]:-}" ;;
+  esac
+  i=$((i+1))
+done
+
+if [ "$perm" = "plan" ]; then
+  [ -n "${FAKE_OVERSEER_ARGV:-}" ] && printf '%s\n' "$@" > "$FAKE_OVERSEER_ARGV"
+  [ -n "${OVERSEER_FIRED:-}" ] && touch "$OVERSEER_FIRED"
+  printf '%s\n' '{"type":"result","result":"DRIFT_LEVEL: low\nREASON: fine\nSTEER: none"}'
+else
+  if [ -n "${OVERSEER_FIRED:-}" ]; then
+    j=0
+    while [ "$j" -lt 100 ] && [ ! -f "$OVERSEER_FIRED" ]; do sleep 0.1; j=$((j+1)); done
+  fi
+  printf '%s\n' '{"type":"system","subtype":"init","model":"fake-claude-model"}'
+  printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"iteration ok"}]}}'
+  printf '%s\n' '{"type":"result","result":"iteration progress (no promise)"}'
+fi
+exit 0
+EOF
+  chmod +x "$fakebin/claude"
+}
+
 test_once_registers_and_marks_run_done() {
   local tmp fakebin index_file status_file status_rel
   new_tmpdir
@@ -738,6 +827,93 @@ test_once_resolves_agent_provider_via_shared_role_config() {
   echo "  PASS: once resolves the agent provider via the shared role config"
 }
 
+# afk.sh routes the overseer's codex judge call through the shared agent_run seam
+# (#66 crit 6 — no inline provider exec remains). The seam runs codex read-only
+# (--sandbox read-only) and, unlike the old inline overseer call, requests --json
+# and --output-last-message — so their presence in the read-only invocation proves
+# the overseer now goes through the seam. Driven end-to-end with a short overseer
+# interval and a fake whose iteration agent blocks until the overseer has fired,
+# making the ordering deterministic. No jq needed (the verdict comes back via
+# --output-last-message; the iteration stream degrades to a raw tee without jq).
+test_afk_overseer_routes_codex_judge_call_through_seam() {
+  local tmp fakebin overseer_argv fired
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  overseer_argv="$tmp/overseer-argv.txt"
+  fired="$tmp/overseer-fired"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_codex_overseer "$fakebin"
+
+  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex \
+    RALPH_OVERSEE_INTERVAL=1 OVERSEER_FIRED="$fired" FAKE_OVERSEER_ARGV="$overseer_argv" \
+    bash "$AFK_SCRIPT" demo 1 >/dev/null 2>&1)
+
+  [ -f "$fired" ] || fail "afk overseer should have fired (routed its codex judge call)"
+  [ -f "$overseer_argv" ] || fail "afk overseer codex call should have been recorded"
+  assert_file_contains "$overseer_argv" "--json" "overseer codex should route through the seam (--json, absent from the old inline overseer call)"
+  assert_file_contains "$overseer_argv" "--sandbox" "overseer codex invocation should set a sandbox via the seam"
+  assert_file_contains "$overseer_argv" "read-only" "overseer codex sandbox should be read-only"
+  assert_file_contains "$overseer_argv" "--output-last-message" "overseer codex should capture its verdict via the seam"
+  echo "  PASS: afk routes the overseer codex judge call through the shared seam"
+}
+
+# afk.sh routes the overseer's claude judge call through the seam too. The
+# overseer needs read-only -> --permission-mode plan, and the seam uses
+# --output-format stream-json (the old inline overseer used plain --print, never
+# stream-json) — so stream-json in the plan invocation proves seam routing.
+test_afk_overseer_routes_claude_judge_call_through_seam() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  SKIP: afk overseer claude seam routing (jq not available)"
+    return 0
+  fi
+
+  local tmp fakebin overseer_argv fired
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  overseer_argv="$tmp/overseer-argv.txt"
+  fired="$tmp/overseer-fired"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_claude_overseer "$fakebin"
+
+  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=claude \
+    RALPH_OVERSEE_INTERVAL=1 OVERSEER_FIRED="$fired" FAKE_OVERSEER_ARGV="$overseer_argv" \
+    bash "$AFK_SCRIPT" demo 1 >/dev/null 2>&1)
+
+  [ -f "$fired" ] || fail "afk overseer should have fired (routed its claude judge call)"
+  [ -f "$overseer_argv" ] || fail "afk overseer claude call should have been recorded"
+  assert_file_contains "$overseer_argv" "--output-format" "overseer claude should route through the seam (structured output, unlike the old inline --print)"
+  assert_file_contains "$overseer_argv" "stream-json" "overseer claude should request stream-json via the seam"
+  assert_file_contains "$overseer_argv" "--permission-mode" "overseer claude should set a permission mode via the seam"
+  assert_file_contains "$overseer_argv" "plan" "overseer claude permission mode should be plan (read-only)"
+  echo "  PASS: afk routes the overseer claude judge call through the shared seam"
+}
+
+# Criterion 6 (#66): no duplicate provider/feedback logic remains in ralph
+# scripts — every provider invocation now lives in the shared agent_run seam, so
+# the launchers carry no raw provider-invocation flags of their own. Strip
+# comments first (the scripts document the seam's invocation in prose), then
+# assert no inline exec flag survives in once.sh or afk.sh.
+test_ralph_scripts_carry_no_inline_provider_invocation() {
+  local script code flag
+  for script in "$ONCE_SCRIPT" "$AFK_SCRIPT"; do
+    code="$(sed 's/#.*//' "$script")"
+    for flag in --ask-for-approval --output-format --permission-mode --output-last-message; do
+      if printf '%s' "$code" | grep -Fq -- "$flag"; then
+        fail "$(basename "$script") still has an inline provider invocation ($flag) — it must route through the shared seam (#66 crit 6)"
+      fi
+    done
+  done
+  echo "  PASS: ralph scripts carry no inline provider invocation (all routed through the seam)"
+}
+
 echo "=== Ralph Run Registry Tests ==="
 test_once_registers_and_marks_run_done
 test_once_marks_run_failed_on_provider_error
@@ -757,3 +933,6 @@ test_afk_codex_verbose_routes_through_seam_raw_mode
 test_once_resolves_agent_model_via_shared_role_config
 test_afk_resolves_agent_model_via_shared_role_config
 test_once_resolves_agent_provider_via_shared_role_config
+test_afk_overseer_routes_codex_judge_call_through_seam
+test_afk_overseer_routes_claude_judge_call_through_seam
+test_ralph_scripts_carry_no_inline_provider_invocation

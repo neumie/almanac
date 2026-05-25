@@ -46,15 +46,12 @@ detect_provider() {
 PROVIDER="$(detect_provider | tr '[:upper:]' '[:lower:]')"
 
 # Model/effort overrides resolve through the same shared role-config helper.
-# Unset = provider default. The overseer reuses these arg arrays, so it inherits
-# the same role-resolved model/effort as the iteration agent (as before).
+# Unset = provider default. Every provider call — the iteration agent AND the
+# overseer's read-only judge call — now routes through the shared agent_run seam
+# (which takes these scalars directly), so afk no longer builds MODEL_ARG/
+# EFFORT_ARG arrays; that arg-shaping lives in the seam (#66 crit 6).
 AGENT_MODEL="$(almanac_loop_role_field ralph agent "" model "")"
 AGENT_EFFORT="$(almanac_loop_role_field ralph agent "" effort "")"
-MODEL_ARG=()
-if [ -n "$AGENT_MODEL" ]; then
-  MODEL_ARG=(--model "$AGENT_MODEL")
-fi
-EFFORT_ARG=()
 
 if [ ! -f "$PROMPT" ]; then
   echo "Error: $PROMPT not found. Run /ralph-loop $PRD_NAME to set up first."
@@ -69,9 +66,6 @@ case "$PROVIDER" in
     fi
     PROVIDER_DISPLAY="Claude Code"
     MODEL_DISPLAY="${AGENT_MODEL:-Claude Code default (resolved per session)}"
-    if [ -n "$AGENT_EFFORT" ]; then
-      EFFORT_ARG=(--effort "$AGENT_EFFORT")
-    fi
     EFFORT_DISPLAY="${AGENT_EFFORT:-provider default}"
     ;;
   codex)
@@ -81,9 +75,6 @@ case "$PROVIDER" in
     fi
     PROVIDER_DISPLAY="Codex"
     MODEL_DISPLAY="${AGENT_MODEL:-Codex default}"
-    if [ -n "$AGENT_EFFORT" ]; then
-      EFFORT_ARG=(-c "model_reasoning_effort=\"$AGENT_EFFORT\"")
-    fi
     EFFORT_DISPLAY="${AGENT_EFFORT:-provider default}"
     ;;
   *)
@@ -345,38 +336,45 @@ STEER: <one paragraph of concrete steering for next iteration, OR the literal wo
 
 Be conservative on DRIFT_LEVEL — only 'high' with clear evidence (the loop stops via .ralph-stop). Be conservative on STEER too — emit 'none' when agents are progressing fine."
 
-  local result overseer_result_file codex_overseer_prompt
+  # The overseer's read-only judge call now routes through the shared agent_run
+  # seam (#66 crit 6 — no inline provider exec remains in ralph scripts). The
+  # `read-only` sandbox maps to claude --permission-mode plan / codex --sandbox
+  # read-only — exactly the read-only modes the overseer used inline. This is a
+  # non-stream seam call: the overseer parses the verdict (it never prints it
+  # live), so the seam captures the model's response to a result file we read
+  # back rather than streaming it. The overseer reuses the iteration agent's
+  # role-resolved AGENT_MODEL/AGENT_EFFORT — its model/effort today. The seam
+  # call is guarded with `|| true` so a flaky/missing provider can never kill the
+  # overseer subshell, matching the old inline `|| true`.
+  local result="" overseer_prompt_file overseer_result_file overseer_events_file overseer_full_prompt
+  overseer_prompt_file=$(mktemp)
+  overseer_result_file=$(mktemp)
+  overseer_events_file=$(mktemp)
+
   case "$PROVIDER" in
     claude)
-      result=$(claude \
-        --print \
-        --permission-mode plan \
-        "${MODEL_ARG[@]}" \
-        "${EFFORT_ARG[@]}" \
-        "$overseer_prompt" 2>&1 || true)
+      # claude resolves the @${PROMPT} reference in the prompt itself.
+      printf '%s' "$overseer_prompt" > "$overseer_prompt_file"
       ;;
     codex)
-      overseer_result_file=$(mktemp)
-      codex_overseer_prompt="PRD/iteration prompt contents from ${PROMPT}:
+      # codex exec does not resolve @-references, so inline the PRD/iteration
+      # prompt contents the same way the inline codex overseer call did.
+      overseer_full_prompt="PRD/iteration prompt contents from ${PROMPT}:
 $(cat "$PROMPT")
 
 ${overseer_prompt}"
-      result=$(codex \
-        --ask-for-approval never \
-        exec \
-        --cd "$PWD" \
-        --sandbox read-only \
-        --color never \
-        --output-last-message "$overseer_result_file" \
-        "${MODEL_ARG[@]}" \
-        "${EFFORT_ARG[@]}" \
-        "$codex_overseer_prompt" 2>&1 || true)
-      if [ -s "$overseer_result_file" ]; then
-        result=$(cat "$overseer_result_file")
-      fi
-      rm -f "$overseer_result_file"
+      printf '%s' "$overseer_full_prompt" > "$overseer_prompt_file"
       ;;
   esac
+
+  almanac_loop_agent_run \
+    "$PROVIDER" "$AGENT_MODEL" "$AGENT_EFFORT" read-only \
+    "$overseer_prompt_file" "$overseer_result_file" "$overseer_events_file" \
+    >/dev/null 2>&1 || true
+  if [ -s "$overseer_result_file" ]; then
+    result=$(cat "$overseer_result_file")
+  fi
+  rm -f "$overseer_prompt_file" "$overseer_result_file" "$overseer_events_file"
 
   {
     echo ""
