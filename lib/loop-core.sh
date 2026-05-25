@@ -264,6 +264,123 @@ almanac_loop_role_config() {
   printf 'effort\t%s\n' "$(almanac_loop_role_field "$prefix" "$role" "$lens" "effort" "$default_effort")"
 }
 
+almanac_loop_agent_provider_key() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+almanac_loop_agent_claude_permission() {
+  case "$1" in
+    read-only) printf '%s\n' "plan" ;;
+    *) printf '%s\n' "acceptEdits" ;;
+  esac
+}
+
+almanac_loop_agent_extract_claude_result() {
+  local stream_file="$1"
+  local result_file="$2"
+
+  if command -v jq >/dev/null 2>&1; then
+    jq -r 'select(.type == "result").result // empty' "$stream_file" | tail -n 1 > "$result_file"
+    return 0
+  fi
+
+  awk '
+    /"type"[[:space:]]*:[[:space:]]*"result"/ && /"result"[[:space:]]*:/ {
+      line = $0
+      sub(/^.*"result"[[:space:]]*:[[:space:]]*"/, "", line)
+      sub(/".*$/, "", line)
+      result = line
+    }
+    END {
+      if (result != "") print result
+    }
+  ' "$stream_file" > "$result_file"
+}
+
+almanac_loop_agent_run() {
+  [ "$#" -ge 6 ] || return 2
+
+  local provider="$1"
+  local model="$2"
+  local effort="$3"
+  local sandbox="$4"
+  local prompt_file="$5"
+  local result_file="$6"
+  local provider_key prompt
+
+  [ -n "$provider" ] || return 2
+  [ -f "$prompt_file" ] || return 2
+
+  provider_key="$(almanac_loop_agent_provider_key "$provider")"
+  prompt="$(cat "$prompt_file")"
+  sandbox="${sandbox:-danger-full-access}"
+
+  case "$provider_key" in
+    codex)
+      if ! command -v codex >/dev/null 2>&1; then
+        printf '%s\n' "Error: provider 'codex' is not on PATH." >&2
+        return 4
+      fi
+
+      local codex_args=(
+        --ask-for-approval never
+        exec
+        --cd "$PWD"
+        --sandbox "$sandbox"
+        --color never
+        --json
+        --output-last-message "$result_file"
+      )
+
+      if [ -n "$model" ]; then
+        codex_args+=(--model "$model")
+      fi
+
+      if [ -n "$effort" ]; then
+        codex_args+=(-c "model_reasoning_effort=\"$effort\"")
+      fi
+
+      codex "${codex_args[@]}" "$prompt"
+      ;;
+    claude|claude-code)
+      if ! command -v claude >/dev/null 2>&1; then
+        printf '%s\n' "Error: provider 'claude' is not on PATH." >&2
+        return 4
+      fi
+
+      local claude_args=(
+        --print
+        --output-format stream-json
+        --verbose
+        --permission-mode "$(almanac_loop_agent_claude_permission "$sandbox")"
+      )
+      local stream_file status
+
+      if [ -n "$model" ]; then
+        claude_args+=(--model "$model")
+      fi
+
+      if [ -n "$effort" ]; then
+        claude_args+=(--effort "$effort")
+      fi
+
+      stream_file="$(mktemp "${TMPDIR:-/tmp}/almanac-loop-agent.XXXXXX")"
+      if claude "${claude_args[@]}" "$prompt" | tee "$stream_file"; then
+        almanac_loop_agent_extract_claude_result "$stream_file" "$result_file"
+        rm -f "$stream_file"
+      else
+        status="$?"
+        rm -f "$stream_file"
+        return "$status"
+      fi
+      ;;
+    *)
+      printf '%s\n' "Error: unsupported provider: $provider" >&2
+      return 3
+      ;;
+  esac
+}
+
 almanac_loop_feedback_commands() {
   local root="${1:-.}"
 

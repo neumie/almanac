@@ -43,9 +43,67 @@ assert_file_contains() {
   fi
 }
 
+assert_contains() {
+  local haystack="$1"
+  local needle="$2"
+  local message="$3"
+
+  case "$haystack" in
+    *"$needle"*) ;;
+    *) fail "$message" ;;
+  esac
+}
+
 new_tmpdir() {
   NEW_TMPDIR=$(mktemp -d)
   TMPDIRS+=("$NEW_TMPDIR")
+}
+
+write_fake_codex_agent() {
+  local fakebin="$1"
+  local args_log="$2"
+
+  mkdir -p "$fakebin"
+  cat > "$fakebin/codex" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "\$*" > "$args_log"
+result_file=""
+prompt=""
+while [ "\$#" -gt 0 ]; do
+  case "\$1" in
+    --output-last-message)
+      shift
+      result_file="\${1:-}"
+      ;;
+    *)
+      prompt="\$1"
+      ;;
+  esac
+  shift || true
+done
+
+[ -n "\$result_file" ] && printf '%s\n' "codex final: \$prompt" > "\$result_file"
+printf '%s\n' '{"type":"event_msg","payload":{"type":"agent_message","message":"codex event"}}'
+EOF
+  chmod +x "$fakebin/codex"
+}
+
+write_fake_claude_agent() {
+  local fakebin="$1"
+  local args_log="$2"
+
+  mkdir -p "$fakebin"
+  cat > "$fakebin/claude" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "\$*" > "$args_log"
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"claude event"}]}}'
+printf '%s\n' '{"type":"result","result":"claude final"}'
+EOF
+  chmod +x "$fakebin/claude"
 }
 
 test_detects_project_marker_commands() {
@@ -207,6 +265,55 @@ EOF
   echo "  PASS: resolves role config with Ralph-style fallbacks"
 }
 
+test_agent_runner_invokes_codex_with_common_config() {
+  local tmp fakebin prompt result events args
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  prompt="$tmp/prompt.md"
+  result="$tmp/result.txt"
+  events="$tmp/events.jsonl"
+
+  printf '%s\n' "review target" > "$prompt"
+  write_fake_codex_agent "$fakebin" "$tmp/codex-args.txt"
+
+  PATH="$fakebin:$PATH" almanac_loop_agent_run "codex" "gpt-test" "high" "read-only" "$prompt" "$result" > "$events"
+
+  args="$(cat "$tmp/codex-args.txt")"
+  assert_contains "$args" "--ask-for-approval never" "codex runner should disable approval prompts"
+  assert_contains "$args" "--sandbox read-only" "codex runner should pass sandbox mode"
+  assert_contains "$args" "--model gpt-test" "codex runner should pass model override"
+  assert_contains "$args" "model_reasoning_effort=\"high\"" "codex runner should pass effort override"
+  assert_file_contains "$result" "codex final: review target" "codex runner should write provider final result"
+  assert_file_contains "$events" "codex event" "codex runner should stream provider events"
+  echo "  PASS: agent runner invokes codex with common config"
+}
+
+test_agent_runner_invokes_claude_with_common_config() {
+  local tmp fakebin prompt result events args
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  prompt="$tmp/prompt.md"
+  result="$tmp/result.txt"
+  events="$tmp/events.jsonl"
+
+  printf '%s\n' "review target" > "$prompt"
+  write_fake_claude_agent "$fakebin" "$tmp/claude-args.txt"
+
+  PATH="$fakebin:$PATH" almanac_loop_agent_run "claude" "sonnet-test" "medium" "read-only" "$prompt" "$result" > "$events"
+
+  args="$(cat "$tmp/claude-args.txt")"
+  assert_contains "$args" "--print" "claude runner should print non-interactively"
+  assert_contains "$args" "--output-format stream-json" "claude runner should stream json events"
+  assert_contains "$args" "--permission-mode plan" "claude read-only runner should use plan permission mode"
+  assert_contains "$args" "--model sonnet-test" "claude runner should pass model override"
+  assert_contains "$args" "--effort medium" "claude runner should pass effort override"
+  assert_file_contains "$result" "claude final" "claude runner should extract final result"
+  assert_file_contains "$events" "claude event" "claude runner should stream provider events"
+  echo "  PASS: agent runner invokes claude with common config"
+}
+
 echo "=== Loop Core Tests ==="
 test_detects_project_marker_commands
 test_dedupes_python_markers
@@ -215,3 +322,5 @@ test_registers_run_in_registry
 test_marks_registered_run_done
 test_resolves_role_config_with_lens_overrides
 test_resolves_role_config_with_ralph_style_fallbacks
+test_agent_runner_invokes_codex_with_common_config
+test_agent_runner_invokes_claude_with_common_config
