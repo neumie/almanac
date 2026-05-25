@@ -73,6 +73,14 @@ almanac_loop_run_index_file() {
   printf '%s/index.tsv\n' "$(almanac_loop_registry_dir "$root")"
 }
 
+# Write a run's status.tsv blob — the per-run detail view the hub reads. The
+# index.tsv is the lightweight list pointer (id/type/target/pid/status-file/
+# start/status); this blob carries the same identity PLUS the live progress the
+# index does not: `round` (harden round / ralph iteration) and `summary` (a
+# worker/lens summary line). round/summary are optional trailing args (default
+# empty) so existing 9-arg callers stay correct and every blob still carries the
+# keys, blank until a progress update fills them. The contract is identical for
+# harden and ralph — both write this same shape.
 almanac_loop_write_run_status() {
   local status_file="$1"
   local run_id="$2"
@@ -83,6 +91,8 @@ almanac_loop_write_run_status() {
   local started_at="$7"
   local status="$8"
   local finished_at="$9"
+  local round="${10:-}"
+  local summary="${11:-}"
 
   {
     printf 'id\t%s\n' "$run_id"
@@ -93,6 +103,8 @@ almanac_loop_write_run_status() {
     printf 'started_at\t%s\n' "$started_at"
     printf 'status\t%s\n' "$status"
     printf 'finished_at\t%s\n' "$finished_at"
+    printf 'round\t%s\n' "$round"
+    printf 'summary\t%s\n' "$summary"
   } > "$status_file"
 }
 
@@ -166,10 +178,10 @@ almanac_loop_mark_run_status() {
   local run_id="$2"
   local status="$3"
   local finished_at="${4:-}"
-  local status_file index_file tmp type target pid status_rel started_at
+  local status_file index_file tmp type target pid status_rel started_at round summary
 
   case "$status" in
-    done|failed) ;;
+    done|failed|aborted) ;;
     *) return 3 ;;
   esac
 
@@ -188,6 +200,8 @@ almanac_loop_mark_run_status() {
   pid="$(almanac_loop_status_field "$status_file" "pid")"
   status_rel="$(almanac_loop_status_field "$status_file" "status_file")"
   started_at="$(almanac_loop_status_field "$status_file" "started_at")"
+  round="$(almanac_loop_status_field "$status_file" "round" || true)"
+  summary="$(almanac_loop_status_field "$status_file" "summary" || true)"
 
   tmp="$(mktemp "${index_file}.XXXXXX")"
   if ! awk -v run_id="$run_id" -v status="$status" '
@@ -202,7 +216,96 @@ almanac_loop_mark_run_status() {
   fi
   mv "$tmp" "$index_file"
 
-  almanac_loop_write_run_status "$status_file" "$run_id" "$type" "$target" "$pid" "$status_rel" "$started_at" "$status" "$finished_at"
+  almanac_loop_write_run_status "$status_file" "$run_id" "$type" "$target" "$pid" "$status_rel" "$started_at" "$status" "$finished_at" "$round" "$summary"
+}
+
+# Update a live run's progress mid-flight: rewrite its status.tsv with a new
+# round (harden round / ralph iteration) and worker/lens summary, preserving the
+# lifecycle status, start, and finish fields. This is the "updated as it
+# progresses" half of the run-status contract — the loop calls it each round so
+# the hub's read view reflects current progress. Touches only the per-run blob,
+# not index.tsv (the index stays the lightweight lifecycle pointer). Returns 2
+# when the run has no status file.
+almanac_loop_update_run_progress() {
+  [ "$#" -ge 2 ] || return 2
+
+  local root="$1"
+  local run_id="$2"
+  local round="${3:-}"
+  local summary="${4:-}"
+  local status_file type target pid status_rel started_at status finished_at
+
+  status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
+  [ -f "$status_file" ] || return 2
+
+  type="$(almanac_loop_status_field "$status_file" "type")"
+  target="$(almanac_loop_status_field "$status_file" "target")"
+  pid="$(almanac_loop_status_field "$status_file" "pid")"
+  status_rel="$(almanac_loop_status_field "$status_file" "status_file")"
+  started_at="$(almanac_loop_status_field "$status_file" "started_at")"
+  status="$(almanac_loop_status_field "$status_file" "status")"
+  finished_at="$(almanac_loop_status_field "$status_file" "finished_at" || true)"
+
+  almanac_loop_write_run_status "$status_file" "$run_id" "$type" "$target" "$pid" "$status_rel" "$started_at" "$status" "$finished_at" "$round" "$summary"
+}
+
+# Detect a stale registry entry: a run whose recorded status is still `running`
+# but whose process is gone (crashed/killed without marking itself), so the hub
+# can surface or reap it. Returns 0 (stale) only when status is running AND the
+# pid is not alive — a numeric pid that `kill -0` cannot signal, or a missing/
+# non-numeric pid that cannot be verified. Returns 1 for a live running pid or
+# any terminal status; returns 2 when the run is unknown.
+almanac_loop_run_is_stale() {
+  local root="$1"
+  local run_id="$2"
+  local status_file status pid
+
+  status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
+  [ -f "$status_file" ] || return 2
+
+  status="$(almanac_loop_status_field "$status_file" "status" || true)"
+  [ "$status" = "running" ] || return 1
+
+  pid="$(almanac_loop_status_field "$status_file" "pid" || true)"
+  case "$pid" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+
+  if kill -0 "$pid" 2>/dev/null; then
+    return 1
+  fi
+  return 0
+}
+
+# List every registered run as index.tsv data rows (id/type/target/pid/status-
+# file/start/status), header stripped — the API the hub reads to enumerate runs.
+# Returns 1 when there is no registry or no run has been registered yet, so a
+# caller can branch on "any runs?" without parsing.
+almanac_loop_list_runs() {
+  local root="$1"
+  local index_file rows
+
+  index_file="$(almanac_loop_run_index_file "$root")"
+  [ -f "$index_file" ] || return 1
+
+  rows="$(awk 'NR > 1' "$index_file")"
+  [ -n "$rows" ] || return 1
+
+  printf '%s\n' "$rows"
+}
+
+# Read a single run's full status.tsv blob — the detail view the hub renders for
+# one run (identity plus live round/summary and finish state). Returns 1 when the
+# run is unknown.
+almanac_loop_read_run() {
+  local root="$1"
+  local run_id="$2"
+  local status_file
+
+  status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
+  [ -f "$status_file" ] || return 1
+
+  cat "$status_file"
 }
 
 almanac_loop_env_key_part() {

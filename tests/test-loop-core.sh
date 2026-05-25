@@ -285,6 +285,106 @@ test_marks_registered_run_done() {
   echo "  PASS: marks registered run done"
 }
 
+test_update_run_progress_records_round_and_summary() {
+  local tmp status_file
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "harden" "src/app.js" "4242" "harden-demo-002" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_update_run_progress "$tmp" "harden-demo-002" "2" "reviewers: security,perf,correctness"
+
+  status_file="$tmp/.almanac/runs/harden-demo-002/status.tsv"
+  assert_file_contains "$status_file" $'round\t2' "progress update should record the round/iteration"
+  assert_file_contains "$status_file" $'summary\treviewers: security,perf,correctness' "progress update should record the worker/lens summary"
+  assert_file_contains "$status_file" $'status\trunning' "progress update must not change lifecycle status"
+  assert_file_contains "$status_file" $'started_at\t2026-05-25T12:00:00Z' "progress update must preserve start time"
+  assert_eq "" "$(almanac_loop_status_field "$status_file" "finished_at")" "progress update must leave a live run unfinished"
+  echo "  PASS: update run progress records round and summary"
+}
+
+test_mark_run_aborted_preserves_progress() {
+  local tmp status_file index_file
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "harden" "src/app.js" "4242" "harden-demo-003" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_update_run_progress "$tmp" "harden-demo-003" "3" "reviewers: security"
+  almanac_loop_mark_run_status "$tmp" "harden-demo-003" "aborted" "2026-05-25T12:30:00Z"
+
+  status_file="$tmp/.almanac/runs/harden-demo-003/status.tsv"
+  index_file="$tmp/.almanac/runs/index.tsv"
+  assert_file_contains "$status_file" $'status\taborted' "aborted is a valid terminal state"
+  assert_file_contains "$status_file" $'finished_at\t2026-05-25T12:30:00Z' "aborted run should record finish time"
+  assert_file_contains "$status_file" $'round\t3' "marking a run must preserve recorded round"
+  assert_file_contains "$status_file" $'summary\treviewers: security' "marking a run must preserve recorded summary"
+  assert_file_contains "$index_file" $'harden-demo-003\tharden\tsrc/app.js\t4242\t.almanac/runs/harden-demo-003/status.tsv\t2026-05-25T12:00:00Z\taborted' "index should reflect aborted status"
+  echo "  PASS: mark run aborted preserves progress"
+}
+
+test_run_is_stale_detects_dead_pid() {
+  local tmp rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  # A running entry whose pid is long dead is stale.
+  almanac_loop_register_run "$tmp" "harden" "src/app.js" "2147483647" "harden-dead" "2026-05-25T12:00:00Z" >/dev/null
+  rc=0; almanac_loop_run_is_stale "$tmp" "harden-dead" || rc=$?
+  assert_eq "0" "$rc" "a running entry with a dead pid must be detected as stale"
+
+  # A running entry whose pid is alive (this test process) is not stale.
+  almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "harden-alive" "2026-05-25T12:00:00Z" >/dev/null
+  rc=0; almanac_loop_run_is_stale "$tmp" "harden-alive" || rc=$?
+  assert_eq "1" "$rc" "a running entry with a live pid must not be stale"
+
+  # A terminal entry is never stale regardless of pid.
+  almanac_loop_register_run "$tmp" "harden" "src/app.js" "2147483647" "harden-done" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_mark_run_status "$tmp" "harden-done" "done" "2026-05-25T12:10:00Z"
+  rc=0; almanac_loop_run_is_stale "$tmp" "harden-done" || rc=$?
+  assert_eq "1" "$rc" "a finished run is never stale"
+  echo "  PASS: run is stale detects dead pid"
+}
+
+test_list_runs_returns_all_registered_runs() {
+  local tmp out rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  # No registry yet -> non-zero, no rows.
+  rc=0; almanac_loop_list_runs "$tmp" >/dev/null 2>&1 || rc=$?
+  [ "$rc" -ne 0 ] || fail "listing runs with no registry should report no runs"
+
+  almanac_loop_register_run "$tmp" "harden" "src/app.js" "11" "harden-a" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "ralph" "docs/plans/demo/prd.md" "22" "ralph-b" "2026-05-25T12:01:00Z" >/dev/null
+
+  out="$(almanac_loop_list_runs "$tmp")"
+  assert_eq "2" "$(printf '%s\n' "$out" | grep -c '[^[:space:]]')" "list should return one row per run, no header"
+  assert_contains "$out" "harden-a" "list should include the harden run"
+  assert_contains "$out" "ralph-b" "list should include the ralph run"
+  case "$out" in
+    id*) fail "list should not include the index header row" ;;
+  esac
+  echo "  PASS: list runs returns all registered runs"
+}
+
+test_read_run_returns_single_run_status() {
+  local tmp out rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "harden" "src/app.js" "4242" "harden-read" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_update_run_progress "$tmp" "harden-read" "4" "reviewers: security,perf"
+
+  out="$(almanac_loop_read_run "$tmp" "harden-read")"
+  assert_contains "$out" $'id\tharden-read' "read should return the run id"
+  assert_contains "$out" $'type\tharden' "read should return the run type"
+  assert_contains "$out" $'round\t4' "read should return the live round"
+  assert_contains "$out" $'summary\treviewers: security,perf' "read should return the worker/lens summary"
+
+  rc=0; almanac_loop_read_run "$tmp" "no-such-run" >/dev/null 2>&1 || rc=$?
+  [ "$rc" -ne 0 ] || fail "reading an unknown run should report failure"
+  echo "  PASS: read run returns single run status"
+}
+
 test_resolves_role_config_with_lens_overrides() {
   local expected actual
 
@@ -548,6 +648,11 @@ test_feedback_run_reports_per_loop_verdict
 test_feedback_run_passes_when_all_green
 test_registers_run_in_registry
 test_marks_registered_run_done
+test_update_run_progress_records_round_and_summary
+test_mark_run_aborted_preserves_progress
+test_run_is_stale_detects_dead_pid
+test_list_runs_returns_all_registered_runs
+test_read_run_returns_single_run_status
 test_resolves_role_config_with_lens_overrides
 test_resolves_role_config_with_ralph_style_fallbacks
 test_agent_runner_invokes_codex_with_common_config
