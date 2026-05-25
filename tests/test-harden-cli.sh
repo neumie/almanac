@@ -52,6 +52,7 @@ test_creates_draft_rubric_for_target_and_goal() {
   [ -f "$rubric" ] || fail "harden should create default rubric path"
   assert_file_contains "$rubric" "# Harden Rubric" "rubric should have title"
   assert_file_contains "$rubric" "Target: lib/loop-core.sh" "rubric should record target"
+  assert_file_contains "$rubric" "Status: draft" "rubric should start as draft"
   assert_file_contains "$rubric" "prove feedback detection cannot regress" "rubric should record goal"
   assert_file_contains "$rubric" "## Acceptance" "rubric should include acceptance section"
   assert_file_contains "$rubric" "## Context" "rubric should include context section"
@@ -85,7 +86,42 @@ test_refuses_to_overwrite_existing_rubric() {
   echo "  PASS: refuses to overwrite existing rubric"
 }
 
+test_approves_existing_draft_rubric() {
+  local tmp rubric
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  (cd "$tmp" && "$ALMANAC" harden src/app.js --goal "lock behavior" >/dev/null)
+  rubric="$tmp/docs/plans/harden/src-app-js/rubric.md"
+  printf '%s\n' "- Existing context survives approval." >> "$rubric"
+
+  (cd "$tmp" && "$ALMANAC" harden src/app.js --approve >/dev/null)
+
+  assert_file_contains "$rubric" "Status: approved" "approval should mark rubric approved"
+  assert_file_contains "$rubric" "## Approval" "approval should append approval section"
+  assert_file_contains "$rubric" "Approved:" "approval should record timestamp"
+  assert_file_contains "$rubric" "Existing context survives approval." "approval should preserve edited rubric content"
+  echo "  PASS: approves existing draft rubric"
+}
+
+test_approve_requires_existing_rubric() {
+  local tmp output
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  if output=$(cd "$tmp" && "$ALMANAC" harden src/app.js --approve 2>&1); then
+    fail "harden should reject approval without an existing rubric"
+  fi
+  case "$output" in
+    *"Rubric not found"*) ;;
+    *) fail "approval should report missing rubric" ;;
+  esac
+  echo "  PASS: approve requires existing rubric"
+}
+
 echo "=== Harden CLI Tests ==="
 test_creates_draft_rubric_for_target_and_goal
 test_requires_goal
 test_refuses_to_overwrite_existing_rubric
+test_approves_existing_draft_rubric
+test_approve_requires_existing_rubric

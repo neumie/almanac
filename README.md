@@ -65,6 +65,8 @@ almanac list                 List available providers and install status
 almanac ralph                Launch the interactive Ralph loop CLI
 almanac harden <target> --goal "<goal>"
                              Draft a harden-loop rubric for a target
+almanac harden <target> --approve
+                             Approve an edited harden-loop rubric
 almanac update               Update almanac (git pull + re-install)
 almanac sync                 Check adapted skills for upstream changes
 almanac help                 Show help

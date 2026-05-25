@@ -43,6 +43,7 @@ almanac_harden_write_rubric() {
 # Harden Rubric
 
 Target: $target
+Status: draft
 
 ## Goal
 
@@ -71,4 +72,61 @@ Subjective or unreproducible findings are non-blocking notes.
 
 - Add intentional decisions and false-positive preemptions here before running reviewers.
 EOF
+}
+
+almanac_harden_approve_rubric() {
+  local root="$1"
+  local target="$2"
+  local path approved_at tmp
+
+  path="$(almanac_harden_rubric_path "$root" "$target")"
+
+  if [ ! -f "$path" ]; then
+    return 2
+  fi
+
+  if grep -Eq '^Status: approved$' "$path"; then
+    return 3
+  fi
+
+  approved_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  tmp="$(mktemp "${path}.XXXXXX")"
+
+  if grep -Eq '^Status: draft$' "$path"; then
+    awk -v approved_at="$approved_at" '
+      /^Status: draft$/ && !replaced {
+        print "Status: approved"
+        replaced = 1
+        next
+      }
+      { print }
+      END {
+        print ""
+        print "## Approval"
+        print ""
+        print "Approved: " approved_at
+      }
+    ' "$path" > "$tmp"
+  else
+    awk -v approved_at="$approved_at" '
+      /^Target: / && !inserted {
+        print
+        print "Status: approved"
+        inserted = 1
+        next
+      }
+      { print }
+      END {
+        if (!inserted) {
+          print "Status: approved"
+        }
+        print ""
+        print "## Approval"
+        print ""
+        print "Approved: " approved_at
+      }
+    ' "$path" > "$tmp"
+  fi
+
+  mv "$tmp" "$path"
 }

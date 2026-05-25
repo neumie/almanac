@@ -6,13 +6,17 @@ set -euo pipefail
 source "$ALMANAC_HOME/lib/harden-core.sh"
 
 usage() {
-  printf '%s\n' "Usage: almanac harden <target> --goal <goal>"
+  printf '%s\n' "Usage:"
+  printf '%s\n' "  almanac harden <target> --goal <goal>"
+  printf '%s\n' "  almanac harden <target> --approve"
   printf '%s\n' ""
   printf '%s\n' "Creates docs/plans/harden/<target-slug>/rubric.md in the current repo."
+  printf '%s\n' "Approves an edited draft rubric when --approve is used."
 }
 
 TARGET=""
 GOAL=""
+APPROVE=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -24,6 +28,9 @@ while [ "$#" -gt 0 ]; do
       shift
       [ "$#" -gt 0 ] || _die "Missing value for --goal"
       GOAL="$1"
+      ;;
+    --approve)
+      APPROVE=1
       ;;
     --)
       shift
@@ -47,6 +54,33 @@ done
   usage
   _die "Missing harden target"
 }
+
+if [ "$APPROVE" -eq 1 ]; then
+  [ -z "$GOAL" ] || _die "Use either --goal or --approve, not both"
+
+  RUBRIC_PATH="$(almanac_harden_rubric_path "$PWD" "$TARGET")"
+  DISPLAY_PATH="${RUBRIC_PATH#$PWD/}"
+
+  if almanac_harden_approve_rubric "$PWD" "$TARGET"; then
+    _success "Rubric approved: $DISPLAY_PATH"
+    _info "Next harden-loop phase can require approved status before reviewers run."
+    exit 0
+  else
+    APPROVE_STATUS="$?"
+  fi
+
+  case "$APPROVE_STATUS" in
+    2)
+      _die "Rubric not found: $DISPLAY_PATH"
+      ;;
+    3)
+      _die "Rubric already approved: $DISPLAY_PATH"
+      ;;
+    *)
+      _die "Failed to approve rubric: $DISPLAY_PATH"
+      ;;
+  esac
+fi
 
 [ -n "$GOAL" ] || {
   usage
