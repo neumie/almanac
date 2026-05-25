@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 # loop-core.sh - Shared loop orchestration helpers
 
+# Output helpers (_die/_info/_error/...) live in lib/core.sh. Source it
+# idempotently so loop-core's direct consumers — Ralph scripts and tests that
+# source this file without going through bin/almanac — still get them. pwd -P
+# resolves the install symlink so the sibling core.sh is found from either path.
+if ! declare -F _error >/dev/null 2>&1; then
+  __loop_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/core.sh
+  source "$__loop_core_dir/core.sh"
+  unset __loop_core_dir
+fi
+
 almanac_loop_slug() {
   local raw="$1"
   local slug
@@ -306,6 +317,7 @@ almanac_loop_agent_run() {
   local sandbox="$4"
   local prompt_file="$5"
   local result_file="$6"
+  local events_file="${7:-}"
   local provider_key prompt
 
   [ -n "$provider" ] || return 2
@@ -315,10 +327,17 @@ almanac_loop_agent_run() {
   prompt="$(cat "$prompt_file")"
   sandbox="${sandbox:-danger-full-access}"
 
+  # Raw provider events stream to a JSONL log. The caller may pass its own path
+  # (per-run events.jsonl); otherwise we allocate one. Either way the path is
+  # echoed back at the end so the caller can locate the stream.
+  if [ -z "$events_file" ]; then
+    events_file="$(mktemp "${TMPDIR:-/tmp}/almanac-loop-events.XXXXXX")"
+  fi
+
   case "$provider_key" in
     codex)
       if ! command -v codex >/dev/null 2>&1; then
-        printf '%s\n' "Error: provider 'codex' is not on PATH." >&2
+        _error "provider 'codex' is not on PATH."
         return 4
       fi
 
@@ -340,11 +359,11 @@ almanac_loop_agent_run() {
         codex_args+=(-c "model_reasoning_effort=\"$effort\"")
       fi
 
-      codex "${codex_args[@]}" "$prompt"
+      codex "${codex_args[@]}" "$prompt" > "$events_file" || return "$?"
       ;;
     claude|claude-code)
       if ! command -v claude >/dev/null 2>&1; then
-        printf '%s\n' "Error: provider 'claude' is not on PATH." >&2
+        _error "provider 'claude' is not on PATH."
         return 4
       fi
 
@@ -354,7 +373,6 @@ almanac_loop_agent_run() {
         --verbose
         --permission-mode "$(almanac_loop_agent_claude_permission "$sandbox")"
       )
-      local stream_file status
 
       if [ -n "$model" ]; then
         claude_args+=(--model "$model")
@@ -364,21 +382,18 @@ almanac_loop_agent_run() {
         claude_args+=(--effort "$effort")
       fi
 
-      stream_file="$(mktemp "${TMPDIR:-/tmp}/almanac-loop-agent.XXXXXX")"
-      if claude "${claude_args[@]}" "$prompt" | tee "$stream_file"; then
-        almanac_loop_agent_extract_claude_result "$stream_file" "$result_file"
-        rm -f "$stream_file"
-      else
-        status="$?"
-        rm -f "$stream_file"
-        return "$status"
-      fi
+      # No pipe: a direct redirect keeps $? as claude's exit so a provider
+      # failure propagates instead of being masked by a downstream tee.
+      claude "${claude_args[@]}" "$prompt" > "$events_file" || return "$?"
+      almanac_loop_agent_extract_claude_result "$events_file" "$result_file"
       ;;
     *)
-      printf '%s\n' "Error: unsupported provider: $provider" >&2
+      _error "unsupported provider: $provider"
       return 3
       ;;
   esac
+
+  printf '%s\n' "$events_file"
 }
 
 almanac_loop_worker_dir() {
@@ -542,7 +557,7 @@ almanac_loop_worker_start() {
       sleep 0.05
     done
 
-    if almanac_loop_agent_run "$provider" "$model" "$effort" "$sandbox" "$prompt_file" "$result_file" > "$events_file" 2> "$stderr_file"; then
+    if almanac_loop_agent_run "$provider" "$model" "$effort" "$sandbox" "$prompt_file" "$result_file" "$events_file" >/dev/null 2> "$stderr_file"; then
       status="done"
       exit_code=0
     else

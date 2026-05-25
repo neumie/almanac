@@ -106,6 +106,19 @@ EOF
   chmod +x "$fakebin/claude"
 }
 
+write_fake_failing_agent() {
+  local fakebin="$1"
+  local name="$2"
+
+  mkdir -p "$fakebin"
+  cat > "$fakebin/$name" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' '{"type":"event_msg","payload":{"type":"agent_message","message":"partial"}}'
+exit 7
+EOF
+  chmod +x "$fakebin/$name"
+}
+
 test_detects_project_marker_commands() {
   local tmp expected actual
   new_tmpdir
@@ -266,7 +279,7 @@ EOF
 }
 
 test_agent_runner_invokes_codex_with_common_config() {
-  local tmp fakebin prompt result events args
+  local tmp fakebin prompt result events args printed
   new_tmpdir
   tmp="$NEW_TMPDIR"
   fakebin="$tmp/bin"
@@ -277,7 +290,7 @@ test_agent_runner_invokes_codex_with_common_config() {
   printf '%s\n' "review target" > "$prompt"
   write_fake_codex_agent "$fakebin" "$tmp/codex-args.txt"
 
-  PATH="$fakebin:$PATH" almanac_loop_agent_run "codex" "gpt-test" "high" "read-only" "$prompt" "$result" > "$events"
+  printed="$(PATH="$fakebin:$PATH" almanac_loop_agent_run "codex" "gpt-test" "high" "read-only" "$prompt" "$result" "$events")"
 
   args="$(cat "$tmp/codex-args.txt")"
   assert_contains "$args" "--ask-for-approval never" "codex runner should disable approval prompts"
@@ -285,12 +298,13 @@ test_agent_runner_invokes_codex_with_common_config() {
   assert_contains "$args" "--model gpt-test" "codex runner should pass model override"
   assert_contains "$args" "model_reasoning_effort=\"high\"" "codex runner should pass effort override"
   assert_file_contains "$result" "codex final: review target" "codex runner should write provider final result"
-  assert_file_contains "$events" "codex event" "codex runner should stream provider events"
+  assert_file_contains "$events" "codex event" "codex runner should stream provider events to the log file"
+  assert_eq "$events" "$printed" "codex runner should return the events log path"
   echo "  PASS: agent runner invokes codex with common config"
 }
 
 test_agent_runner_invokes_claude_with_common_config() {
-  local tmp fakebin prompt result events args
+  local tmp fakebin prompt result events args printed
   new_tmpdir
   tmp="$NEW_TMPDIR"
   fakebin="$tmp/bin"
@@ -301,7 +315,7 @@ test_agent_runner_invokes_claude_with_common_config() {
   printf '%s\n' "review target" > "$prompt"
   write_fake_claude_agent "$fakebin" "$tmp/claude-args.txt"
 
-  PATH="$fakebin:$PATH" almanac_loop_agent_run "claude" "sonnet-test" "medium" "read-only" "$prompt" "$result" > "$events"
+  printed="$(PATH="$fakebin:$PATH" almanac_loop_agent_run "claude" "sonnet-test" "medium" "read-only" "$prompt" "$result" "$events")"
 
   args="$(cat "$tmp/claude-args.txt")"
   assert_contains "$args" "--print" "claude runner should print non-interactively"
@@ -310,8 +324,47 @@ test_agent_runner_invokes_claude_with_common_config() {
   assert_contains "$args" "--model sonnet-test" "claude runner should pass model override"
   assert_contains "$args" "--effort medium" "claude runner should pass effort override"
   assert_file_contains "$result" "claude final" "claude runner should extract final result"
-  assert_file_contains "$events" "claude event" "claude runner should stream provider events"
+  assert_file_contains "$events" "claude event" "claude runner should stream provider events to the log file"
+  assert_eq "$events" "$printed" "claude runner should return the events log path"
   echo "  PASS: agent runner invokes claude with common config"
+}
+
+test_agent_runner_propagates_codex_failure() {
+  local tmp fakebin prompt result events rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  prompt="$tmp/prompt.md"
+  result="$tmp/result.txt"
+  events="$tmp/events.jsonl"
+
+  printf '%s\n' "review target" > "$prompt"
+  write_fake_failing_agent "$fakebin" "codex"
+
+  rc=0
+  PATH="$fakebin:$PATH" almanac_loop_agent_run "codex" "" "" "read-only" "$prompt" "$result" "$events" >/dev/null || rc=$?
+
+  assert_eq "7" "$rc" "codex runner should propagate the provider's non-zero exit"
+  echo "  PASS: agent runner propagates codex failure"
+}
+
+test_agent_runner_propagates_claude_failure() {
+  local tmp fakebin prompt result events rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  prompt="$tmp/prompt.md"
+  result="$tmp/result.txt"
+  events="$tmp/events.jsonl"
+
+  printf '%s\n' "review target" > "$prompt"
+  write_fake_failing_agent "$fakebin" "claude"
+
+  rc=0
+  PATH="$fakebin:$PATH" almanac_loop_agent_run "claude" "" "" "read-only" "$prompt" "$result" "$events" >/dev/null || rc=$?
+
+  assert_eq "7" "$rc" "claude runner should propagate the provider's non-zero exit (not mask it behind a pipe)"
+  echo "  PASS: agent runner propagates claude failure"
 }
 
 test_worker_start_tracks_background_agent() {
@@ -368,4 +421,6 @@ test_resolves_role_config_with_lens_overrides
 test_resolves_role_config_with_ralph_style_fallbacks
 test_agent_runner_invokes_codex_with_common_config
 test_agent_runner_invokes_claude_with_common_config
+test_agent_runner_propagates_codex_failure
+test_agent_runner_propagates_claude_failure
 test_worker_start_tracks_background_agent
