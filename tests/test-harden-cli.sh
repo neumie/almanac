@@ -847,6 +847,202 @@ test_rubric_guard_keeps_untouched_rubric() {
   echo "  PASS: rubric guard leaves an untouched rubric unchanged"
 }
 
+# --- Convergence loop + gate ---------------------------------------------------
+
+# Criterion (62.6): the convergence gate is a pure predicate that exits exactly
+# when it should — never early (no false "converged"), never forever (always
+# stops continuing once the budget is reached). Table-driven over the input space.
+assert_gate() {
+  local acc="$1" open="$2" round="$3" budget="$4" want_verdict="$5" want_rc="$6"
+  local got rc
+  got="$(almanac_harden_gate_verdict "$acc" "$open" "$round" "$budget")" && rc=0 || rc=$?
+  [ "$got" = "$want_verdict" ] || fail "gate($acc,$open,$round,$budget): verdict want '$want_verdict' got '$got'"
+  [ "$rc" -eq "$want_rc" ] || fail "gate($acc,$open,$round,$budget): rc want $want_rc got $rc"
+}
+
+test_gate_verdict_is_pure_predicate() {
+  # Converges only when acceptance is met AND zero open blocking remain.
+  assert_gate 1 0 1 5 "converged" 0
+  # Converges even exactly at the budget — convergence is checked first, so a
+  # clean final round is never mislabelled non-converged.
+  assert_gate 1 0 5 5 "converged" 0
+  # Not converged: acceptance unmet, or open blocking remain -> continue (early).
+  assert_gate 0 0 1 5 "continue" 1
+  assert_gate 1 2 1 5 "continue" 1
+  assert_gate 0 3 2 5 "continue" 1
+  # Budget reached without convergence -> non-converged, distinct exit code.
+  assert_gate 0 3 5 5 "non-converged" 2
+  assert_gate 1 1 5 5 "non-converged" 2
+  assert_gate 0 0 5 5 "non-converged" 2
+  # Never exits early: huge budget, still continues while not converged.
+  assert_gate 0 1 1 1000 "continue" 1
+  # Never loops forever: at the budget it must NOT return "continue".
+  local got
+  got="$(almanac_harden_gate_verdict 0 9 7 7)" || true
+  [ "$got" != "continue" ] || fail "gate must never continue once the round budget is reached"
+  echo "  PASS: gate verdict is a pure terminating predicate"
+}
+
+test_acceptance_met_tracks_unchecked_criteria() {
+  local tmp rubric flipped
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  # A drafted rubric ships with unchecked acceptance criteria -> not yet met.
+  almanac_harden_write_rubric "$tmp" "src/app.js" "lock behavior"
+  rubric="$tmp/docs/plans/harden/src-app-js/rubric.md"
+  if almanac_harden_acceptance_met "$rubric"; then
+    fail "a rubric with unchecked '- [ ]' criteria must report acceptance unmet"
+  fi
+
+  # Once every criterion is checked off, acceptance is met.
+  flipped="$tmp/flipped.md"
+  sed 's/- \[ \]/- [x]/g' "$rubric" > "$flipped"
+  mv "$flipped" "$rubric"
+  almanac_harden_acceptance_met "$rubric" || fail "an all-checked rubric must report acceptance met"
+
+  # An ad-hoc run with no rubric has no checklist -> vacuously met.
+  almanac_harden_acceptance_met "$tmp/no-such-rubric.md" || fail "an absent rubric must be vacuously met"
+  echo "  PASS: acceptance-met tracks unchecked rubric criteria"
+}
+
+# Criterion (62.1): one round runs fan-out -> ratify -> fix -> feedback in that
+# order, threading the round number. Override the four heavy steps to record the
+# call order without spawning agents; restore them by re-sourcing afterwards.
+test_round_runs_steps_in_sequence() {
+  local tmp got want
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  SEQLOG="$tmp/seq.log"
+  : > "$SEQLOG"
+
+  almanac_harden_fanout() { printf 'fanout:%s\n' "$3" >> "$SEQLOG"; }
+  almanac_harden_ratify_open() { printf 'ratify:%s\n' "$3" >> "$SEQLOG"; }
+  almanac_harden_fix() { printf 'fix:%s\n' "$3" >> "$SEQLOG"; return 0; }
+  almanac_harden_report_feedback() { printf 'feedback\n' >> "$SEQLOG"; return 0; }
+
+  almanac_harden_round "$tmp" "src/app.js" 2
+
+  got="$(cat "$SEQLOG")"
+  want=$'fanout:2\nratify:2\nfix:2\nfeedback'
+  [ "$got" = "$want" ] || fail "round must run fan-out -> ratify -> fix -> feedback in order (got: $got)"
+
+  # Restore real implementations for any later tests.
+  source "$ROOT/lib/harden-core.sh"
+  echo "  PASS: round runs fan-out -> ratify -> fix -> feedback in sequence"
+}
+
+# Criteria (62.1/62.2/62.4): the loop advances rounds, prints a kill-list and a
+# verdict each round, and exits successfully when a round leaves zero open
+# blocking findings with acceptance met. Drive convergence by overriding the
+# round to retire one finding per pass via a real ledger; the gate readers stay
+# real. No rubric -> acceptance is vacuously met, so the gate keys on open count.
+test_run_converges_and_advances_rounds() {
+  local tmp output rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  mkdir -p "$tmp/src"
+  printf '%s\n' "code" > "$tmp/src/app.js"
+  RUN_REMAIN="$tmp/remain"
+  echo 2 > "$RUN_REMAIN"
+
+  almanac_harden_round() {
+    local root="$1" target="$2" round="$3" lp n i
+    lp="$(almanac_harden_ledger_path "$root" "$target")"
+    n="$(cat "$RUN_REMAIN")"
+    if [ "$n" -gt 0 ]; then n=$((n - 1)); fi
+    echo "$n" > "$RUN_REMAIN"
+    rm -f "$lp"
+    almanac_harden_ledger_init "$lp"
+    i=1
+    while [ "$i" -le "$n" ]; do
+      almanac_harden_ledger_append_entry "$lp" "f-r$round-$i" correctness high \
+        "src/app.js:$i" "open bug $i" "demo $i" open "$round" "" >/dev/null
+      i=$((i + 1))
+    done
+    return 0
+  }
+
+  output="$(HARDEN_HITL=continue almanac_harden_run "$tmp" "src/app.js" 10 2>&1)" && rc=0 || rc=$?
+
+  [ "$rc" -eq 0 ] || fail "a converging run should exit successfully (got $rc)"
+  assert_contains "$output" "round 1/10" "the loop should advance and label round 1"
+  assert_contains "$output" "round 2/10" "the loop should advance the round counter"
+  assert_contains "$output" "Kill-list" "each round should print a kill-list"
+  assert_contains "$output" "Verdict:" "each round should print a verdict"
+  assert_contains "$output" "Converged after 2 round" "the loop should converge once findings are retired"
+
+  source "$ROOT/lib/harden-core.sh"
+  echo "  PASS: run advances rounds, prints kill-list/verdict, and converges"
+}
+
+# Criterion (62.3): a configurable round budget caps the loop and exits with a
+# clear non-converged status; the loop never runs forever. The overridden round
+# keeps one blocking finding open every pass, so only the budget can stop it.
+test_run_caps_at_round_budget() {
+  local tmp output rc ran
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  mkdir -p "$tmp/src"
+  printf '%s\n' "code" > "$tmp/src/app.js"
+  RUN_LOG="$tmp/ran.log"
+  : > "$RUN_LOG"
+
+  almanac_harden_round() {
+    local root="$1" target="$2" round="$3" lp
+    lp="$(almanac_harden_ledger_path "$root" "$target")"
+    rm -f "$lp"
+    almanac_harden_ledger_init "$lp"
+    almanac_harden_ledger_append_entry "$lp" "f-stuck" correctness high \
+      "src/app.js:1" "stubborn bug" "always reproduces" open "$round" "" >/dev/null
+    printf 'round %s\n' "$round" >> "$RUN_LOG"
+    return 0
+  }
+
+  output="$(HARDEN_HITL=continue almanac_harden_run "$tmp" "src/app.js" 3 2>&1)" && rc=0 || rc=$?
+
+  [ "$rc" -eq 1 ] || fail "a non-converging run must exit non-zero at the budget (got $rc)"
+  assert_contains "$output" "NON-CONVERGED" "the budget exit should report a clear non-converged status"
+  ran="$(grep -c '^round ' "$RUN_LOG")"
+  [ "$ran" -eq 3 ] || fail "the loop must run exactly the budgeted number of rounds, then stop (ran $ran)"
+
+  source "$ROOT/lib/harden-core.sh"
+  echo "  PASS: run caps at the round budget with a non-converged status"
+}
+
+# Criterion (62.5): a HITL checkpoint lets the user ship instead of continuing.
+# The round never converges, but HARDEN_HITL=ship stops the loop after round 1.
+test_run_hitl_ship_stops_early() {
+  local tmp output rc ran
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  mkdir -p "$tmp/src"
+  printf '%s\n' "code" > "$tmp/src/app.js"
+  RUN_LOG="$tmp/ran.log"
+  : > "$RUN_LOG"
+
+  almanac_harden_round() {
+    local root="$1" target="$2" round="$3" lp
+    lp="$(almanac_harden_ledger_path "$root" "$target")"
+    rm -f "$lp"
+    almanac_harden_ledger_init "$lp"
+    almanac_harden_ledger_append_entry "$lp" "f-stuck" correctness high \
+      "src/app.js:1" "stubborn bug" "always reproduces" open "$round" "" >/dev/null
+    printf 'round %s\n' "$round" >> "$RUN_LOG"
+    return 0
+  }
+
+  output="$(HARDEN_HITL=ship almanac_harden_run "$tmp" "src/app.js" 10 2>&1)" && rc=0 || rc=$?
+
+  [ "$rc" -eq 0 ] || fail "shipping at the HITL checkpoint should exit successfully (got $rc)"
+  assert_contains "$output" "Shipping at round 1" "ship should stop the loop and report it"
+  ran="$(grep -c '^round ' "$RUN_LOG")"
+  [ "$ran" -eq 1 ] || fail "ship must stop the loop after the current round (ran $ran)"
+
+  source "$ROOT/lib/harden-core.sh"
+  echo "  PASS: HITL ship stops the loop early"
+}
+
 echo "=== Harden CLI Tests ==="
 test_creates_draft_rubric_for_target_and_goal
 test_draft_rubric_includes_all_required_sections
@@ -877,3 +1073,9 @@ test_ratify_new_reproducing_finding_is_blocking
 test_ratify_nonreproducing_finding_is_note
 test_ratify_adjudicated_not_relitigated_when_not_reproducing
 test_ratify_adjudicated_reopens_when_newly_reproducing
+test_gate_verdict_is_pure_predicate
+test_acceptance_met_tracks_unchecked_criteria
+test_round_runs_steps_in_sequence
+test_run_converges_and_advances_rounds
+test_run_caps_at_round_budget
+test_run_hitl_ship_stops_early

@@ -704,6 +704,7 @@ almanac_harden_ratify() {
 almanac_harden_fanout() {
   local root="$1"
   local target="$2"
+  local round="${3:-1}"
   local target_path run_id ledger_path rubric_path lens provider model effort
   local worker_id prompt_file pidfile pid result_file status_file wstatus
   local added total_added i
@@ -802,7 +803,7 @@ almanac_harden_fanout() {
     almanac_harden_format_findings "$result_file"
 
     if [ -f "$result_file" ]; then
-      added="$(almanac_harden_ledger_record "$ledger_path" "$result_file" 1)"
+      added="$(almanac_harden_ledger_record "$ledger_path" "$result_file" "$round")"
       total_added=$((total_added + added))
     fi
   done
@@ -887,6 +888,11 @@ EOF
 # silently closed. A no-op (prints a note, returns 0) when there are no open
 # blocking findings. Returns the provider's exit code on a fixer failure, leaving
 # the findings open.
+#
+# The objective feedback gate is NOT run here: the convergence loop runs it once
+# per round (almanac_harden_round) so feedback executes every round even when
+# there is nothing to fix, and the gate reads a fresh verdict. The standalone
+# `--fix` CLI path runs almanac_harden_report_feedback explicitly afterwards.
 almanac_harden_fix() {
   local root="$1"
   local target="$2"
@@ -970,9 +976,6 @@ $open
 INNER
 
   _success "Applied fixes for $count finding(s); regenerated tests persist in the working tree."
-
-  # Objective gate: run the detected feedback loops and report a verdict per loop.
-  almanac_harden_report_feedback "$root"
 }
 
 # Run the project's feedback loops via the shared runner and print a pass/fail
@@ -1004,4 +1007,245 @@ $verdicts
 INNER
 
   return "$rc"
+}
+
+# --- Convergence loop + gate ---------------------------------------------------
+#
+# A round is the full hardening pass over one target: fan out reviewers, ratify
+# their findings by execution, fix the blocking ones, and run the project's
+# feedback loops. The convergence loop repeats rounds until the gate says stop:
+# it converges when the acceptance bar is met AND no open blocking findings
+# remain, gives up with a clear NON-CONVERGED status when the round budget is
+# hit, and otherwise checks in with the human (ship vs. continue) between rounds.
+# Because the gate only ever exits on convergence or the budget, the loop always
+# terminates — a pathological target cannot run forever.
+
+# Pure convergence predicate. Given the round's state, decide what the loop does
+# next. No I/O, no side effects (besides echoing the verdict) so it is trivially
+# unit-testable across the whole input space:
+#
+#   acceptance_met  1 = every acceptance criterion is met, else 0
+#   open_blocking   count of open blocking findings still remaining
+#   round           the round that just finished (1-based)
+#   budget          the hard round cap (>= 1)
+#
+# Echoes one verdict and returns a distinct code so a caller can branch on either:
+#   converged      (return 0) acceptance met AND zero open blocking — exit success
+#   non-converged  (return 2) budget reached without convergence — exit failure
+#   continue       (return 1) neither — run another round
+#
+# Convergence is checked first, so a round that converges exactly at the budget
+# still reports converged (it never falsely claims non-convergence). And it never
+# reports converged unless BOTH conditions hold (it never exits early).
+almanac_harden_gate_verdict() {
+  local acceptance_met="$1"
+  local open_blocking="$2"
+  local round="$3"
+  local budget="$4"
+
+  if [ "$acceptance_met" = "1" ] && [ "$open_blocking" -eq 0 ]; then
+    printf '%s\n' "converged"
+    return 0
+  fi
+
+  if [ "$round" -ge "$budget" ]; then
+    printf '%s\n' "non-converged"
+    return 2
+  fi
+
+  printf '%s\n' "continue"
+  return 1
+}
+
+# Return 0 (acceptance met) when the rubric's `## Acceptance` section has no
+# unchecked `- [ ]` criteria left, non-zero when at least one remains. An ad-hoc
+# run with no rubric has no checklist to satisfy, so acceptance is vacuously met
+# (return 0). This is one half of the gate's acceptance signal; the other half —
+# the objective feedback loops being green — is the round's own exit code.
+almanac_harden_acceptance_met() {
+  local rubric_path="$1"
+
+  [ -f "$rubric_path" ] || return 0
+
+  if almanac_harden_rubric_acceptance "$rubric_path" | grep -q '^- \[ \]'; then
+    return 1
+  fi
+  return 0
+}
+
+# Ratify every currently-open finding by executing its demonstration through the
+# seam (almanac_harden_demo_reproduces): a finding that reproduces stays open
+# (blocking) and grows the rubric bar; one that does not becomes a non-blocking
+# note. Iterates the open-blocking rows the fan-out just recorded. The rubric
+# append happens here, between fan-out and fix and OUTSIDE the immutability
+# brackets those phases use — this is the conductor's sanctioned, monotonic
+# growth of the contract, not an agent edit. A no-op when nothing is open.
+almanac_harden_ratify_open() {
+  local root="$1"
+  local target="$2"
+  local round="${3:-1}"
+  local ledger_path rubric_path target_path open
+  local id lens severity location claim demonstration
+
+  case "$target" in
+    /*) target_path="$target" ;;
+    *)  target_path="$root/$target" ;;
+  esac
+
+  ledger_path="$(almanac_harden_ledger_path "$root" "$target")"
+  rubric_path="$(almanac_harden_rubric_path "$root" "$target")"
+
+  open="$(almanac_harden_ledger_open_blocking "$ledger_path")"
+  [ -n "$open" ] || return 0
+
+  while IFS=$'\t' read -r id lens severity location claim demonstration; do
+    [ -n "$id" ] || continue
+    almanac_harden_ratify "$ledger_path" "$id" "$lens" "$severity" \
+      "$location" "$claim" "$demonstration" "$round" "$target_path" "$rubric_path" >/dev/null
+  done <<INNER
+$open
+INNER
+}
+
+# Print the kill-list — the blocking findings the round must fix — from the
+# open-blocking TSV rows. Reports an empty kill-list explicitly so every round
+# shows its verdict input. Pure presentation; does not touch the ledger.
+almanac_harden_print_killlist() {
+  local rows="$1"
+  local id lens severity location claim demonstration
+
+  if [ -z "$rows" ]; then
+    _info "Kill-list: no blocking findings this round."
+    return 0
+  fi
+
+  _info "Kill-list (blocking findings this round):"
+  while IFS=$'\t' read -r id lens severity location claim demonstration; do
+    [ -n "$id" ] || continue
+    printf -- '  - [%s] %s: %s (at %s)\n' \
+      "${severity:-?}" "${lens:-?}" "${claim:-?}" "${location:-?}"
+  done <<INNER
+$rows
+INNER
+}
+
+# HITL checkpoint between rounds: let the human ship the current state or keep
+# going. Returns 0 = continue (run another round), 1 = ship (stop, accept now).
+# HARDEN_HITL ("ship"|"continue") drives it non-interactively (tests, headless
+# runs). With a TTY it prompts — gum choose when gum is present, a plain `read`
+# otherwise (graceful degradation, keeping almanac's zero-dep promise). With no
+# TTY and no override it defaults to continue so an unattended loop keeps working
+# toward convergence rather than blocking on input.
+almanac_harden_hitl_checkpoint() {
+  local choice="${HARDEN_HITL:-}"
+  local reply
+
+  if [ -z "$choice" ]; then
+    if [ -t 0 ] && command -v gum >/dev/null 2>&1; then
+      choice="$(gum choose --header "Round complete — ship current state or continue?" continue ship)" || choice="continue"
+    elif [ -t 0 ]; then
+      printf 'Ship current state or continue? [continue/ship] ' >&2
+      read -r reply || reply=""
+      choice="$reply"
+    else
+      choice="continue"
+    fi
+  fi
+
+  case "$choice" in
+    ship|s|S|SHIP) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# Run one hardening round over the target: fan out reviewers -> ratify their
+# findings by execution -> fix the blocking findings -> run the project feedback
+# loops. The round's exit code is the feedback verdict (0 = all loops green) so
+# the loop can fold it into the acceptance signal. A fixer failure is reported but
+# does not abort the round — the next round's reviewers re-surface anything still
+# broken. The per-round kill-list + verdict are reported by almanac_harden_run.
+almanac_harden_round() {
+  local root="$1"
+  local target="$2"
+  local round="${3:-1}"
+  local rc
+
+  almanac_harden_fanout "$root" "$target" "$round"
+  almanac_harden_ratify_open "$root" "$target" "$round"
+
+  if ! almanac_harden_fix "$root" "$target" "$round"; then
+    _warn "Fixer did not complete cleanly this round; unaddressed findings carry to the next round."
+  fi
+
+  rc=0
+  almanac_harden_report_feedback "$root" || rc=$?
+  return "$rc"
+}
+
+# Drive the convergence loop: repeat almanac_harden_round under the gate until
+# the target converges, the round budget is exhausted, or the human ships.
+# Budget is configurable (3rd arg, else HARDEN_ROUND_BUDGET, else 5). Each round
+# prints its kill-list and a verdict. Returns 0 when converged or shipped, 1 when
+# the budget is hit without convergence (clear NON-CONVERGED status).
+almanac_harden_run() {
+  local root="$1"
+  local target="$2"
+  local budget="${3:-${HARDEN_ROUND_BUDGET:-5}}"
+  local ledger_path rubric_path round round_rc open_rows open_count acc verdict rc acc_label
+
+  case "$budget" in
+    ''|*[!0-9]*) _die "Round budget must be a positive integer: $budget" ;;
+  esac
+  [ "$budget" -ge 1 ] || _die "Round budget must be at least 1: $budget"
+
+  ledger_path="$(almanac_harden_ledger_path "$root" "$target")"
+  rubric_path="$(almanac_harden_rubric_path "$root" "$target")"
+
+  round=0
+  while :; do
+    round=$((round + 1))
+    _info "=== Harden round $round/$budget ==="
+
+    almanac_harden_round "$root" "$target" "$round" && round_rc=0 || round_rc=$?
+
+    open_rows="$(almanac_harden_ledger_open_blocking "$ledger_path")"
+    if [ -n "$open_rows" ]; then
+      open_count="$(printf '%s\n' "$open_rows" | grep -c '[^[:space:]]' || true)"
+    else
+      open_count=0
+    fi
+
+    # Report this round's kill-list (the blocking findings still open after the
+    # round) — the HITL view of what remains to harden.
+    almanac_harden_print_killlist "$open_rows"
+
+    # Acceptance for the gate = the round's feedback loops are green AND every
+    # rubric acceptance criterion is checked off (vacuously true for ad-hoc runs).
+    acc=0
+    if [ "$round_rc" -eq 0 ] && almanac_harden_acceptance_met "$rubric_path"; then
+      acc=1
+    fi
+
+    verdict="$(almanac_harden_gate_verdict "$acc" "$open_count" "$round" "$budget")" && rc=0 || rc=$?
+    if [ "$acc" -eq 1 ]; then acc_label="met"; else acc_label="unmet"; fi
+    _info "Verdict: $verdict (round $round/$budget, open-blocking=$open_count, acceptance=$acc_label)"
+
+    case "$rc" in
+      0)
+        _success "Converged after $round round(s): acceptance met and no open blocking findings remain."
+        return 0
+        ;;
+      2)
+        _warn "Round budget ($budget) reached — $open_count open blocking finding(s) remain. Status: NON-CONVERGED."
+        return 1
+        ;;
+      *)
+        if almanac_harden_hitl_checkpoint; then
+          continue
+        fi
+        _success "Shipping at round $round by request — $open_count open blocking finding(s) left unaddressed."
+        return 0
+        ;;
+    esac
+  done
 }

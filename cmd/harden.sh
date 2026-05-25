@@ -11,6 +11,7 @@ usage() {
   printf '%s\n' "  almanac harden <target> --goal <goal>"
   printf '%s\n' "  almanac harden <target> --approve"
   printf '%s\n' "  almanac harden <target> --fix"
+  printf '%s\n' "  almanac harden <target> --loop [--rounds N]"
   printf '%s\n' ""
   printf '%s\n' "With no flags, fans out one read-only reviewer per lens over the target,"
   printf '%s\n' "aggregates their findings into the ledger, and prints them. Configure the"
@@ -21,12 +22,17 @@ usage() {
   printf '%s\n' "With --approve, approves an edited draft rubric."
   printf '%s\n' "With --fix, runs one sequential write-capable fixer over the open blocking"
   printf '%s\n' "findings, then runs the project feedback loops and reports a verdict per loop."
+  printf '%s\n' "With --loop, runs the convergence loop (fan-out -> ratify -> fix -> feedback"
+  printf '%s\n' "-> gate) in rounds until it converges or the round budget is hit. Set the"
+  printf '%s\n' "budget with --rounds N (default 5, or HARDEN_ROUND_BUDGET)."
 }
 
 TARGET=""
 GOAL=""
 APPROVE=0
 FIX=0
+LOOP=0
+ROUNDS=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -44,6 +50,14 @@ while [ "$#" -gt 0 ]; do
       ;;
     --fix)
       FIX=1
+      ;;
+    --loop)
+      LOOP=1
+      ;;
+    --rounds)
+      shift
+      [ "$#" -gt 0 ] || _die "Missing value for --rounds"
+      ROUNDS="$1"
       ;;
     --)
       shift
@@ -68,11 +82,25 @@ done
   _die "Missing harden target"
 }
 
+if [ "$LOOP" -eq 1 ]; then
+  [ -z "$GOAL" ] || _die "Use either --goal or --loop, not both"
+  [ "$APPROVE" -eq 0 ] || _die "Use either --approve or --loop, not both"
+  [ "$FIX" -eq 0 ] || _die "Use either --fix or --loop, not both"
+
+  almanac_harden_run "$PWD" "$TARGET" ${ROUNDS:+"$ROUNDS"}
+  exit 0
+fi
+
+[ -z "$ROUNDS" ] || _die "--rounds only applies with --loop"
+
 if [ "$FIX" -eq 1 ]; then
   [ -z "$GOAL" ] || _die "Use either --goal or --fix, not both"
   [ "$APPROVE" -eq 0 ] || _die "Use either --approve or --fix, not both"
 
   almanac_harden_fix "$PWD" "$TARGET"
+  # Feedback is decoupled from the fixer (the loop runs it per round); run it
+  # here so the standalone --fix path still reports the objective verdict.
+  almanac_harden_report_feedback "$PWD"
   exit 0
 fi
 
