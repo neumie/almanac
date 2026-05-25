@@ -228,6 +228,180 @@ almanac_harden_format_findings() {
   fi
 }
 
+# --- Findings ledger -----------------------------------------------------------
+#
+# Canonical finding schema (one JSON object per reviewer line, see the reviewer
+# prompt above): lens, severity, location, claim, demonstration. The ledger adds
+# three adjudication fields when a finding is recorded:
+#   id            - deterministic fingerprint of (lens, location, claim)
+#   status        - open | fixed | rejected-subjective | wontfix-per-context
+#   round         - the review round that first raised the finding
+#   adjudication  - free-text note (why rejected / how fixed); empty when open
+#
+# Findings persist append-only to findings.md next to the target's rubric.md.
+# Each finding is one markdown section keyed by its id, so the file is both
+# human-readable and re-parseable (dedupe + open-blocking query read it back).
+
+almanac_harden_ledger_path() {
+  local root="$1"
+  local target="$2"
+  local slug
+
+  slug="$(almanac_harden_slug "$target")"
+  printf '%s/docs/plans/harden/%s/findings.md\n' "$root" "$slug"
+}
+
+# Deterministic finding identity. Two reviewer reports of the same defect
+# (same lens, same place, same claim) collapse to one id so re-raising a
+# finding never re-adds it. Demonstration is deliberately excluded: a reworded
+# repro must not look like a new finding. cksum keeps this dependency-free.
+almanac_harden_finding_id() {
+  local lens="$1"
+  local location="$2"
+  local claim="$3"
+  local sum
+
+  sum="$(printf '%s\037%s\037%s' "$lens" "$location" "$claim" | cksum | awk '{print $1}')"
+  printf 'f-%s\n' "$sum"
+}
+
+almanac_harden_ledger_init() {
+  local path="$1"
+  local dir
+
+  dir="$(dirname "$path")"
+  mkdir -p "$dir"
+
+  if [ ! -f "$path" ]; then
+    {
+      printf '%s\n\n' "# Findings Ledger"
+      printf '%s\n' "<!-- Append-only finding records managed by 'almanac harden'. One section per finding. -->"
+    } > "$path"
+  fi
+}
+
+# True when the ledger already holds a finding with this id.
+almanac_harden_ledger_has() {
+  local path="$1"
+  local id="$2"
+
+  [ -f "$path" ] || return 1
+  grep -Fxq -- "## $id" "$path"
+}
+
+# Append one finding section. Returns 1 (and writes nothing) when the id is
+# already present, so callers can count genuinely-new findings. Creates the
+# ledger file with its header on first write.
+almanac_harden_ledger_append_entry() {
+  [ "$#" -ge 7 ] || return 2
+
+  local path="$1"
+  local id="$2"
+  local lens="$3"
+  local severity="$4"
+  local location="$5"
+  local claim="$6"
+  local demonstration="$7"
+  local status="${8:-open}"
+  local round="${9:-1}"
+  local adjudication="${10:-}"
+
+  almanac_harden_ledger_init "$path"
+
+  if almanac_harden_ledger_has "$path" "$id"; then
+    return 1
+  fi
+
+  {
+    printf '\n## %s\n\n' "$id"
+    printf -- '- lens: %s\n' "$lens"
+    printf -- '- severity: %s\n' "$severity"
+    printf -- '- location: %s\n' "$location"
+    printf -- '- claim: %s\n' "$claim"
+    printf -- '- demonstration: %s\n' "$demonstration"
+    printf -- '- status: %s\n' "$status"
+    printf -- '- round: %s\n' "$round"
+    printf -- '- adjudication: %s\n' "$adjudication"
+  } >> "$path"
+}
+
+# Normalize a reviewer's JSON-Lines result into ledger-entry TSV rows
+# (id, lens, severity, location, claim, demonstration, status, round,
+# adjudication). New findings are status=open with an empty adjudication.
+# Malformed reviewer lines are dropped cleanly (via almanac_harden_findings_tsv).
+almanac_harden_parse_findings() {
+  local result_file="$1"
+  local round="${2:-1}"
+  local lens severity location claim demonstration id
+
+  while IFS=$'\t' read -r lens severity location claim demonstration; do
+    [ -n "${lens}${severity}${location}${claim}${demonstration}" ] || continue
+    id="$(almanac_harden_finding_id "$lens" "$location" "$claim")"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$id" "$lens" "$severity" "$location" "$claim" "$demonstration" "open" "$round" ""
+  done < <(almanac_harden_findings_tsv "$result_file")
+}
+
+# Parse a reviewer result and append each new finding to the ledger, deduping
+# against everything already adjudicated. Prints the count of findings actually
+# added (duplicates do not count).
+almanac_harden_ledger_record() {
+  local path="$1"
+  local result_file="$2"
+  local round="${3:-1}"
+  local id lens severity location claim demonstration status r adjudication
+  local added=0
+
+  while IFS=$'\t' read -r id lens severity location claim demonstration status r adjudication; do
+    [ -n "$id" ] || continue
+    if almanac_harden_ledger_append_entry \
+      "$path" "$id" "$lens" "$severity" "$location" "$claim" \
+      "$demonstration" "$status" "$r" "$adjudication"; then
+      added=$((added + 1))
+    fi
+  done < <(almanac_harden_parse_findings "$result_file" "$round")
+
+  printf '%s\n' "$added"
+}
+
+# Emit the open blocking findings as TSV rows
+# (id, lens, severity, location, claim, demonstration). Only status=open
+# entries qualify; fixed / rejected-subjective / wontfix-per-context never gate.
+almanac_harden_ledger_open_blocking() {
+  local path="$1"
+
+  [ -f "$path" ] || return 0
+
+  awk '
+    function flush() {
+      if (id != "" && status == "open") {
+        printf "%s\t%s\t%s\t%s\t%s\t%s\n", id, lens, severity, location, claim, demonstration
+      }
+    }
+    /^## / {
+      flush()
+      id = substr($0, 4)
+      lens = ""; severity = ""; location = ""; claim = ""; demonstration = ""; status = ""
+      next
+    }
+    /^- / {
+      line = substr($0, 3)
+      p = index(line, ":")
+      if (p == 0) next
+      key = substr(line, 1, p - 1)
+      val = substr(line, p + 1)
+      sub(/^ /, "", val)
+      if (key == "lens") lens = val
+      else if (key == "severity") severity = val
+      else if (key == "location") location = val
+      else if (key == "claim") claim = val
+      else if (key == "demonstration") demonstration = val
+      else if (key == "status") status = val
+    }
+    END { flush() }
+  ' "$path"
+}
+
 # Run a single read-only reviewer over a target via the shared agent runner and
 # print its findings. Resolves provider/model/effort through the shared role
 # config (HARDEN_REVIEWER[_<LENS>]_{PROVIDER,MODEL,EFFORT}). _die on a missing

@@ -173,6 +173,103 @@ test_format_findings_reports_empty() {
   echo "  PASS: format findings reports empty"
 }
 
+# Two well-formed findings, one per line, for ledger/parser exercises.
+write_two_findings() {
+  local result="$1"
+  {
+    printf '%s\n' '{"lens":"correctness","severity":"high","location":"src/app.js:10","claim":"off-by-one in loop bound","demonstration":"input [] returns -1"}'
+    printf '%s\n' '{"lens":"security","severity":"medium","location":"src/auth.js:3","claim":"weak token check","demonstration":"forged token passes"}'
+  } > "$result"
+}
+
+test_parse_findings_emits_ledger_entries() {
+  local tmp result rows count
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  result="$tmp/result.txt"
+  write_two_findings "$result"
+
+  rows="$(almanac_harden_parse_findings "$result" 2)"
+
+  count="$(printf '%s\n' "$rows" | grep -c '^f-')"
+  [ "$count" -eq 2 ] || fail "parse should emit one ledger row per well-formed finding (got $count)"
+  assert_contains "$rows" "off-by-one in loop bound" "parse should carry the claim"
+  assert_contains "$rows" $'\topen\t2\t' "parse should mark new findings open at the given round"
+  echo "  PASS: parse findings emits ledger entries"
+}
+
+test_parse_findings_skips_malformed() {
+  local tmp result rows count
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  result="$tmp/result.txt"
+  {
+    printf '%s\n' '{"lens":"correctness","severity":"high","location":"a.js:1","claim":"real bug","demonstration":"repro"}'
+    printf '%s\n' 'not json at all'
+    printf '%s\n' ''
+  } > "$result"
+
+  rows="$(almanac_harden_parse_findings "$result" 1)"
+
+  count="$(printf '%s\n' "$rows" | grep -c '^f-')"
+  [ "$count" -eq 1 ] || fail "parse should drop malformed lines and keep the valid one (got $count)"
+  case "$rows" in
+    *"not json at all"*) fail "parse should not emit malformed input" ;;
+    *) ;;
+  esac
+  echo "  PASS: parse findings skips malformed lines"
+}
+
+test_ledger_appends_and_queries_open_blocking() {
+  local tmp result ledger open
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  result="$tmp/result.txt"
+  ledger="$tmp/findings.md"
+  write_two_findings "$result"
+
+  almanac_harden_ledger_record "$ledger" "$result" 1 >/dev/null
+
+  assert_file_contains "$ledger" "# Findings Ledger" "ledger should have a header"
+  assert_file_contains "$ledger" "off-by-one in loop bound" "ledger should record the claim"
+  assert_file_contains "$ledger" "- status: open" "ledger entries should default to open"
+  assert_file_contains "$ledger" "- round: 1" "ledger entries should record the round"
+
+  open="$(almanac_harden_ledger_open_blocking "$ledger")"
+  assert_contains "$open" "off-by-one in loop bound" "open-blocking should return open findings"
+  assert_contains "$open" "weak token check" "open-blocking should return every open finding"
+  echo "  PASS: ledger appends and queries open blocking"
+}
+
+test_ledger_dedupes_prior_adjudicated() {
+  local tmp result ledger id added open dup_count
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  result="$tmp/result.txt"
+  ledger="$tmp/findings.md"
+  write_two_findings "$result"
+
+  # Pre-adjudicate the off-by-one finding as rejected-subjective.
+  id="$(almanac_harden_finding_id "correctness" "src/app.js:10" "off-by-one in loop bound")"
+  almanac_harden_ledger_append_entry "$ledger" "$id" "correctness" "high" \
+    "src/app.js:10" "off-by-one in loop bound" "old demo" "rejected-subjective" 1 "opinion only" >/dev/null
+
+  # Recording the reviewer output must skip the already-adjudicated finding.
+  added="$(almanac_harden_ledger_record "$ledger" "$result" 2)"
+  [ "$added" -eq 1 ] || fail "record should add only the genuinely new finding (got $added)"
+
+  dup_count="$(grep -c "^## $id\$" "$ledger")"
+  [ "$dup_count" -eq 1 ] || fail "duplicate finding should not be re-added (got $dup_count entries)"
+
+  open="$(almanac_harden_ledger_open_blocking "$ledger")"
+  case "$open" in
+    *"off-by-one in loop bound"*) fail "rejected-subjective finding must not be open-blocking" ;;
+    *) ;;
+  esac
+  assert_contains "$open" "weak token check" "the new finding should be open-blocking"
+  echo "  PASS: ledger dedupes prior adjudicated finding"
+}
+
 test_refuses_to_overwrite_existing_rubric() {
   local tmp rubric
   new_tmpdir
@@ -231,3 +328,7 @@ test_review_runs_single_reviewer_and_prints_findings
 test_review_errors_on_missing_target
 test_format_findings_skips_malformed_lines
 test_format_findings_reports_empty
+test_parse_findings_emits_ledger_entries
+test_parse_findings_skips_malformed
+test_ledger_appends_and_queries_open_blocking
+test_ledger_dedupes_prior_adjudicated
