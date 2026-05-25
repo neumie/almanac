@@ -205,6 +205,53 @@ almanac_harden_rubric_append_criterion() {
   mv "$tmp" "$path"
 }
 
+# --- Rubric immutability guard -------------------------------------------------
+#
+# The rubric is the contract, and during a run it is immutable to agents: the
+# goalposts move only by a deliberate human act (the developer editing the file
+# between runs / approving it) or the conductor's controlled append at
+# ratification (almanac_harden_rubric_append_criterion — a visible, monotonic
+# diff that runs OUTSIDE the reviewer/fixer phase). Reviewers run read-only and
+# cannot write the rubric; the fixer (later slice) has write access and could.
+# These two helpers bracket an agent phase — snapshot before, verify after — and
+# revert any agent edit, so a stray agent write during a run cannot lower the bar.
+
+# Snapshot the rubric to a protected temp copy and echo the snapshot path so the
+# caller can pass it to almanac_harden_rubric_verify. Returns 2 (echoes nothing)
+# when no rubric exists — an ad-hoc bare run with no drafted contract has nothing
+# to guard.
+almanac_harden_rubric_snapshot() {
+  local rubric_path="$1"
+  local snap
+
+  [ -f "$rubric_path" ] || return 2
+
+  snap="$(mktemp "${TMPDIR:-/tmp}/almanac-rubric-lock.XXXXXX")"
+  cp "$rubric_path" "$snap"
+  printf '%s\n' "$snap"
+}
+
+# Verify the rubric is byte-identical to its snapshot; if an agent modified it
+# during the guarded phase, revert it and warn (the contract is immutable to
+# agents). Discards the snapshot either way. Returns 1 when a modification was
+# reverted, 0 when unchanged, 2 when the snapshot is missing.
+almanac_harden_rubric_verify() {
+  local rubric_path="$1"
+  local snap="$2"
+
+  [ -n "$snap" ] && [ -f "$snap" ] || return 2
+
+  if ! cmp -s "$rubric_path" "$snap"; then
+    cp "$snap" "$rubric_path"
+    rm -f "$snap"
+    _warn "Rubric was modified during the run; reverted (contract is immutable to agents — amend it directly between runs)."
+    return 1
+  fi
+
+  rm -f "$snap"
+  return 0
+}
+
 # Emit the configured reviewer lens set, one lens per line. Defaults to the five
 # PRD lenses; override at runtime via HARDEN_LENSES (comma- or whitespace-
 # separated). The lens set determines the reviewer count — there is no enforced
@@ -673,6 +720,15 @@ almanac_harden_fanout() {
   rubric_path="$(almanac_harden_rubric_path "$root" "$target")"
   almanac_harden_ledger_init "$ledger_path"
 
+  # The rubric is immutable to agents during the run. Snapshot it before any
+  # reviewer spawns; the reviewer round makes no legitimate rubric edits (the
+  # conductor's controlled append happens at ratification, a later phase), so
+  # any change observed when reviewers finish is an agent tampering — revert it.
+  local rubric_snapshot=""
+  if [ -f "$rubric_path" ]; then
+    rubric_snapshot="$(almanac_harden_rubric_snapshot "$rubric_path")" || rubric_snapshot=""
+  fi
+
   _info "Hardening $target — fanning out ${#lenses[@]} read-only reviewer(s)"
 
   for lens in "${lenses[@]}"; do
@@ -734,6 +790,12 @@ almanac_harden_fanout() {
   done
 
   [ "${#prompt_files[@]}" -eq 0 ] || rm -f "${prompt_files[@]}"
+
+  # Enforce the immutability invariant: revert (and warn about) any rubric edit
+  # an agent slipped in during the round.
+  if [ -n "$rubric_snapshot" ]; then
+    almanac_harden_rubric_verify "$rubric_path" "$rubric_snapshot" || true
+  fi
 
   _success "Aggregated $total_added new finding(s) into ${ledger_path#"$root"/}"
 }

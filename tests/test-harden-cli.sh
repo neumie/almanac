@@ -615,6 +615,50 @@ test_ratify_note_leaves_rubric_unchanged() {
   echo "  PASS: ratify note leaves rubric unchanged"
 }
 
+# --- Rubric immutability (agents cannot move the goalposts during a run) -------
+
+test_rubric_guard_reverts_agent_edit() {
+  local tmp rubric snap before after warn rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  almanac_harden_write_rubric "$tmp" "src/app.js" "lock behavior"
+  rubric="$tmp/docs/plans/harden/src-app-js/rubric.md"
+  before="$(cat "$rubric")"
+
+  snap="$(almanac_harden_rubric_snapshot "$rubric")"
+  [ -n "$snap" ] && [ -f "$snap" ] || fail "snapshot should create a protected copy of the rubric"
+
+  # Simulate an agent rewriting the contract mid-run (e.g. lowering the bar).
+  printf '%s\n' "# Hijacked" "## Acceptance" "- [ ] agent lowered the bar" > "$rubric"
+
+  warn="$(almanac_harden_rubric_verify "$rubric" "$snap" 2>&1)" && rc=0 || rc=$?
+
+  [ "$rc" -eq 1 ] || fail "verify should report a reverted modification (got $rc)"
+  after="$(cat "$rubric")"
+  [ "$before" = "$after" ] || fail "an agent edit to the rubric must be reverted byte-for-byte"
+  assert_contains "$warn" "immutable to agents" "verify should warn that the rubric was reverted"
+  [ ! -f "$snap" ] || fail "verify should discard the snapshot after reverting"
+  echo "  PASS: rubric guard reverts an agent edit during a run"
+}
+
+test_rubric_guard_keeps_untouched_rubric() {
+  local tmp rubric snap before after rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  almanac_harden_write_rubric "$tmp" "src/app.js" "lock behavior"
+  rubric="$tmp/docs/plans/harden/src-app-js/rubric.md"
+  before="$(cat "$rubric")"
+
+  snap="$(almanac_harden_rubric_snapshot "$rubric")"
+  almanac_harden_rubric_verify "$rubric" "$snap" && rc=0 || rc=$?
+
+  [ "$rc" -eq 0 ] || fail "verify should report no change for an untouched rubric (got $rc)"
+  after="$(cat "$rubric")"
+  [ "$before" = "$after" ] || fail "an untouched rubric must be left exactly as-is"
+  [ ! -f "$snap" ] || fail "verify should discard the snapshot"
+  echo "  PASS: rubric guard leaves an untouched rubric unchanged"
+}
+
 echo "=== Harden CLI Tests ==="
 test_creates_draft_rubric_for_target_and_goal
 test_refuses_to_overwrite_existing_rubric
@@ -625,6 +669,8 @@ test_rubric_append_criterion_is_append_only_and_idempotent
 test_reviewer_prompt_consumes_rubric_bar
 test_ratify_blocking_grows_rubric_acceptance
 test_ratify_note_leaves_rubric_unchanged
+test_rubric_guard_reverts_agent_edit
+test_rubric_guard_keeps_untouched_rubric
 test_review_runs_single_reviewer_and_prints_findings
 test_fanout_spawns_reviewer_per_lens_and_aggregates
 test_review_errors_on_missing_target
