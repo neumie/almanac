@@ -23,6 +23,13 @@ ALMANAC_HOME="${ALMANAC_HOME:-$(cd -P "$SCRIPT_DIR/../../../.." && pwd -P)}"
 source "$SCRIPT_DIR/ralph-git.sh"
 source "$SCRIPT_DIR/ralph-run-registry.sh"
 
+# Provider seam (almanac_provider_*) — sourced directly so this runner's use of
+# the seam (default-selection / availability / display) is an explicit
+# dependency, not borrowed transitively via loop-core.
+if ! declare -F almanac_provider_default >/dev/null 2>&1; then
+  source "$ALMANAC_HOME/lib/agent.sh"
+fi
+
 if [ -z "$1" ] || [ -z "$2" ]; then
   echo "Usage: $0 <prd-name> <iterations>"
   echo "Example: $0 auth-system 10"
@@ -46,18 +53,13 @@ PROMPT="docs/plans/${PRD_NAME}/prompt.md"
 # absent it, ralph's CLI auto-detection (CODEX_THREAD_ID, then installed CLI)
 # stays — that runtime detection is ralph-specific, not a role-config concern.
 detect_provider() {
-  local configured
+  local configured default
   configured="$(almanac_loop_role_field ralph agent "" provider "")"
   if [ -n "$configured" ]; then
     echo "$configured"
-  elif [ -n "${CODEX_THREAD_ID:-}" ] && command -v codex >/dev/null 2>&1; then
-    echo "codex"
-  elif command -v claude >/dev/null 2>&1; then
-    echo "claude"
-  elif command -v codex >/dev/null 2>&1; then
-    echo "codex"
   else
-    echo "none"
+    default="$(almanac_provider_default)"
+    echo "${default:-none}"
   fi
 }
 
@@ -76,28 +78,24 @@ if [ ! -f "$PROMPT" ]; then
   exit 1
 fi
 
+# Availability + display route through the provider seam (no provider-name
+# branching). The remaining case sets only the banner's cosmetic default-text.
+if [ "$PROVIDER" = "none" ] || ! almanac_provider_known "$PROVIDER"; then
+  echo "Error: no supported agent found. Install Claude Code or Codex, or set RALPH_PROVIDER."
+  exit 1
+fi
+if ! almanac_provider_available "$PROVIDER"; then
+  echo "Error: provider '$PROVIDER' selected but its CLI is not on PATH."
+  exit 1
+fi
+PROVIDER_DISPLAY="$(almanac_provider_display "$PROVIDER")"
+EFFORT_DISPLAY="${AGENT_EFFORT:-provider default}"
 case "$PROVIDER" in
   claude)
-    if ! command -v claude >/dev/null 2>&1; then
-      echo "Error: RALPH_PROVIDER=claude but 'claude' is not on PATH."
-      exit 1
-    fi
-    PROVIDER_DISPLAY="Claude Code"
     MODEL_DISPLAY="${AGENT_MODEL:-Claude Code default (resolved per session)}"
-    EFFORT_DISPLAY="${AGENT_EFFORT:-provider default}"
     ;;
   codex)
-    if ! command -v codex >/dev/null 2>&1; then
-      echo "Error: RALPH_PROVIDER=codex but 'codex' is not on PATH."
-      exit 1
-    fi
-    PROVIDER_DISPLAY="Codex"
     MODEL_DISPLAY="${AGENT_MODEL:-Codex default}"
-    EFFORT_DISPLAY="${AGENT_EFFORT:-provider default}"
-    ;;
-  *)
-    echo "Error: no supported agent found. Install Claude Code or Codex, or set RALPH_PROVIDER."
-    exit 1
     ;;
 esac
 

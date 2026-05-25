@@ -28,56 +28,27 @@ if ! declare -F almanac_loop_ui_choose >/dev/null 2>&1; then
   unset __loop_launcher_dir
 fi
 
-# --- provider helpers ---------------------------------------------------------
-
-# Is PROVIDER's CLI on PATH?
-almanac_loop_launch_provider_available() {
-  case "$1" in
-    codex)  command -v codex  >/dev/null 2>&1 ;;
-    claude) command -v claude >/dev/null 2>&1 ;;
-    *) return 1 ;;
-  esac
-}
-
-# Auto-detect the default provider, matching ralph's runtime detection: prefer
-# codex inside a codex thread, else the first installed CLI (claude, then codex).
-almanac_loop_launch_default_provider() {
-  if [ -n "${CODEX_THREAD_ID:-}" ] && almanac_loop_launch_provider_available codex; then
-    printf '%s\n' codex
-  elif almanac_loop_launch_provider_available claude; then
-    printf '%s\n' claude
-  elif almanac_loop_launch_provider_available codex; then
-    printf '%s\n' codex
-  else
-    printf '%s\n' ""
-  fi
-}
-
-# Model menu for PROVIDER. "default" => provider default, "custom" => free text.
-almanac_loop_launch_model_options() {
-  case "$1" in
-    codex)  printf '%s\n' default gpt-5.5 gpt-5.4 gpt-5.4-mini gpt-5.3-codex gpt-5.2 custom ;;
-    claude) printf '%s\n' default sonnet opus haiku claude-sonnet-4-6 claude-opus-4-7 custom ;;
-  esac
-}
-
-# Thinking-effort menu for PROVIDER (claude also has "max").
-almanac_loop_launch_effort_options() {
-  case "$1" in
-    codex)  printf '%s\n' default low medium high xhigh custom ;;
-    claude) printf '%s\n' default low medium high xhigh max custom ;;
-  esac
-}
+# Provider knowledge (availability, the model/effort menus, default-selection,
+# the provider list) lives in the provider-adapter seam (lib/agent.sh →
+# almanac_provider_*). The launcher consumes it rather than branching on provider
+# name. Source it directly and idempotently so the dependency is the launcher's
+# own, not borrowed from whatever sourced this file.
+if ! declare -F almanac_provider_default >/dev/null 2>&1; then
+  __loop_launcher_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/agent.sh
+  source "$__loop_launcher_dir/agent.sh"
+  unset __loop_launcher_dir
+fi
 
 # --- field collectors ---------------------------------------------------------
 
 # Pick a provider into the named-by-$1 variable if it is empty. Lists only
-# installed providers; dies if none. (eval-assigns so callers stay flag-driven.)
+# installed providers (discovered via the seam); dies if none.
 _almanac_launch_need_provider() {
   local var="$1" current="${2:-}" providers=() p chosen
   if [ -n "$current" ]; then printf '%s\n' "$current"; return 0; fi
-  for p in codex claude; do
-    almanac_loop_launch_provider_available "$p" && providers+=("$p")
+  for p in $(almanac_provider_list); do
+    almanac_provider_available "$p" && providers+=("$p")
   done
   [ "${#providers[@]}" -gt 0 ] || _die "No supported provider found. Install Codex or Claude Code."
   if [ "${#providers[@]}" -eq 1 ]; then printf '%s\n' "${providers[0]}"; return 0; fi
@@ -158,10 +129,10 @@ _almanac_launch_ralph() {
 
   # Provider / model / effort
   provider="$(_almanac_launch_need_provider provider "$provider")" || return 1
-  case "$provider" in codex|claude) ;; *) _die "--provider must be codex or claude" ;; esac
-  almanac_loop_launch_provider_available "$provider" || _die "Provider '$provider' selected but its CLI is not on PATH."
-  model="$(_almanac_launch_need_choice "Model" "$model" $(almanac_loop_launch_model_options "$provider"))" || return 1
-  effort="$(_almanac_launch_need_choice "Thinking effort" "$effort" $(almanac_loop_launch_effort_options "$provider"))" || return 1
+  almanac_provider_known "$provider" || _die "--provider must be a supported provider (e.g. codex or claude)"
+  almanac_provider_available "$provider" || _die "Provider '$provider' selected but its CLI is not on PATH."
+  model="$(_almanac_launch_need_choice "Model" "$model" $(almanac_provider_models "$provider"))" || return 1
+  effort="$(_almanac_launch_need_choice "Thinking effort" "$effort" $(almanac_provider_efforts "$provider"))" || return 1
 
   # Iterations + overseer (afk only)
   if [ "$mode" = "afk" ]; then
@@ -214,9 +185,10 @@ _almanac_launch_harden() {
 
   lenses="$(test -n "$lenses" && printf '%s' "$lenses" || almanac_loop_ui_input "Lenses (blank = default set)")" || return 1
   provider="$(_almanac_launch_need_provider provider "$provider")" || return 1
-  almanac_loop_launch_provider_available "$provider" || _die "Provider '$provider' selected but its CLI is not on PATH."
-  model="$(_almanac_launch_need_choice "Reviewer model" "$model" $(almanac_loop_launch_model_options "$provider"))" || return 1
-  effort="$(_almanac_launch_need_choice "Reviewer thinking effort" "$effort" $(almanac_loop_launch_effort_options "$provider"))" || return 1
+  almanac_provider_known "$provider" || _die "--provider must be a supported provider (e.g. codex or claude)"
+  almanac_provider_available "$provider" || _die "Provider '$provider' selected but its CLI is not on PATH."
+  model="$(_almanac_launch_need_choice "Reviewer model" "$model" $(almanac_provider_models "$provider"))" || return 1
+  effort="$(_almanac_launch_need_choice "Reviewer thinking effort" "$effort" $(almanac_provider_efforts "$provider"))" || return 1
   [ -n "$rounds" ] || rounds="$(almanac_loop_ui_input "Round budget (blank = default)")" || return 1
   [ -z "$rounds" ] || rounds="$(_almanac_launch_need_positive_int "Round budget" "$rounds")" || return 1
 

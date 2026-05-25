@@ -24,6 +24,17 @@ if ! declare -F almanac_loop_ui_render >/dev/null 2>&1; then
   unset __loop_core_dir
 fi
 
+# The provider-adapter seam (almanac_provider_*) lives in lib/agent.sh. The agent
+# runner below dispatches the exec argv + event filter through it, so loop-core
+# depends on it directly — source it idempotently. pwd -P resolves the install
+# symlink so the sibling agent.sh is found from either path.
+if ! declare -F almanac_provider_default >/dev/null 2>&1; then
+  __loop_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/agent.sh
+  source "$__loop_core_dir/agent.sh"
+  unset __loop_core_dir
+fi
+
 almanac_loop_slug() {
   local raw="$1"
   local slug
@@ -390,75 +401,12 @@ almanac_loop_role_config() {
   printf 'effort\t%s\n' "$(almanac_loop_role_field "$prefix" "$role" "$lens" "effort" "$default_effort")"
 }
 
-almanac_loop_agent_provider_key() {
-  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
-}
-
-# Map a sandbox value to claude's --permission-mode. read-only review runs in
-# `plan` (no writes); the `default` sentinel returns an empty mode so the seam
-# OMITS --permission-mode entirely, letting claude fall back to its own default
-# mode — ralph afk.sh's iteration agent has never set a permission mode, so
-# routing it through the seam must preserve that; everything else
-# (workspace-write, danger-full-access) maps to `acceptEdits`. The `default`
-# sentinel only governs claude's permission flag; codex callers do not use it.
-almanac_loop_agent_claude_permission() {
-  case "$1" in
-    read-only) printf '%s\n' "plan" ;;
-    default)   printf '%s\n' "" ;;
-    *)         printf '%s\n' "acceptEdits" ;;
-  esac
-}
-
-almanac_loop_agent_extract_claude_result() {
-  local stream_file="$1"
-  local result_file="$2"
-
-  if command -v jq >/dev/null 2>&1; then
-    jq -r 'select(.type == "result").result // empty' "$stream_file" | tail -n 1 > "$result_file"
-    return 0
-  fi
-
-  awk '
-    /"type"[[:space:]]*:[[:space:]]*"result"/ && /"result"[[:space:]]*:/ {
-      line = $0
-      sub(/^.*"result"[[:space:]]*:[[:space:]]*"/, "", line)
-      sub(/".*$/, "", line)
-      result = line
-    }
-    END {
-      if (result != "") print result
-    }
-  ' "$stream_file" > "$result_file"
-}
-
-# jq filter turning claude --output-format stream-json events into the live
-# assistant text the console shows: the init model line, then each assistant
-# text block, CRLF-normalised so it renders cleanly in a terminal. Identical to
-# ralph once.sh/afk.sh's stream_text so routing ralph through this seam keeps
-# its console output byte-for-byte.
-almanac_loop_agent_claude_stream_filter() {
-  cat <<'JQ'
-  if .type == "system" and .subtype == "init" and (.model // "") != "" then
-    "Claude model: \(.model)\r\n\n"
-  elif .type == "assistant" then
-    .message.content[]? | select(.type == "text").text // empty | gsub("\n"; "\r\n") | . + "\r\n\n"
-  else
-    empty
-  end
-JQ
-}
-
-# jq filter turning codex --json events into the live agent-message text the
-# console shows. Identical to ralph's codex_stream_text.
-almanac_loop_agent_codex_stream_filter() {
-  cat <<'JQ'
-  if .type == "item.completed" and .item.type == "agent_message" then
-    .item.text | . + "\n\n"
-  else
-    empty
-  end
-JQ
-}
+# Provider-specific knowledge — the exec argv (incl. the sandbox→permission
+# mapping), the event-stream jq filter, and result extraction — lives in the
+# provider adapters (lib/providers/<name>.sh), dispatched through the seam in
+# lib/agent.sh (almanac_provider_*). loop-core owns only the generic execution
+# mechanics below (producer / stream / run); nothing here branches on provider
+# name.
 
 # Run a provider command, optionally merging its stderr into stdout (2>&1) when
 # $1 is "1". Used as the producer at the head of the stream pipeline below so the
@@ -475,42 +423,36 @@ almanac_loop_agent_producer() {
 }
 
 # Run a provider command live: tee its raw event stream to $events_file AND pipe
-# it through the provider's jq filter to stdout, so the caller sees progress as
-# it happens. Crucially, the PRODUCER's exit code wins (via PIPESTATUS), not the
-# jq filter's — a provider failure must propagate even though it is piped. errexit
-# is suspended around the pipeline (a no-match grep / empty filter must not abort
-# a set -e caller) and restored afterwards. Degrades to a raw tee when jq is
-# absent so output is never silently dropped. When $merge_stderr requests it, the
-# provider's stderr is folded into the captured/streamed output (2>&1) —
-# preserving ralph once.sh's `codex ... 2>&1 | tee` log capture; default leaves
-# stderr on the terminal.
+# it through the provider adapter's jq filter to stdout, so the caller sees
+# progress as it happens. Crucially, the PRODUCER's exit code wins (via
+# PIPESTATUS), not the jq filter's — a provider failure must propagate even
+# though it is piped. errexit is suspended around the pipeline (a no-match grep /
+# empty filter must not abort a set -e caller) and restored afterwards. The
+# `grep '^{'` prefilter keeps only JSON-object lines (provider event streams are
+# newline-delimited objects; the events FILE is the raw tee, captured upstream
+# and so unaffected). Degrades to a raw tee when jq is absent or the adapter
+# yields no filter, so output is never silently dropped. When $merge_stderr
+# requests it, the provider's stderr is folded into the captured/streamed output
+# (2>&1) — preserving ralph once.sh's `codex ... 2>&1 | tee` log capture; default
+# leaves stderr on the terminal.
 # Usage: almanac_loop_agent_stream <provider> <events_file> <merge_stderr> <cmd> [args...]
 almanac_loop_agent_stream() {
   local provider="$1"; shift
   local events_file="$1"; shift
   local merge_stderr="$1"; shift
 
-  local filter prefilter=0 rc had_e=0 merge=0
+  local filter rc had_e=0 merge=0
   case "$merge_stderr" in
     merge-stderr|stderr|on|1) merge=1 ;;
   esac
 
-  case "$(almanac_loop_agent_provider_key "$provider")" in
-    claude|claude-code) filter="$(almanac_loop_agent_claude_stream_filter)"; prefilter=1 ;;
-    codex)              filter="$(almanac_loop_agent_codex_stream_filter)" ;;
-    *)                  filter="" ;;
-  esac
+  filter="$(almanac_provider_filter "$provider" 2>/dev/null)" || filter=""
 
   case $- in *e*) had_e=1 ;; esac
   set +e
   if command -v jq >/dev/null 2>&1 && [ -n "$filter" ]; then
-    if [ "$prefilter" -eq 1 ]; then
-      almanac_loop_agent_producer "$merge" "$@" | tee "$events_file" | grep --line-buffered '^{' \
-        | jq -Rj --unbuffered "fromjson? // empty | objects | ( $filter )"
-    else
-      almanac_loop_agent_producer "$merge" "$@" | tee "$events_file" \
-        | jq -Rj --unbuffered "fromjson? // empty | objects | ( $filter )"
-    fi
+    almanac_loop_agent_producer "$merge" "$@" | tee "$events_file" | grep --line-buffered '^{' \
+      | jq -Rj --unbuffered "fromjson? // empty | objects | ( $filter )"
   else
     almanac_loop_agent_producer "$merge" "$@" | tee "$events_file"
   fi
@@ -519,6 +461,13 @@ almanac_loop_agent_stream() {
   return "$rc"
 }
 
+# Run one agent invocation. (provider, model, effort, sandbox) come from role
+# config; the provider adapter (lib/providers/<name>.sh) supplies the exec argv +
+# event filter, and this function owns only the execution mechanics — capture /
+# stream / raw passthrough + PIPESTATUS exit threading. stream_mode: stream|live|
+# on|1 tees jq-filtered live text to stdout; raw|passthrough runs the provider's
+# native output (only for adapters declaring *_supports_raw — ralph's
+# RALPH_CODEX_VERBOSE path); default captures the raw event stream to the log.
 almanac_loop_agent_run() {
   [ "$#" -ge 6 ] || return 2
 
@@ -531,129 +480,69 @@ almanac_loop_agent_run() {
   local events_file="${7:-}"
   local stream_mode="${8:-}"
   local merge_stderr="${9:-}"
-  local provider_key prompt stream=0 raw=0 rc
+  local provider_key prompt stream=0 raw=0 rc shape
 
   [ -n "$provider" ] || return 2
   [ -f "$prompt_file" ] || return 2
 
-  # stream tees live assistant text to stdout (jq-filtered); raw is codex's native
-  # passthrough (no --json, no filter, no events capture) — ralph's
-  # RALPH_CODEX_VERBOSE path; default captures the raw event stream to the log.
   case "$stream_mode" in
     stream|live|on|1) stream=1 ;;
     raw|passthrough)  raw=1 ;;
   esac
 
-  provider_key="$(almanac_loop_agent_provider_key "$provider")"
+  provider_key="$(almanac_provider_key "$provider")"
   prompt="$(cat "$prompt_file")"
   sandbox="${sandbox:-danger-full-access}"
 
-  # Raw mode is codex-specific (it omits --json); any other provider falls back to
-  # its normal non-stream path so events capture still works.
-  [ "$provider_key" = "codex" ] || raw=0
+  almanac_provider_known "$provider"     || { _error "unsupported provider: $provider"; return 3; }
+  almanac_provider_available "$provider" || { _error "provider '$provider' is not on PATH."; return 4; }
 
-  # Raw provider events stream to a JSONL log. The caller may pass its own path
-  # (per-run events.jsonl); otherwise we allocate one. Either way the path is
-  # echoed back at the end so the caller can locate the stream. Raw mode captures
-  # no events log (codex's native output goes straight to the terminal), so it
-  # never allocates one.
+  # Raw passthrough only applies to adapters that declare support for it (codex
+  # omits --json so its native output streams straight to the terminal); other
+  # providers fall back to their normal capture path so events still record.
+  if [ "$raw" -eq 1 ] && ! declare -F "almanac_provider_${provider_key}_supports_raw" >/dev/null 2>&1; then
+    raw=0
+  fi
+
+  # Non-raw runs capture the raw event stream to a JSONL log. The caller may pass
+  # its own path (per-run events.jsonl); otherwise allocate one. Either way the
+  # path is echoed back at the end so the caller can locate the stream. Raw mode
+  # captures no events log (native output goes straight to the terminal).
   if [ "$raw" -ne 1 ] && [ -z "$events_file" ]; then
     events_file="$(mktemp "${TMPDIR:-/tmp}/almanac-loop-events.XXXXXX")"
   fi
 
-  case "$provider_key" in
-    codex)
-      if ! command -v codex >/dev/null 2>&1; then
-        _error "provider 'codex' is not on PATH."
-        return 4
-      fi
+  # Deep invocation: the adapter yields the exec argv (incl. the sandbox→
+  # permission mapping and --json-or-not by shape) into _ALMANAC_AGENT_ARGV. No
+  # `codex …`/`claude …` literal lives here.
+  [ "$raw" -eq 1 ] && shape="raw" || shape="structured"
+  almanac_provider_call "$provider" argv "$model" "$effort" "$sandbox" "$result_file" "$shape"
+  local cmd=("${_ALMANAC_AGENT_ARGV[@]}")
 
-      local codex_args=(
-        --ask-for-approval never
-        exec
-        --cd "$PWD"
-        --sandbox "$sandbox"
-        --color never
-      )
+  if [ "$raw" -eq 1 ]; then
+    # No --json, no filter, no events capture: the provider's native output
+    # streams straight to the terminal. The direct exec keeps $? as the
+    # provider's exit so a failure propagates.
+    "${cmd[@]}" "$prompt" || return "$?"
+    return 0
+  elif [ "$stream" -eq 1 ]; then
+    # Stream mode tees live assistant text to stdout; the helper preserves the
+    # provider's exit via PIPESTATUS so a failure still propagates past the pipe.
+    rc=0
+    almanac_loop_agent_stream "$provider" "$events_file" "$merge_stderr" "${cmd[@]}" "$prompt" || rc=$?
+    [ "$rc" -eq 0 ] || return "$rc"
+  else
+    # No pipe: a direct redirect keeps $? as the provider's exit so a provider
+    # failure propagates instead of being masked by a downstream tee.
+    "${cmd[@]}" "$prompt" > "$events_file" || return "$?"
+  fi
 
-      # Raw mode wants codex's NATIVE output (ralph's RALPH_CODEX_VERBOSE); every
-      # other mode parses the structured --json event stream.
-      if [ "$raw" -ne 1 ]; then
-        codex_args+=(--json)
-      fi
-      codex_args+=(--output-last-message "$result_file")
-
-      if [ -n "$model" ]; then
-        codex_args+=(--model "$model")
-      fi
-
-      if [ -n "$effort" ]; then
-        codex_args+=(-c "model_reasoning_effort=\"$effort\"")
-      fi
-
-      if [ "$raw" -eq 1 ]; then
-        # No --json, no filter, no events capture: codex's native output streams
-        # straight to the terminal; --output-last-message still writes the result.
-        # The direct exec keeps $? as codex's exit so a failure propagates.
-        codex "${codex_args[@]}" "$prompt" || return "$?"
-        return 0
-      elif [ "$stream" -eq 1 ]; then
-        rc=0
-        almanac_loop_agent_stream "codex" "$events_file" "$merge_stderr" \
-          codex "${codex_args[@]}" "$prompt" || rc=$?
-        [ "$rc" -eq 0 ] || return "$rc"
-      else
-        codex "${codex_args[@]}" "$prompt" > "$events_file" || return "$?"
-      fi
-      ;;
-    claude|claude-code)
-      if ! command -v claude >/dev/null 2>&1; then
-        _error "provider 'claude' is not on PATH."
-        return 4
-      fi
-
-      local claude_args=(
-        --print
-        --output-format stream-json
-        --verbose
-      )
-
-      # Permission mode is derived from the sandbox; the `default` sentinel maps
-      # to an empty mode so the flag is omitted (claude's own default) —
-      # preserving afk.sh's iteration agent, which has never set --permission-mode.
-      local claude_perm
-      claude_perm="$(almanac_loop_agent_claude_permission "$sandbox")"
-      if [ -n "$claude_perm" ]; then
-        claude_args+=(--permission-mode "$claude_perm")
-      fi
-
-      if [ -n "$model" ]; then
-        claude_args+=(--model "$model")
-      fi
-
-      if [ -n "$effort" ]; then
-        claude_args+=(--effort "$effort")
-      fi
-
-      if [ "$stream" -eq 1 ]; then
-        # Stream mode tees live assistant text to stdout; the helper preserves
-        # claude's exit via PIPESTATUS so a failure still propagates past the pipe.
-        rc=0
-        almanac_loop_agent_stream "claude" "$events_file" "$merge_stderr" \
-          claude "${claude_args[@]}" "$prompt" || rc=$?
-        [ "$rc" -eq 0 ] || return "$rc"
-      else
-        # No pipe: a direct redirect keeps $? as claude's exit so a provider
-        # failure propagates instead of being masked by a downstream tee.
-        claude "${claude_args[@]}" "$prompt" > "$events_file" || return "$?"
-      fi
-      almanac_loop_agent_extract_claude_result "$events_file" "$result_file"
-      ;;
-    *)
-      _error "unsupported provider: $provider"
-      return 3
-      ;;
-  esac
+  # Result handling: providers that don't write the result via their argv (claude
+  # extracts it from the captured stream) implement an *_extract hook; codex
+  # writes it directly via --output-last-message and declares no hook.
+  if declare -F "almanac_provider_${provider_key}_extract" >/dev/null 2>&1; then
+    "almanac_provider_${provider_key}_extract" "$events_file" "$result_file"
+  fi
 
   # In stream mode stdout already carries the live assistant text, so do not
   # append the events-file path (it would corrupt the stream). The caller passes
