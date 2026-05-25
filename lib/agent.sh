@@ -1,15 +1,24 @@
 #!/usr/bin/env bash
 # lib/agent.sh — the agent/provider seam.
 #
-# This slice (loop-engine-split 03) hosts the provider-adapter seam: discovery
-# of lib/providers/<name>.sh, contract dispatch (callers never branch on provider
-# name), and the single default-selection policy. A later slice (04) adds the
-# three agent shapes (agent_capture/agent_stream/agent_raw) here too — per the
-# module map, lib/agent.sh owns "the three shapes + provider dispatch".
+# Per the module map, lib/agent.sh owns "the three shapes + provider dispatch".
+# Two layers live here:
+#   1. The provider-adapter seam (loop-engine-split slice 03): discovery of
+#      lib/providers/<name>.sh, contract dispatch (callers never branch on a
+#      provider name), and the single default-selection policy.
+#   2. The three agent-run shapes (slice 04): almanac_loop_agent_capture /
+#      _stream / _raw — intention-revealing replacements for the old
+#      mode-parametric almanac_loop_agent_run. Each takes only what its shape
+#      needs (no invalid mode combinations to guard); they consume the adapter's
+#      argv + filter and own ONLY execution mechanics (exec, capture, stream,
+#      PIPESTATUS exit threading).
 #
-# Self-contained: like lib/ui.sh, the seam uses only printf / command -v / source
-# and has NO dependency on lib/core.sh, so any caller can source it directly.
-# Provider adapters are auto-loaded at source time (almanac_provider_load below).
+# Self-contained: the seam uses only printf / command -v / source. The run shapes
+# add jq / tee / grep / mktemp (coreutils) and emit diagnostics through _error
+# when a caller has sourced lib/core.sh, falling back to a plain stderr line
+# otherwise (_almanac_agent_err) — so there is still no hard dependency on
+# lib/core.sh and any caller (or test) can source this file directly. Provider
+# adapters are auto-loaded at source time (almanac_provider_load below).
 
 __almanac_agent_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
@@ -103,6 +112,166 @@ almanac_provider_default() {
     fi
   done
   printf '%s\n' ""
+  return 0
+}
+
+# --- Agent run shapes ----------------------------------------------------------
+#
+# Three intention-revealing shapes replace the old mode-parametric agent_run. The
+# common quartet (provider, model, effort, sandbox) comes from role config; the
+# provider adapter supplies the exec argv + event filter (deep invocation), and
+# these own only execution mechanics. There are no invalid mode combinations to
+# guard because each shape takes only the args it needs.
+
+# Diagnostics: prefer lib/core.sh's _error when a caller sourced it (real runs all
+# do), so the message is byte-identical; else a plain stderr line. Keeps the seam
+# sourceable standalone (tests) without a hard core.sh dependency.
+_almanac_agent_err() {
+  if declare -F _error >/dev/null 2>&1; then
+    _error "$@"
+  else
+    printf '[error] %s\n' "$*" >&2
+  fi
+}
+
+# Run a provider command, optionally merging its stderr into stdout (2>&1) when
+# $1 is "1". The producer at the head of the stream pipeline so the merge toggles
+# without duplicating the pipeline. Its exit is the provider's, so PIPESTATUS[0]
+# in the calling pipeline reflects the producer, not this wrapper.
+almanac_loop_agent_producer() {
+  local merge="$1"; shift
+  if [ "$merge" = "1" ]; then
+    "$@" 2>&1
+  else
+    "$@"
+  fi
+}
+
+# Private: validate the provider is known + on PATH, then build its exec argv for
+# SHAPE into _ALMANAC_AGENT_ARGV. Returns 3/4 (with a diagnostic) on an unknown/
+# unavailable provider; 0 with the argv ready otherwise. The single place the
+# shapes turn (provider, model, effort, sandbox) into exec tokens — no shape
+# contains a `codex …`/`claude …` literal.
+_almanac_agent_build() {
+  local provider="$1" model="$2" effort="$3" sandbox="$4" result_file="$5" shape="$6"
+  almanac_provider_known "$provider"     || { _almanac_agent_err "unsupported provider: $provider"; return 3; }
+  almanac_provider_available "$provider" || { _almanac_agent_err "provider '$provider' is not on PATH."; return 4; }
+  almanac_provider_call "$provider" argv "$model" "$effort" "${sandbox:-danger-full-access}" "$result_file" "$shape"
+}
+
+# Private: providers that don't write their result via argv (claude) implement an
+# *_extract hook that recovers it from the captured stream; codex writes it
+# directly via --output-last-message and declares none. A no-op for the latter.
+_almanac_agent_extract() {
+  local key; key="$(almanac_provider_key "$1")"
+  local stream_file="$2" result_file="$3"
+  if declare -F "almanac_provider_${key}_extract" >/dev/null 2>&1; then
+    "almanac_provider_${key}_extract" "$stream_file" "$result_file"
+  fi
+  return 0
+}
+
+# capture: run the provider silently, capturing the raw event stream to
+# EVENTS_FILE and (for adapters with an extract hook) the final result to
+# RESULT_FILE. No stdout — the harden fan-out / ratify / fixer and ralph's
+# overseer all discard it. A direct redirect (no pipe) keeps $? as the provider's
+# exit so a failure propagates.
+# Usage: almanac_loop_agent_capture <provider> <model> <effort> <sandbox> \
+#                                   <prompt_file> <result_file> <events_file>
+almanac_loop_agent_capture() {
+  [ "$#" -ge 7 ] || return 2
+  local provider="$1" model="$2" effort="$3" sandbox="$4"
+  local prompt_file="$5" result_file="$6" events_file="$7"
+  local prompt
+  [ -n "$provider" ] || return 2
+  [ -f "$prompt_file" ] || return 2
+  [ -n "$events_file" ] || return 2
+
+  _almanac_agent_build "$provider" "$model" "$effort" "$sandbox" "$result_file" "structured" || return
+  local cmd=("${_ALMANAC_AGENT_ARGV[@]}")
+  prompt="$(cat "$prompt_file")"
+
+  "${cmd[@]}" "$prompt" > "$events_file" || return "$?"
+  _almanac_agent_extract "$provider" "$events_file" "$result_file"
+}
+
+# stream: run the provider live — tee its raw event stream to EVENTS_FILE AND pipe
+# it through the adapter's jq filter to stdout, so the caller sees progress as it
+# happens. The PRODUCER's exit wins via PIPESTATUS (a provider failure propagates
+# even though it is piped), not the jq filter's; errexit is suspended around the
+# pipeline (a no-match filter must not abort a set -e caller) and restored after.
+# The `grep '^{'` prefilter keeps only JSON-object lines (the events FILE is the
+# raw tee, unaffected); degrades to a raw tee when jq is absent or the adapter
+# yields no filter, so output is never silently dropped. Optional MERGE_STDERR
+# (merge-stderr|on|1) folds the provider's stderr into the captured/streamed
+# output — preserving ralph's `codex ... 2>&1 | tee` log capture; default leaves
+# stderr on the terminal. The events-file path is NOT echoed (it would corrupt
+# the live stream); the caller passes its own path and already knows it.
+# Usage: almanac_loop_agent_stream <provider> <model> <effort> <sandbox> \
+#                          <prompt_file> <result_file> <events_file> [merge_stderr]
+almanac_loop_agent_stream() {
+  [ "$#" -ge 7 ] || return 2
+  local provider="$1" model="$2" effort="$3" sandbox="$4"
+  local prompt_file="$5" result_file="$6" events_file="$7" merge_stderr="${8:-}"
+  local prompt filter rc had_e=0 merge=0
+  [ -n "$provider" ] || return 2
+  [ -f "$prompt_file" ] || return 2
+  [ -n "$events_file" ] || return 2
+  case "$merge_stderr" in
+    merge-stderr|stderr|on|1) merge=1 ;;
+  esac
+
+  _almanac_agent_build "$provider" "$model" "$effort" "$sandbox" "$result_file" "structured" || return
+  local cmd=("${_ALMANAC_AGENT_ARGV[@]}")
+  prompt="$(cat "$prompt_file")"
+  filter="$(almanac_provider_filter "$provider" 2>/dev/null)" || filter=""
+
+  case $- in *e*) had_e=1 ;; esac
+  set +e
+  if command -v jq >/dev/null 2>&1 && [ -n "$filter" ]; then
+    almanac_loop_agent_producer "$merge" "${cmd[@]}" "$prompt" | tee "$events_file" | grep --line-buffered '^{' \
+      | jq -Rj --unbuffered "fromjson? // empty | objects | ( $filter )"
+  else
+    almanac_loop_agent_producer "$merge" "${cmd[@]}" "$prompt" | tee "$events_file"
+  fi
+  rc=${PIPESTATUS[0]}
+  [ "$had_e" -eq 1 ] && set -e
+  [ "$rc" -eq 0 ] || return "$rc"
+
+  _almanac_agent_extract "$provider" "$events_file" "$result_file"
+  return 0
+}
+
+# raw: native passthrough for adapters that declare *_supports_raw (codex omits
+# --json so its native output streams straight to the terminal — no jq filter, no
+# events capture). The direct exec keeps $? as the provider's exit. A provider
+# WITHOUT raw support degrades to a silent capture into a throwaway events log, so
+# output is never dropped (matching the old agent_run raw fallback).
+# Usage: almanac_loop_agent_raw <provider> <model> <effort> <sandbox> \
+#                               <prompt_file> <result_file>
+almanac_loop_agent_raw() {
+  [ "$#" -ge 6 ] || return 2
+  local provider="$1" model="$2" effort="$3" sandbox="$4"
+  local prompt_file="$5" result_file="$6"
+  local key prompt events_file
+  [ -n "$provider" ] || return 2
+  [ -f "$prompt_file" ] || return 2
+
+  key="$(almanac_provider_key "$provider")"
+  if ! declare -F "almanac_provider_${key}_supports_raw" >/dev/null 2>&1; then
+    events_file="$(mktemp "${TMPDIR:-/tmp}/almanac-loop-events.XXXXXX")"
+    almanac_loop_agent_capture "$provider" "$model" "$effort" "$sandbox" \
+      "$prompt_file" "$result_file" "$events_file"
+    return "$?"
+  fi
+
+  _almanac_agent_build "$provider" "$model" "$effort" "$sandbox" "$result_file" "raw" || return
+  local cmd=("${_ALMANAC_AGENT_ARGV[@]}")
+  prompt="$(cat "$prompt_file")"
+
+  # No --json, no filter, no events capture: native output to the terminal. codex
+  # writes its result via --output-last-message, so no extract step is needed.
+  "${cmd[@]}" "$prompt" || return "$?"
   return 0
 }
 

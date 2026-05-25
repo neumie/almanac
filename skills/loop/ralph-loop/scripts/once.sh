@@ -134,9 +134,9 @@ case "$PROVIDER" in
     claude_events_file=$(mktemp)
     claude_result_file=$(mktemp)
     printf '%s' "$prompt" > "$claude_prompt_file"
-    almanac_loop_agent_run \
+    almanac_loop_agent_stream \
       claude "$AGENT_MODEL" "$AGENT_EFFORT" workspace-write \
-      "$claude_prompt_file" "$claude_result_file" "$claude_events_file" stream
+      "$claude_prompt_file" "$claude_result_file" "$claude_events_file"
     rm -f "$claude_prompt_file" "$claude_events_file" "$claude_result_file"
     ;;
   codex)
@@ -162,9 +162,9 @@ $ralph_commits"
       # failure we clean up and exit so the run is marked failed (as set -e did).
       codex_prompt_file=$(mktemp)
       printf '%s' "$prompt" > "$codex_prompt_file"
-      if ! almanac_loop_agent_run \
+      if ! almanac_loop_agent_raw \
         codex "$AGENT_MODEL" "$AGENT_EFFORT" danger-full-access \
-        "$codex_prompt_file" "$codex_result" "" raw; then
+        "$codex_prompt_file" "$codex_result"; then
         rm -f "$codex_prompt_file" "$codex_result"
         exit 1
       fi
@@ -182,9 +182,9 @@ $ralph_commits"
       # before; the seam owns that now). On failure we print the same log tail.
       codex_prompt_file=$(mktemp)
       printf '%s' "$prompt" > "$codex_prompt_file"
-      if ! almanac_loop_agent_run \
+      if ! almanac_loop_agent_stream \
         codex "$AGENT_MODEL" "$AGENT_EFFORT" danger-full-access \
-        "$codex_prompt_file" "$codex_result" "$codex_log" stream merge-stderr; then
+        "$codex_prompt_file" "$codex_result" "$codex_log" merge-stderr; then
         rm -f "$codex_prompt_file"
         echo "Codex failed. Last log lines:"
         tail -n 40 "$codex_log" || true

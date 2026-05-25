@@ -383,7 +383,7 @@ ${overseer_prompt}"
       ;;
   esac
 
-  almanac_loop_agent_run \
+  almanac_loop_agent_capture \
     "$PROVIDER" "$AGENT_MODEL" "$AGENT_EFFORT" read-only \
     "$overseer_prompt_file" "$overseer_result_file" "$overseer_events_file" \
     >/dev/null 2>&1 || true
@@ -543,9 +543,9 @@ for ((i=1; i<=$ITERATIONS; i++)); do
       claude_prompt_file=$(mktemp)
       claude_events_file=$(mktemp)
       printf '%s' "$prompt" > "$claude_prompt_file"
-      if ! almanac_loop_agent_run \
+      if ! almanac_loop_agent_stream \
         claude "$AGENT_MODEL" "$AGENT_EFFORT" default \
-        "$claude_prompt_file" "$tmpfile" "$claude_events_file" stream; then
+        "$claude_prompt_file" "$tmpfile" "$claude_events_file"; then
         rm -f "$claude_prompt_file" "$claude_events_file"
         echo "Claude failed."
         exit 1
@@ -578,9 +578,9 @@ $ralph_commits"
         # still uses them.)
         codex_prompt_file=$(mktemp)
         printf '%s' "$prompt" > "$codex_prompt_file"
-        if ! almanac_loop_agent_run \
+        if ! almanac_loop_agent_raw \
           codex "$AGENT_MODEL" "$AGENT_EFFORT" danger-full-access \
-          "$codex_prompt_file" "$tmpfile" "" raw; then
+          "$codex_prompt_file" "$tmpfile"; then
           rm -f "$codex_prompt_file"
           echo "Codex failed."
           exit 1
@@ -602,9 +602,9 @@ $ralph_commits"
         # back unchanged. On failure we print the same log tail.
         codex_prompt_file=$(mktemp)
         printf '%s' "$prompt" > "$codex_prompt_file"
-        if ! almanac_loop_agent_run \
+        if ! almanac_loop_agent_stream \
           codex "$AGENT_MODEL" "$AGENT_EFFORT" danger-full-access \
-          "$codex_prompt_file" "$tmpfile" "$codex_log" stream merge-stderr; then
+          "$codex_prompt_file" "$tmpfile" "$codex_log" merge-stderr; then
           rm -f "$codex_prompt_file"
           echo "Codex failed. Last log lines:"
           tail -n 40 "$codex_log" || true

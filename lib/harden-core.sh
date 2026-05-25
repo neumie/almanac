@@ -5,7 +5,7 @@
 # Source it idempotently so harden-core works both through bin/almanac and when a
 # test sources this file directly. pwd -P resolves the install symlink so the
 # sibling loop-core.sh is found from either path.
-if ! declare -F almanac_loop_agent_run >/dev/null 2>&1; then
+if ! declare -F almanac_loop_agent_capture >/dev/null 2>&1; then
   __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
   # shellcheck source=lib/loop-core.sh
   source "$__harden_core_dir/loop-core.sh"
@@ -758,7 +758,7 @@ almanac_harden_demo_reproduces() {
   # like the fixer; the prompt forbids it from mutating the target to change the
   # outcome. Output is discarded; only the verdict in result_file matters.
   rc=0
-  almanac_loop_agent_run "$conductor_provider" "$conductor_model" "$conductor_effort" \
+  almanac_loop_agent_capture "$conductor_provider" "$conductor_model" "$conductor_effort" \
     "workspace-write" "$prompt_file" "$result_file" "$events_file" >/dev/null 2>&1 || rc=$?
 
   if [ "$rc" -ne 0 ]; then
@@ -1135,7 +1135,7 @@ INNER
   _info "Fixing $count open blocking finding(s) with one sequential fixer (provider=$provider, write-capable)"
 
   rc=0
-  almanac_loop_agent_run "$provider" "$model" "$effort" "workspace-write" \
+  almanac_loop_agent_capture "$provider" "$model" "$effort" "workspace-write" \
     "$prompt_file" "$result_file" "$events_file" >/dev/null || rc=$?
 
   rm -f "$prompt_file" "$result_file" "$events_file"
