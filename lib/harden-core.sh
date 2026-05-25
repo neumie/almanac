@@ -22,6 +22,16 @@ if ! declare -F almanac_loop_ui_render >/dev/null 2>&1; then
   unset __harden_core_dir
 fi
 
+# Per-role provider/model/effort resolution (almanac_loop_role_config) lives in
+# lib/role.sh — source it directly and idempotently so harden-core's dependency
+# on the role resolver is explicit (not borrowed transitively through loop-core).
+if ! declare -F almanac_loop_role_config >/dev/null 2>&1; then
+  __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/role.sh
+  source "$__harden_core_dir/role.sh"
+  unset __harden_core_dir
+fi
+
 # --- Role config (per-role provider / model / effort) --------------------------
 #
 # Each harden role selects its own agent config:

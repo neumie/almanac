@@ -357,49 +357,9 @@ test_read_run_returns_single_run_status() {
   echo "  PASS: read run returns single run status"
 }
 
-test_resolves_role_config_with_lens_overrides() {
-  local expected actual
-
-  expected=$(cat <<'EOF'
-provider	codex
-model	security-model
-effort	medium
-EOF
-)
-
-  actual="$(
-    HARDEN_PROVIDER=claude \
-    HARDEN_MODEL=default-model \
-    HARDEN_EFFORT=medium \
-    HARDEN_REVIEWER_PROVIDER=codex \
-    HARDEN_REVIEWER_SECURITY_MODEL=security-model \
-    almanac_loop_role_config "harden" "reviewer" "security" "fallback-provider" "fallback-model" "low"
-  )"
-
-  assert_eq "$expected" "$actual" "lens config should layer lens, role, shared, then defaults"
-  echo "  PASS: resolves role config with lens overrides"
-}
-
-test_resolves_role_config_with_ralph_style_fallbacks() {
-  local expected actual
-
-  expected=$(cat <<'EOF'
-provider	claude
-model	sonnet
-effort	high
-EOF
-)
-
-  actual="$(
-    RALPH_PROVIDER=claude \
-    RALPH_MODEL=sonnet \
-    RALPH_EFFORT=high \
-    almanac_loop_role_config "ralph" "worker" "" "codex" "" "medium"
-  )"
-
-  assert_eq "$expected" "$actual" "shared config should support Ralph-style global overrides"
-  echo "  PASS: resolves role config with Ralph-style fallbacks"
-}
+# Role config resolution (almanac_loop_role_field / role_config) moved to
+# lib/role.sh in loop-engine-split slice 06; its precedence + role_config tests
+# now live in tests/test-role.sh (sourced directly), not here.
 
 test_worker_start_tracks_background_agent() {
   local tmp fakebin prompt pid status_file events_file result_file args
@@ -756,8 +716,6 @@ test_mark_run_aborted_preserves_progress
 test_run_is_stale_detects_dead_pid
 test_list_runs_returns_all_registered_runs
 test_read_run_returns_single_run_status
-test_resolves_role_config_with_lens_overrides
-test_resolves_role_config_with_ralph_style_fallbacks
 test_worker_start_tracks_background_agent
 test_worker_health_classifies_states
 test_worker_health_of_reads_state
