@@ -1280,7 +1280,111 @@ RUBRIC
   echo "  PASS: render dashboard reads run state and degrades without gum"
 }
 
+# Criterion (64.1): a live dashboard renders reviewer status, round, findings
+# tallies, rubric progress, and the feedback verdict during a run. The redraw loop
+# reprints almanac_harden_render_dashboard from live run state each frame; a bounded
+# frame count (with zero sleep) proves it renders all five fields per frame and
+# terminates rather than running forever.
+seed_live_run_state() {
+  local tmp="$1" run_id="$2" wdir ledger rubric
+  mkdir -p "$tmp/src"
+  printf '%s\n' "code" > "$tmp/src/app.js"
+
+  wdir="$tmp/.almanac/runs/$run_id/workers/reviewer-correctness"
+  mkdir -p "$wdir"
+  printf '%s\n' '{"e":1}' > "$wdir/events.jsonl"
+  almanac_loop_write_worker_status "$wdir/status.tsv" "reviewer-correctness" "$run_id" \
+    "111" "codex" "" "" "read-only" "p" "$wdir/events.jsonl" "r" "s" "2026-05-25T12:00:00Z" "running" "" ""
+
+  ledger="$(almanac_harden_ledger_path "$tmp" "src/app.js")"
+  almanac_harden_ledger_init "$ledger"
+  almanac_harden_ledger_append_entry "$ledger" "f-1" "correctness" "high" "src/app.js:1" "bug" "demo" "open" 1 "" >/dev/null
+
+  rubric="$(almanac_harden_rubric_path "$tmp" "src/app.js")"
+  mkdir -p "$(dirname "$rubric")"
+  cat > "$rubric" <<'RUBRIC'
+# Harden Rubric
+
+## Acceptance
+
+- [ ] no crash on empty input
+
+## Context
+RUBRIC
+}
+
+test_dashboard_redraw_renders_live_frames() {
+  local tmp run_id out frames
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  run_id="harden-src-app-js-20260525T120000Z-4242"
+  seed_live_run_state "$tmp" "$run_id"
+
+  # Two bounded frames, zero sleep: the live redraw renders every field each frame
+  # from live run state and returns (never hangs).
+  out="$(ALMANAC_NO_GUM=1 almanac_harden_dashboard_redraw "$tmp" "src/app.js" 2 5 "1/1 loops passing" 2 0)"
+
+  assert_contains "$out" "round 2/5" "redraw renders the round/budget"
+  assert_contains "$out" "reviewer-correctness" "redraw renders the live reviewer from worker state"
+  assert_contains "$out" "open=1" "redraw renders the findings tally"
+  assert_contains "$out" "0/1" "redraw renders rubric acceptance progress"
+  assert_contains "$out" "1/1 loops passing" "redraw renders the feedback verdict"
+
+  frames="$(printf '%s\n' "$out" | grep -c 'Harden dashboard')"
+  [ "$frames" -eq 2 ] || fail "redraw should render exactly the bounded number of frames (got $frames)"
+  echo "  PASS: dashboard redraw renders live frames"
+}
+
+# Criterion (64.1, CLI surface): the bare `--watch` CLI mode renders the live
+# dashboard for the latest run and, when its output is piped (not a TTY), renders
+# a single frame and exits rather than looping forever.
+test_watch_cli_renders_dashboard_and_exits() {
+  local tmp run_id out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  run_id="harden-src-app-js-20260525T120000Z-4242"
+  seed_live_run_state "$tmp" "$run_id"
+
+  out="$(cd "$tmp" && ALMANAC_NO_GUM=1 "$ALMANAC" harden src/app.js --watch 2>&1)"
+
+  assert_contains "$out" "Harden dashboard" "the --watch CLI mode should render the dashboard"
+  assert_contains "$out" "reviewer-correctness" "the --watch CLI mode should render the live reviewer"
+  echo "  PASS: --watch CLI renders the dashboard and exits when piped"
+}
+
+# Criterion (64.3): the user can watch a single worker's live event stream. The
+# wrapper resolves the target's most recent run, accepts a bare lens as shorthand
+# for its reviewer worker, and streams that worker's event log.
+test_watch_worker_streams_latest_run() {
+  local tmp run_id wdir out rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  mkdir -p "$tmp/src"
+  printf '%s\n' "code" > "$tmp/src/app.js"
+
+  run_id="harden-src-app-js-20260525T120000Z-4242"
+  wdir="$tmp/.almanac/runs/$run_id/workers/reviewer-security"
+  mkdir -p "$wdir"
+  printf '%s\n' '{"e":"review started"}' '{"e":"finding emitted"}' > "$wdir/events.jsonl"
+  almanac_loop_write_worker_status "$wdir/status.tsv" "reviewer-security" "$run_id" \
+    "111" "codex" "" "" "read-only" "p" "$wdir/events.jsonl" "r" "s" "2026-05-25T12:00:00Z" "running" "" ""
+
+  # A bare lens ("security") resolves to its reviewer-security worker.
+  out="$(almanac_harden_watch_worker "$tmp" "src/app.js" "security")"
+  assert_contains "$out" "review started" "watch-worker should stream the worker's live event log"
+  assert_contains "$out" "finding emitted" "watch-worker should stream every event line"
+
+  # No run for an unknown target -> clean non-zero, no hang.
+  rc=0
+  almanac_harden_watch_worker "$tmp" "other/target.js" "security" >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 1 ] || fail "watch-worker should report cleanly when no run exists (got $rc)"
+  echo "  PASS: watch-worker streams a single worker from the latest run"
+}
+
 echo "=== Harden CLI Tests ==="
+test_dashboard_redraw_renders_live_frames
+test_watch_cli_renders_dashboard_and_exits
+test_watch_worker_streams_latest_run
 test_dashboard_rows_render_all_fields
 test_dashboard_surfaces_unhealthy_workers
 test_dashboard_rows_report_empty_reviewer_set

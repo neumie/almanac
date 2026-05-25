@@ -1485,3 +1485,106 @@ almanac_harden_render_dashboard() {
     | almanac_harden_dashboard_rows "$round" "$budget" "$tally" "$progress" "$verdict" \
     | almanac_loop_ui_render
 }
+
+# True (0) when at least one worker in the run is still running (its status.tsv
+# status field reads "running"), so the live redraw loop can tell an ongoing run
+# from a finished one. Non-zero when the run dir is absent or every worker has
+# reached a terminal status (done/failed). Harden does not yet register runs in
+# the run registry (deferred to #67), so the redraw loop keys on per-worker status
+# rather than a run-status blob.
+almanac_harden_run_has_active_worker() {
+  local root="$1"
+  local run_id="$2"
+  local workers_dir wdir st
+
+  workers_dir="$(almanac_loop_registry_dir "$root")/$run_id/workers"
+  [ -d "$workers_dir" ] || return 1
+
+  for wdir in "$workers_dir"/*/; do
+    [ -d "$wdir" ] || continue
+    [ -f "$wdir/status.tsv" ] || continue
+    st="$(almanac_loop_status_field "$wdir/status.tsv" "status" || true)"
+    [ "$st" = "running" ] && return 0
+  done
+
+  return 1
+}
+
+# Live supervision: redraw the dashboard on an interval so an operator can watch a
+# harden run unfold (this is the hub's "watch a run" action and the `--watch` CLI
+# mode). Each frame clears the terminal (TTY only, via almanac_loop_ui_clear) and
+# reprints almanac_harden_render_dashboard from the run's live worker/ledger/rubric
+# state, so reviewer health, findings tallies, rubric progress, and the verdict
+# update as the run progresses.
+#
+# Termination is bounded by construction so it can never run forever:
+#   max_frames > 0  -> render exactly that many frames (the unit-test path).
+#   max_frames == 0 and stdout is NOT a TTY -> render a single frame and return,
+#                     so a pipe / script / test never blocks on a live loop.
+#   max_frames == 0 on a TTY -> redraw until the latest run's workers have all
+#                     finished (or there is no run to watch), then return.
+# interval is the seconds slept between frames.
+almanac_harden_dashboard_redraw() {
+  local root="$1"
+  local target="$2"
+  local round="${3:-live}"
+  local budget="${4:-?}"
+  local verdict="${5:-n/a}"
+  local max_frames="${6:-0}"
+  local interval="${7:-2}"
+  local frames=0 run_id
+
+  case "$max_frames" in ''|*[!0-9]*) max_frames=0 ;; esac
+
+  if [ "$max_frames" -eq 0 ] && [ ! -t 1 ]; then
+    almanac_harden_render_dashboard "$root" "$target" "$round" "$budget" "$verdict"
+    return 0
+  fi
+
+  while :; do
+    almanac_loop_ui_clear
+    almanac_harden_render_dashboard "$root" "$target" "$round" "$budget" "$verdict"
+    frames=$((frames + 1))
+
+    if [ "$max_frames" -gt 0 ]; then
+      [ "$frames" -ge "$max_frames" ] && break
+    else
+      run_id="$(almanac_harden_latest_run_id "$root" "$target" || true)"
+      if [ -z "$run_id" ] || ! almanac_harden_run_has_active_worker "$root" "$run_id"; then
+        break
+      fi
+    fi
+
+    sleep "$interval"
+  done
+}
+
+# Watch a single reviewer/worker's live event stream for the target's most recent
+# run, so an operator can see what one worker is doing without the whole dashboard.
+# worker_id accepts a full worker id (reviewer-correctness) or a bare lens
+# (correctness) as shorthand for its reviewer worker. follow="follow" tails the
+# log live on a TTY; otherwise the current contents print once. Delegates the
+# actual streaming to the shared almanac_loop_worker_watch. Returns 1 (and warns)
+# when no run exists for the target.
+almanac_harden_watch_worker() {
+  local root="$1"
+  local target="$2"
+  local worker_id="$3"
+  local follow="${4:-}"
+  local run_id status_file
+
+  run_id="$(almanac_harden_latest_run_id "$root" "$target")" || {
+    _warn "No harden run found for target: $target"
+    return 1
+  }
+
+  # A bare lens (e.g. "security") is shorthand for its reviewer worker when no
+  # worker with that exact id exists in the run.
+  status_file="$(almanac_loop_worker_status_file "$root" "$run_id" "$worker_id")"
+  if [ ! -f "$status_file" ]; then
+    status_file="$(almanac_loop_worker_status_file "$root" "$run_id" "reviewer-$worker_id")"
+    [ -f "$status_file" ] && worker_id="reviewer-$worker_id"
+  fi
+
+  almanac_loop_worker_watch "$root" "$run_id" "$worker_id" "$follow"
+}

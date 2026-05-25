@@ -497,6 +497,37 @@ test_worker_health_of_reads_state() {
   echo "  PASS: worker health of reads worker state"
 }
 
+# A single worker's live event stream can be watched: the shared watcher reads the
+# worker's events-file path from its status.tsv and prints the log (non-follow mode
+# so it returns rather than tailing), and reports cleanly when no log exists yet.
+test_worker_watch_streams_event_log() {
+  local tmp run_id wdir events out rc perfdir
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  run_id="harden-demo-001"
+  wdir="$tmp/.almanac/runs/$run_id/workers/reviewer-security"
+  mkdir -p "$wdir"
+  events="$wdir/events.jsonl"
+  printf '%s\n' '{"e":"started"}' '{"e":"thinking"}' > "$events"
+  almanac_loop_write_worker_status "$wdir/status.tsv" "reviewer-security" "$run_id" \
+    "111" "codex" "" "" "read-only" "p" "$events" "r" "s" "2026-05-25T12:00:00Z" "running" "" ""
+
+  out="$(almanac_loop_worker_watch "$tmp" "$run_id" "reviewer-security")"
+  assert_contains "$out" '{"e":"started"}' "watch should stream the worker's event log"
+  assert_contains "$out" '{"e":"thinking"}' "watch should stream every event line"
+
+  # A worker whose event log does not exist yet reports cleanly (non-zero) instead
+  # of hanging or erroring.
+  perfdir="$tmp/.almanac/runs/$run_id/workers/reviewer-perf"
+  mkdir -p "$perfdir"
+  almanac_loop_write_worker_status "$perfdir/status.tsv" "reviewer-perf" "$run_id" \
+    "112" "codex" "" "" "read-only" "p" "$perfdir/events.jsonl" "r" "s" "2026-05-25T12:00:00Z" "running" "" ""
+  rc=0
+  almanac_loop_worker_watch "$tmp" "$run_id" "reviewer-perf" >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 1 ] || fail "watch should return non-zero when the worker has no event log yet (got $rc)"
+  echo "  PASS: worker watch streams the worker event log"
+}
+
 test_ui_render_degrades_without_gum() {
   local out rc
   out="$(printf '%s\n' "reviewer-security stalled" | ALMANAC_NO_GUM=1 almanac_loop_ui_render)"
@@ -526,4 +557,5 @@ test_agent_runner_propagates_claude_failure
 test_worker_start_tracks_background_agent
 test_worker_health_classifies_states
 test_worker_health_of_reads_state
+test_worker_watch_streams_event_log
 test_ui_render_degrades_without_gum

@@ -69,6 +69,10 @@ almanac harden <target> --goal "<goal>"
                              Draft a harden-loop rubric for a target
 almanac harden <target> --approve
                              Approve an edited harden-loop rubric
+almanac harden <target> --watch
+                             Redraw the live supervision dashboard for the latest run
+almanac harden <target> --watch-worker <lens>
+                             Stream one reviewer's live event log
 almanac update               Update almanac (git pull + re-install)
 almanac sync                 Check adapted skills for upstream changes
 almanac help                 Show help

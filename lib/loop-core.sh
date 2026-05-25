@@ -591,6 +591,38 @@ almanac_loop_worker_start() {
   printf '%s\n' "$worker_pid"
 }
 
+# Stream one worker's live event log (events.jsonl) so an operator can watch what
+# a single reviewer/fixer is doing. Reads the worker's events-file path from its
+# status.tsv (falling back to the conventional path), so it works regardless of
+# where the runner allocated the log. With follow="follow" on a TTY it tails the
+# log live (-f); otherwise it prints the current contents once and returns, so
+# tests, pipes, and non-interactive callers never block. Returns 1 (and warns)
+# when the worker has produced no event log yet.
+almanac_loop_worker_watch() {
+  local root="$1"
+  local run_id="$2"
+  local worker_id="$3"
+  local follow="${4:-}"
+  local status_file events_file=""
+
+  status_file="$(almanac_loop_worker_status_file "$root" "$run_id" "$worker_id")"
+  if [ -f "$status_file" ]; then
+    events_file="$(almanac_loop_status_field "$status_file" "events_file" || true)"
+  fi
+  [ -n "$events_file" ] || events_file="$(almanac_loop_worker_file "$root" "$run_id" "$worker_id" "events.jsonl")"
+
+  if [ ! -f "$events_file" ]; then
+    _warn "No event stream for worker '$worker_id' in run '$run_id' yet."
+    return 1
+  fi
+
+  if [ "$follow" = "follow" ] && [ -t 1 ]; then
+    tail -n +1 -f "$events_file"
+  else
+    cat "$events_file"
+  fi
+}
+
 almanac_loop_feedback_commands() {
   local root="${1:-.}"
 
@@ -733,6 +765,19 @@ almanac_loop_ui_render() {
     gum style --border rounded --padding "0 1" "$(cat)"
   else
     cat
+  fi
+}
+
+# Clear the terminal between redraw-loop frames — but ONLY when stdout is a TTY,
+# so piped/captured output (tests, scripts, the hub reading a tail) is never
+# polluted with clear escape sequences. A no-op off a terminal. Uses clear(1)
+# when present, else the ANSI clear+home sequence.
+almanac_loop_ui_clear() {
+  [ -t 1 ] || return 0
+  if command -v clear >/dev/null 2>&1; then
+    clear
+  else
+    printf '\033[2J\033[H'
   fi
 }
 

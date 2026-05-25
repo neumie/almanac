@@ -14,6 +14,8 @@ echo "  harden <target>        Fan out read-only reviewers (one per lens), aggre
 echo "  harden <target> --goal Draft a harden-loop rubric for a target"
 echo "  harden <target> --fix  Run one sequential fixer over open blocking findings + feedback loops"
 echo "  harden <target> --loop Run the convergence loop (rounds) until converged or budget hit"
+echo "  harden <target> --watch  Redraw the live supervision dashboard for the latest run"
+echo "  harden <target> --watch-worker <lens>  Stream one reviewer's live event log"
 echo "  update                 Update almanac (git pull)"
 echo "  sync                   Check adapted skills for upstream changes"
 echo "  help                   Show this help"
