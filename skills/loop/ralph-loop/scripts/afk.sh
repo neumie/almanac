@@ -3,6 +3,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/ralph-git.sh"
+source "$SCRIPT_DIR/ralph-run-registry.sh"
 
 if [ -z "$1" ] || [ -z "$2" ]; then
   echo "Usage: $0 <prd-name> <iterations>"
@@ -449,10 +450,15 @@ stop_overseer() {
 }
 
 cleanup_all() {
+  local exit_code="${1:-0}"
+
+  trap - EXIT INT TERM
   stop_overseer
   [ -n "${tmpfile:-}" ] && rm -f "$tmpfile"
+  ralph_mark_run_finished "$exit_code"
+  exit "$exit_code"
 }
-trap cleanup_all EXIT INT TERM
+trap 'cleanup_all "$?"' EXIT INT TERM
 
 if [ "${RALPH_NO_OVERSEE:-}" = "1" ]; then
   OVERSEER_DISPLAY="off (RALPH_NO_OVERSEE=1)"
@@ -474,6 +480,10 @@ echo "CI watch:    poll ${CI_POLL}s, timeout ${CI_TIMEOUT}s"
 echo "Overseer log: $OVERSEE_LOG"
 echo "Reports log: $REPORTS_LOG"
 echo "========================="
+echo ""
+
+ralph_register_run "$PRD_NAME"
+echo "Run ID:      $RALPH_RUN_ID"
 echo ""
 
 # Pick up any pre-existing CI failure (e.g. from a prior AFK run or a manual

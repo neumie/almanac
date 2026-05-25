@@ -2,46 +2,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ALMANAC_HOME="${ALMANAC_HOME:-$(cd "$SCRIPT_DIR/../../../.." && pwd)}"
-
-if [ ! -f "$ALMANAC_HOME/lib/loop-core.sh" ]; then
-  echo "Error: lib/loop-core.sh not found at $ALMANAC_HOME/lib/loop-core.sh" >&2
-  exit 1
-fi
-
-source "$ALMANAC_HOME/lib/loop-core.sh"
-
-RALPH_RUN_ID=""
-
-register_ralph_run() {
-  local target pid
-
-  target="docs/plans/${PRD_NAME}/prd.md"
-  pid="${BASHPID:-$$}"
-
-  if ! RALPH_RUN_ID="$(almanac_loop_register_run "$PWD" "ralph" "$target" "$pid")"; then
-    echo "Error: failed to register Ralph run." >&2
-    exit 1
-  fi
-}
-
-finish_ralph_run() {
-  local exit_code="$1"
-  local status
-
-  trap - EXIT
-
-  if [ -n "$RALPH_RUN_ID" ]; then
-    if [ "$exit_code" -eq 0 ]; then
-      status="done"
-    else
-      status="failed"
-    fi
-    almanac_loop_mark_run_status "$PWD" "$RALPH_RUN_ID" "$status" >/dev/null 2>&1 || true
-  fi
-
-  exit "$exit_code"
-}
+source "$SCRIPT_DIR/ralph-run-registry.sh"
 
 if [ -z "$1" ]; then
   echo "Usage: $0 <prd-name>"
@@ -135,8 +96,8 @@ case "$PROVIDER" in
     ;;
 esac
 
-register_ralph_run
-trap 'finish_ralph_run "$?"' EXIT
+ralph_register_run "$PRD_NAME"
+trap 'ralph_finish_run "$?"' EXIT
 
 echo "======= RALPH ONCE ======="
 echo "PRD:         $PRD_NAME"

@@ -41,6 +41,7 @@ check "cmd/help.sh"
 check "cmd/sync.sh"
 check "install.sh"
 check "skills/loop/ralph-loop/scripts/prompt.sh"
+check "skills/loop/ralph-loop/scripts/ralph-run-registry.sh"
 
 # Lib
 check "lib/core.sh"
