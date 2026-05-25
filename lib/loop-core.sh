@@ -1416,3 +1416,90 @@ almanac_loop_run_watch() {
   done
   return 0
 }
+
+# --- New-run composition (hub "New run" flow) -------------------------------
+#
+# The hub's New-run flow picks a loop type (ralph|harden), gathers config, and
+# launches it. The argv/env COMPOSITION is pure (no gum, no exec) so it is unit-
+# testable off a terminal and doubles as the seam the gum menu and `almanac hub
+# --new … [--dry-run]` both drive: menu choices in, launch tokens out.
+#
+# Config arrives as `key=value` pairs (the keys the gum menu / --new flags
+# collect): ralph takes prd, mode, provider, model, effort, iterations, oversee;
+# harden takes target, rounds, lenses, provider, model, effort.
+
+# Compose the launcher argv for a new run, one token per line, starting with the
+# `almanac` subcommand. ralph config maps to ralph.sh flags; harden launches the
+# convergence loop (`harden <target> --loop [--rounds N]`) — its provider/model/
+# effort/lenses are environment, emitted by almanac_loop_new_run_env, not argv.
+# Returns 1 for an unknown type, 2 when a required field is missing (ralph: prd;
+# harden: target).
+almanac_loop_new_run_argv() {
+  local type="$1"; shift
+  local prd="" mode="" provider="" model="" effort="" iterations="" oversee="" target="" rounds="" kv key val
+  for kv in "$@"; do
+    key="${kv%%=*}"; val="${kv#*=}"
+    case "$key" in
+      prd) prd="$val" ;;
+      mode) mode="$val" ;;
+      provider) provider="$val" ;;
+      model) model="$val" ;;
+      effort) effort="$val" ;;
+      iterations) iterations="$val" ;;
+      oversee) oversee="$val" ;;
+      target) target="$val" ;;
+      rounds) rounds="$val" ;;
+    esac
+  done
+
+  case "$type" in
+    ralph)
+      [ -n "$prd" ] || return 2
+      printf '%s\n' ralph
+      printf '%s\n%s\n' --prd "$prd"
+      if [ -n "$mode" ]; then printf '%s\n%s\n' --mode "$mode"; fi
+      if [ -n "$provider" ]; then printf '%s\n%s\n' --provider "$provider"; fi
+      if [ -n "$model" ]; then printf '%s\n%s\n' --model "$model"; fi
+      if [ -n "$effort" ]; then printf '%s\n%s\n' --effort "$effort"; fi
+      if [ -n "$iterations" ]; then printf '%s\n%s\n' --iterations "$iterations"; fi
+      if [ "$oversee" = "off" ]; then printf '%s\n' --no-oversee; fi
+      ;;
+    harden)
+      [ -n "$target" ] || return 2
+      printf '%s\n%s\n%s\n' harden "$target" --loop
+      if [ -n "$rounds" ]; then printf '%s\n%s\n' --rounds "$rounds"; fi
+      ;;
+    *) return 1 ;;
+  esac
+  return 0
+}
+
+# Compose the environment assignments (KEY=VALUE, one per line) a new run needs
+# beyond its argv. ralph takes all config as flags, so it emits nothing; harden's
+# reviewer/role config rides on environment (HARDEN_LENSES / HARDEN_PROVIDER /
+# HARDEN_MODEL / HARDEN_EFFORT). Returns 1 for an unknown type.
+almanac_loop_new_run_env() {
+  local type="$1"; shift
+  local provider="" model="" effort="" lenses="" kv key val
+  for kv in "$@"; do
+    key="${kv%%=*}"; val="${kv#*=}"
+    case "$key" in
+      provider) provider="$val" ;;
+      model) model="$val" ;;
+      effort) effort="$val" ;;
+      lenses) lenses="$val" ;;
+    esac
+  done
+
+  case "$type" in
+    ralph) : ;;
+    harden)
+      if [ -n "$lenses" ]; then printf 'HARDEN_LENSES=%s\n' "$lenses"; fi
+      if [ -n "$provider" ]; then printf 'HARDEN_PROVIDER=%s\n' "$provider"; fi
+      if [ -n "$model" ]; then printf 'HARDEN_MODEL=%s\n' "$model"; fi
+      if [ -n "$effort" ]; then printf 'HARDEN_EFFORT=%s\n' "$effort"; fi
+      ;;
+    *) return 1 ;;
+  esac
+  return 0
+}

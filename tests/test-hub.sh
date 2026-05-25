@@ -130,11 +130,50 @@ test_hub_watch_renders_run_detail() {
   echo "  PASS: hub --watch renders run detail"
 }
 
+# Criterion 3: `almanac hub --new ralph … --dry-run` composes (without launching)
+# the ralph launcher invocation from the menu's config flags. The gum New-run menu
+# drives the same seam; --dry-run is the non-interactive, scripts-safe preview.
+test_hub_new_dry_run_composes_ralph_launch() {
+  local out
+  out="$("$ALMANAC_BIN" hub --new ralph --prd auth-system --mode afk --iterations 4 --provider codex --dry-run </dev/null 2>&1)"
+  assert_contains "$out" "ralph" "hub --new ralph dry-run shows the ralph launch"
+  assert_contains "$out" "--prd auth-system" "dry-run shows --prd"
+  assert_contains "$out" "--mode afk" "dry-run shows --mode"
+  assert_contains "$out" "--iterations 4" "dry-run shows --iterations"
+  assert_contains "$out" "--provider codex" "dry-run shows --provider"
+  echo "  PASS: hub --new ralph dry-run composes the launch"
+}
+
+# Criterion 3: `almanac hub --new harden … --dry-run` composes the harden
+# convergence-loop launch — its --rounds flag plus the HARDEN_* env its reviewer
+# config rides on.
+test_hub_new_dry_run_composes_harden_launch() {
+  local out
+  out="$("$ALMANAC_BIN" hub --new harden --target src/app.js --rounds 2 --lenses security,perf --provider codex --dry-run </dev/null 2>&1)"
+  assert_contains "$out" "harden src/app.js --loop" "harden dry-run shows the loop launch"
+  assert_contains "$out" "--rounds 2" "harden dry-run shows --rounds"
+  assert_contains "$out" "HARDEN_LENSES=security,perf" "harden dry-run shows the lenses env"
+  assert_contains "$out" "HARDEN_PROVIDER=codex" "harden dry-run shows the provider env"
+  echo "  PASS: hub --new harden dry-run composes the launch"
+}
+
+# Criterion 3: a new run missing its required config (harden target) is rejected
+# with a non-zero exit rather than launching a malformed run.
+test_hub_new_missing_required_errors() {
+  local rc=0
+  "$ALMANAC_BIN" hub --new harden --rounds 2 --dry-run </dev/null >/dev/null 2>&1 || rc=$?
+  [ "$rc" -ne 0 ] || fail "hub --new harden without a target must exit non-zero"
+  echo "  PASS: hub --new without required config errors"
+}
+
 echo "=== Hub Tests ==="
 test_bare_almanac_non_tty_prints_help
 test_hub_command_renders_registry_overview
 test_hub_steer_queues_directive
 test_hub_stop_signals_run
 test_hub_watch_renders_run_detail
+test_hub_new_dry_run_composes_ralph_launch
+test_hub_new_dry_run_composes_harden_launch
+test_hub_new_missing_required_errors
 echo ""
 echo "All hub tests passed."

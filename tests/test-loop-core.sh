@@ -1022,6 +1022,65 @@ test_run_watch_one_shot_renders_detail() {
   echo "  PASS: run watch one-shot renders detail"
 }
 
+test_new_run_argv_ralph_composes_flags() {
+  local flat
+  flat="$(almanac_loop_new_run_argv ralph prd=auth-system mode=afk provider=codex model=gpt-5.5 effort=high iterations=8 oversee=off | tr '\n' ' ')"
+  assert_contains "$flat" "ralph " "ralph new-run argv leads with the ralph subcommand"
+  assert_contains "$flat" "--prd auth-system" "ralph argv carries --prd <name>"
+  assert_contains "$flat" "--mode afk" "ralph argv carries --mode"
+  assert_contains "$flat" "--provider codex" "ralph argv carries --provider"
+  assert_contains "$flat" "--model gpt-5.5" "ralph argv carries --model"
+  assert_contains "$flat" "--effort high" "ralph argv carries --effort"
+  assert_contains "$flat" "--iterations 8" "ralph argv carries --iterations"
+  assert_contains "$flat" "--no-oversee" "oversee=off adds --no-oversee"
+
+  # Overseer left on (the default) must NOT add --no-oversee.
+  flat="$(almanac_loop_new_run_argv ralph prd=auth-system mode=afk | tr '\n' ' ')"
+  case "$flat" in
+    *"--no-oversee"*) fail "overseer defaults to on (no --no-oversee flag when oversee unset)" ;;
+  esac
+  echo "  PASS: new-run argv composes ralph flags"
+}
+
+test_new_run_argv_harden_composes_loop() {
+  local flat
+  flat="$(almanac_loop_new_run_argv harden target=src/app.js rounds=3 | tr '\n' ' ')"
+  assert_contains "$flat" "harden src/app.js --loop" "harden argv launches the convergence loop"
+  assert_contains "$flat" "--rounds 3" "harden argv carries --rounds when set"
+
+  # Rounds omitted -> no --rounds (harden falls back to its own default budget).
+  flat="$(almanac_loop_new_run_argv harden target=src/app.js | tr '\n' ' ')"
+  case "$flat" in
+    *"--rounds"*) fail "no --rounds flag when rounds is unset" ;;
+  esac
+  echo "  PASS: new-run argv composes harden loop launch"
+}
+
+test_new_run_argv_rejects_unknown_and_missing() {
+  local rc
+  rc=0; almanac_loop_new_run_argv bogus target=x >/dev/null 2>&1 || rc=$?
+  assert_eq "1" "$rc" "an unknown run type must return 1"
+  rc=0; almanac_loop_new_run_argv ralph mode=afk >/dev/null 2>&1 || rc=$?
+  assert_eq "2" "$rc" "a ralph run without a prd must return 2"
+  rc=0; almanac_loop_new_run_argv harden rounds=2 >/dev/null 2>&1 || rc=$?
+  assert_eq "2" "$rc" "a harden run without a target must return 2"
+  echo "  PASS: new-run argv rejects unknown type and missing required config"
+}
+
+test_new_run_env_maps_harden_config() {
+  local out
+  out="$(almanac_loop_new_run_env harden lenses=security,perf provider=codex model=gpt-5.5 effort=high)"
+  assert_contains "$out" "HARDEN_LENSES=security,perf" "harden env carries HARDEN_LENSES"
+  assert_contains "$out" "HARDEN_PROVIDER=codex" "harden env carries HARDEN_PROVIDER"
+  assert_contains "$out" "HARDEN_MODEL=gpt-5.5" "harden env carries HARDEN_MODEL"
+  assert_contains "$out" "HARDEN_EFFORT=high" "harden env carries HARDEN_EFFORT"
+
+  # Ralph config rides on flags (argv), not env — so its env stream is empty.
+  out="$(almanac_loop_new_run_env ralph provider=codex model=gpt-5.5)"
+  assert_eq "" "$out" "ralph new-run emits no env lines (config via flags)"
+  echo "  PASS: new-run env maps harden config"
+}
+
 echo "=== Loop Core Tests ==="
 test_detects_project_marker_commands
 test_dedupes_python_markers
@@ -1062,3 +1121,7 @@ test_run_stop_writes_stopfile_and_signals
 test_run_steer_writes_steerfile_with_directive
 test_run_detail_renders_run_status
 test_run_watch_one_shot_renders_detail
+test_new_run_argv_ralph_composes_flags
+test_new_run_argv_harden_composes_loop
+test_new_run_argv_rejects_unknown_and_missing
+test_new_run_env_maps_harden_config
