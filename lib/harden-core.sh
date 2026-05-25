@@ -12,6 +12,16 @@ if ! declare -F almanac_loop_agent_run >/dev/null 2>&1; then
   unset __harden_core_dir
 fi
 
+# The dashboard composes the gum-or-plain UI seam (status glyph / render / clear)
+# from lib/ui.sh — source it directly and idempotently so harden-core's own
+# dependency is explicit (not borrowed transitively through loop-core).
+if ! declare -F almanac_loop_ui_render >/dev/null 2>&1; then
+  __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/ui.sh
+  source "$__harden_core_dir/ui.sh"
+  unset __harden_core_dir
+fi
+
 # --- Role config (per-role provider / model / effort) --------------------------
 #
 # Each harden role selects its own agent config:

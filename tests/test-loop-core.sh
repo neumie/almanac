@@ -839,17 +839,6 @@ test_worker_watch_streams_event_log() {
   echo "  PASS: worker watch streams the worker event log"
 }
 
-test_ui_render_degrades_without_gum() {
-  local out rc
-  out="$(printf '%s\n' "reviewer-security stalled" | ALMANAC_NO_GUM=1 almanac_loop_ui_render)"
-  assert_contains "$out" "reviewer-security stalled" "ui render must pass content through plainly when gum is suppressed"
-
-  rc=0
-  ALMANAC_NO_GUM=1 almanac_loop_ui_has_gum || rc=$?
-  [ "$rc" -ne 0 ] || fail "has_gum must report absent when ALMANAC_NO_GUM is set"
-  echo "  PASS: ui render degrades without gum"
-}
-
 test_hub_render_lists_running_with_live_status() {
   local tmp out
   new_tmpdir
@@ -1081,68 +1070,6 @@ test_new_run_env_maps_harden_config() {
   echo "  PASS: new-run env maps harden config"
 }
 
-test_ui_menu_render_numbers_options() {
-  local out
-  out="$(almanac_loop_ui_menu_render "+ New run" "watch" "quit")"
-  assert_contains "$out" "1) + New run" "menu render numbers the first option"
-  assert_contains "$out" "2) watch" "menu render numbers the second option"
-  assert_contains "$out" "3) quit" "menu render numbers the third option"
-  echo "  PASS: ui menu render numbers options"
-}
-
-test_ui_menu_pick_maps_and_rejects() {
-  local rc
-  assert_eq "watch" "$(almanac_loop_ui_menu_pick 2 "+ New run" "watch" "quit")" "pick maps a number to its option"
-  assert_eq "+ New run" "$(almanac_loop_ui_menu_pick 1 "+ New run" "watch" "quit")" "pick maps the first option"
-
-  rc=0; almanac_loop_ui_menu_pick "" "a" "b" >/dev/null || rc=$?
-  [ "$rc" -ne 0 ] || fail "pick must reject a blank selection"
-  rc=0; almanac_loop_ui_menu_pick "x" "a" "b" >/dev/null || rc=$?
-  [ "$rc" -ne 0 ] || fail "pick must reject a non-numeric selection"
-  rc=0; almanac_loop_ui_menu_pick "9" "a" "b" >/dev/null || rc=$?
-  [ "$rc" -ne 0 ] || fail "pick must reject an out-of-range selection"
-  echo "  PASS: ui menu pick maps and rejects"
-}
-
-test_ui_choose_degrades_to_numbered_menu() {
-  local out err rc
-  # Without gum, choose prints a numbered menu (to stderr) and reads a number from
-  # stdin, echoing the chosen option (and only that) on stdout.
-  out="$(printf '2\n' | ALMANAC_NO_GUM=1 almanac_loop_ui_choose "Pick one" "alpha" "beta" "gamma" 2>/dev/null)"
-  assert_eq "beta" "$out" "plain choose maps the typed number to the option"
-
-  err="$(printf '2\n' | ALMANAC_NO_GUM=1 almanac_loop_ui_choose "Pick one" "alpha" "beta" 2>&1 >/dev/null)"
-  assert_contains "$err" "1) alpha" "plain choose renders the numbered menu on stderr"
-  assert_contains "$err" "Pick one" "plain choose renders the header on stderr"
-
-  rc=0
-  printf 'bogus\n' | ALMANAC_NO_GUM=1 almanac_loop_ui_choose "Pick one" "alpha" "beta" >/dev/null 2>&1 || rc=$?
-  [ "$rc" -ne 0 ] || fail "plain choose must return nonzero on bad input (cancel-equivalent)"
-  echo "  PASS: ui choose degrades to a numbered menu"
-}
-
-test_ui_input_degrades_to_read() {
-  local out
-  out="$(printf 'src/app.js\n' | ALMANAC_NO_GUM=1 almanac_loop_ui_input "Target" 2>/dev/null)"
-  assert_eq "src/app.js" "$out" "plain input returns the typed value"
-
-  # Empty input falls back to the default.
-  out="$(printf '\n' | ALMANAC_NO_GUM=1 almanac_loop_ui_input "Iterations" "10" 2>/dev/null)"
-  assert_eq "10" "$out" "plain input falls back to the default on empty input"
-  echo "  PASS: ui input degrades to read"
-}
-
-test_ui_confirm_degrades_to_read() {
-  local rc
-  rc=0; printf 'y\n'  | ALMANAC_NO_GUM=1 almanac_loop_ui_confirm "Go?" >/dev/null 2>&1 || rc=$?
-  [ "$rc" -eq 0 ] || fail "plain confirm must return 0 (yes) for 'y'"
-  rc=0; printf 'n\n'  | ALMANAC_NO_GUM=1 almanac_loop_ui_confirm "Go?" >/dev/null 2>&1 || rc=$?
-  [ "$rc" -eq 1 ] || fail "plain confirm must return 1 (no) for 'n'"
-  rc=0; printf '\n'   | ALMANAC_NO_GUM=1 almanac_loop_ui_confirm "Go?" >/dev/null 2>&1 || rc=$?
-  [ "$rc" -eq 0 ] || fail "plain confirm must default to yes on empty input (gum affirmative default)"
-  echo "  PASS: ui confirm degrades to read"
-}
-
 echo "=== Loop Core Tests ==="
 test_detects_project_marker_commands
 test_dedupes_python_markers
@@ -1173,7 +1100,6 @@ test_worker_start_tracks_background_agent
 test_worker_health_classifies_states
 test_worker_health_of_reads_state
 test_worker_watch_streams_event_log
-test_ui_render_degrades_without_gum
 test_hub_render_lists_running_with_live_status
 test_hub_render_recent_newest_first_capped
 test_hub_overview_degrades_without_gum
@@ -1187,8 +1113,3 @@ test_new_run_argv_ralph_composes_flags
 test_new_run_argv_harden_composes_loop
 test_new_run_argv_rejects_unknown_and_missing
 test_new_run_env_maps_harden_config
-test_ui_menu_render_numbers_options
-test_ui_menu_pick_maps_and_rejects
-test_ui_choose_degrades_to_numbered_menu
-test_ui_input_degrades_to_read
-test_ui_confirm_degrades_to_read

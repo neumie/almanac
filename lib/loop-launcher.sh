@@ -14,8 +14,19 @@
 # summary + confirm it execs the underlying runner — it never reimplements the
 # run, only the configuration.
 #
-# Requires lib/core.sh (_die/_info/_success) and lib/loop-core.sh (the ui seam),
-# both sourced by every entry point before this file.
+# Requires lib/core.sh (_die/_info/_success), sourced by every entry point before
+# this file. The gum-or-plain UI seam (almanac_loop_ui_*) lives in lib/ui.sh and
+# is pulled in directly below, so the launcher's dependency on it is explicit.
+
+# The launcher drives the whole config UX through the gum-or-plain seam
+# (choose/input/confirm/render). Source it directly and idempotently so the
+# dependency is the launcher's own, not borrowed from whatever sourced this file.
+if ! declare -F almanac_loop_ui_choose >/dev/null 2>&1; then
+  __loop_launcher_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/ui.sh
+  source "$__loop_launcher_dir/ui.sh"
+  unset __loop_launcher_dir
+fi
 
 # --- provider helpers ---------------------------------------------------------
 
