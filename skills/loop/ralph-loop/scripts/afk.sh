@@ -508,6 +508,8 @@ for ((i=1; i<=$ITERATIONS; i++)); do
   echo "======= ITERATION $i of $ITERATIONS ($PRD_NAME) ======="
   echo ""
 
+  ralph_update_run_progress "$i" "provider=$PROVIDER iteration=$i/$ITERATIONS"
+
   ralph_commits=$(git log --grep="RALPH($PRD_NAME)" -n 10 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No RALPH commits found")
 
   prompt_prefix=$(build_prompt_prefix)

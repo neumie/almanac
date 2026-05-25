@@ -28,6 +28,21 @@ ralph_register_run() {
   fi
 }
 
+# Emit the live half of the shared run-status contract: record the current
+# iteration (as the contract's `round` field) and a one-line summary into the
+# run's status.tsv blob, so the almanac hub's read view reflects progress while
+# the loop runs. Mirrors harden's per-round almanac_loop_update_run_progress
+# call. Best-effort: a missing run id or any registry failure must never break
+# the loop, so it is fully guarded.
+ralph_update_run_progress() {
+  local round="$1"
+  local summary="$2"
+
+  [ -n "$RALPH_RUN_ID" ] || return 0
+
+  almanac_loop_update_run_progress "$PWD" "$RALPH_RUN_ID" "$round" "$summary" >/dev/null 2>&1 || true
+}
+
 ralph_mark_run_finished() {
   local exit_code="$1"
   local status

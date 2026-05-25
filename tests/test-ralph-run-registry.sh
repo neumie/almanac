@@ -175,8 +175,54 @@ test_afk_marks_run_failed_on_provider_error() {
   echo "  PASS: afk marks run failed on provider error"
 }
 
+test_once_emits_live_run_progress_contract() {
+  local tmp fakebin index_file status_file status_rel
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_codex "$fakebin"
+
+  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex bash "$ONCE_SCRIPT" demo >/dev/null)
+
+  index_file="$tmp/.almanac/runs/index.tsv"
+  status_rel="$(awk 'BEGIN { FS = "\t" } NR == 2 { print $5 }' "$index_file")"
+  status_file="$tmp/$status_rel"
+  [ -f "$status_file" ] || fail "ralph once should write status file"
+  assert_file_contains "$status_file" $'round\t1' "once should record the live iteration as round in the run-status contract"
+  assert_file_contains "$status_file" $'summary\tprovider=codex iteration=1/1' "once should record the live iteration summary in the run-status contract"
+  echo "  PASS: once emits the live run-status progress contract"
+}
+
+test_afk_emits_live_run_progress_contract() {
+  local tmp fakebin index_file status_file status_rel
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_codex "$fakebin"
+
+  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex RALPH_NO_OVERSEE=1 bash "$AFK_SCRIPT" demo 1 >/dev/null)
+
+  index_file="$tmp/.almanac/runs/index.tsv"
+  status_rel="$(awk 'BEGIN { FS = "\t" } NR == 2 { print $5 }' "$index_file")"
+  status_file="$tmp/$status_rel"
+  [ -f "$status_file" ] || fail "ralph afk should write status file"
+  assert_file_contains "$status_file" $'round\t1' "afk should record the live iteration as round in the run-status contract"
+  assert_file_contains "$status_file" $'summary\tprovider=codex iteration=1/1' "afk should record the live iteration summary in the run-status contract"
+  echo "  PASS: afk emits the live run-status progress contract"
+}
+
 echo "=== Ralph Run Registry Tests ==="
 test_once_registers_and_marks_run_done
 test_once_marks_run_failed_on_provider_error
+test_once_emits_live_run_progress_contract
 test_afk_registers_and_marks_run_done
 test_afk_marks_run_failed_on_provider_error
+test_afk_emits_live_run_progress_contract

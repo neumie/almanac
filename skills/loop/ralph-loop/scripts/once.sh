@@ -110,6 +110,8 @@ echo "Permission:  $PERMISSION_DISPLAY"
 echo "=========================="
 echo ""
 
+ralph_update_run_progress 1 "provider=$PROVIDER iteration=1/1"
+
 ralph_commits=$(git log --grep="RALPH($PRD_NAME)" -n 10 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No RALPH commits found")
 
 case "$PROVIDER" in
