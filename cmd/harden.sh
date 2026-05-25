@@ -7,11 +7,14 @@ source "$ALMANAC_HOME/lib/harden-core.sh"
 
 usage() {
   printf '%s\n' "Usage:"
+  printf '%s\n' "  almanac harden <target>"
   printf '%s\n' "  almanac harden <target> --goal <goal>"
   printf '%s\n' "  almanac harden <target> --approve"
   printf '%s\n' ""
-  printf '%s\n' "Creates docs/plans/harden/<target-slug>/rubric.md in the current repo."
-  printf '%s\n' "Approves an edited draft rubric when --approve is used."
+  printf '%s\n' "With no flags, runs a single read-only reviewer over the target and"
+  printf '%s\n' "prints its findings."
+  printf '%s\n' "With --goal, creates docs/plans/harden/<target-slug>/rubric.md in the repo."
+  printf '%s\n' "With --approve, approves an edited draft rubric."
 }
 
 TARGET=""
@@ -82,19 +85,20 @@ if [ "$APPROVE" -eq 1 ]; then
   esac
 fi
 
-[ -n "$GOAL" ] || {
-  usage
-  _die "Missing --goal"
-}
+if [ -n "$GOAL" ]; then
+  RUBRIC_PATH="$(almanac_harden_rubric_path "$PWD" "$TARGET")"
+  DISPLAY_PATH="${RUBRIC_PATH#$PWD/}"
 
-RUBRIC_PATH="$(almanac_harden_rubric_path "$PWD" "$TARGET")"
-DISPLAY_PATH="${RUBRIC_PATH#$PWD/}"
+  if [ -e "$RUBRIC_PATH" ]; then
+    _die "Rubric already exists: $DISPLAY_PATH"
+  fi
 
-if [ -e "$RUBRIC_PATH" ]; then
-  _die "Rubric already exists: $DISPLAY_PATH"
+  almanac_harden_write_rubric "$PWD" "$TARGET" "$GOAL"
+
+  _success "Draft rubric created: $DISPLAY_PATH"
+  _info "Edit and approve rubric before running reviewers."
+  exit 0
 fi
 
-almanac_harden_write_rubric "$PWD" "$TARGET" "$GOAL"
-
-_success "Draft rubric created: $DISPLAY_PATH"
-_info "Edit and approve rubric before running reviewers."
+# No --goal or --approve: run a single read-only reviewer over the target.
+almanac_harden_review "$PWD" "$TARGET"

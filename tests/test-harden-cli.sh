@@ -6,6 +6,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ALMANAC="$ROOT/bin/almanac"
 
+# Source the libs for pure-function unit tests (parser/formatter). harden-core
+# pulls in loop-core + core itself.
+source "$ROOT/lib/harden-core.sh"
+
 TMPDIRS=()
 NEW_TMPDIR=""
 
@@ -33,9 +37,54 @@ assert_file_contains() {
   fi
 }
 
+assert_contains() {
+  local haystack="$1"
+  local needle="$2"
+  local message="$3"
+
+  case "$haystack" in
+    *"$needle"*) ;;
+    *) fail "$message" ;;
+  esac
+}
+
 new_tmpdir() {
   NEW_TMPDIR=$(mktemp -d)
   TMPDIRS+=("$NEW_TMPDIR")
+}
+
+# Fake codex that writes canned JSON-Lines findings to --output-last-message and
+# logs its args, so the reviewer path is exercised without a real model call.
+write_fake_reviewer_codex() {
+  local fakebin="$1"
+  local args_log="$2"
+
+  mkdir -p "$fakebin"
+  cat > "$fakebin/codex" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "\$*" > "$args_log"
+result_file=""
+while [ "\$#" -gt 0 ]; do
+  case "\$1" in
+    --output-last-message)
+      shift
+      result_file="\${1:-}"
+      ;;
+  esac
+  shift || true
+done
+
+if [ -n "\$result_file" ]; then
+  {
+    printf '%s\n' '{"lens":"correctness","severity":"high","location":"src/app.js:10","claim":"off-by-one in loop bound","demonstration":"input [] returns -1"}'
+    printf '%s\n' '{"lens":"correctness","severity":"low","location":"src/app.js:22","claim":"unused variable x","demonstration":"lint flags x"}'
+  } > "\$result_file"
+fi
+printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"reviewing"}}'
+EOF
+  chmod +x "$fakebin/codex"
 }
 
 test_creates_draft_rubric_for_target_and_goal() {
@@ -59,15 +108,69 @@ test_creates_draft_rubric_for_target_and_goal() {
   echo "  PASS: creates draft rubric for target and goal"
 }
 
-test_requires_goal() {
-  local tmp
+test_review_runs_single_reviewer_and_prints_findings() {
+  local tmp fakebin output args
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  if (cd "$tmp" && "$ALMANAC" harden lib/loop-core.sh >/dev/null 2>&1); then
-    fail "harden should reject missing goal"
+  mkdir -p "$tmp/src"
+  printf '%s\n' "code" > "$tmp/src/app.js"
+  fakebin="$tmp/bin"
+  write_fake_reviewer_codex "$fakebin" "$tmp/codex-args.txt"
+
+  output="$(cd "$tmp" && HARDEN_REVIEWER_PROVIDER=codex PATH="$fakebin:$PATH" "$ALMANAC" harden src/app.js 2>&1)"
+
+  assert_contains "$output" "off-by-one in loop bound" "review should print the parsed finding claim"
+  assert_contains "$output" "unused variable x" "review should print all parsed findings"
+  args="$(cat "$tmp/codex-args.txt")"
+  assert_contains "$args" "--sandbox read-only" "reviewer should run read-only via agent_run"
+  echo "  PASS: review runs single reviewer and prints findings"
+}
+
+test_review_errors_on_missing_target() {
+  local tmp output
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  if output=$(cd "$tmp" && "$ALMANAC" harden src/missing.js 2>&1); then
+    fail "review should reject a missing target"
   fi
-  echo "  PASS: requires goal"
+  assert_contains "$output" "not found" "review should report the missing target via _die"
+  echo "  PASS: review errors on missing target"
+}
+
+test_format_findings_skips_malformed_lines() {
+  local tmp result output
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  result="$tmp/result.txt"
+
+  {
+    printf '%s\n' '{"lens":"security","severity":"high","location":"a.js:1","claim":"sql injection","demonstration":"payload OR 1=1"}'
+    printf '%s\n' 'this is not json'
+    printf '%s\n' ''
+  } > "$result"
+
+  output="$(almanac_harden_format_findings "$result")"
+
+  assert_contains "$output" "sql injection" "parser should surface a well-formed finding"
+  case "$output" in
+    *"this is not json"*) fail "parser should drop malformed lines" ;;
+    *) ;;
+  esac
+  echo "  PASS: format findings skips malformed lines"
+}
+
+test_format_findings_reports_empty() {
+  local tmp result output
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  result="$tmp/result.txt"
+  : > "$result"
+
+  output="$(almanac_harden_format_findings "$result")"
+  assert_contains "$output" "No findings" "empty reviewer output should report no findings"
+  echo "  PASS: format findings reports empty"
 }
 
 test_refuses_to_overwrite_existing_rubric() {
@@ -121,7 +224,10 @@ test_approve_requires_existing_rubric() {
 
 echo "=== Harden CLI Tests ==="
 test_creates_draft_rubric_for_target_and_goal
-test_requires_goal
 test_refuses_to_overwrite_existing_rubric
 test_approves_existing_draft_rubric
 test_approve_requires_existing_rubric
+test_review_runs_single_reviewer_and_prints_findings
+test_review_errors_on_missing_target
+test_format_findings_skips_malformed_lines
+test_format_findings_reports_empty

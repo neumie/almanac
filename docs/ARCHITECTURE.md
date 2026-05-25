@@ -34,7 +34,7 @@ Setup stubs with symlink instructions for each provider's skill discovery path. 
 
 Dispatcher pattern: `bin/almanac` resolves `ALMANAC_HOME`, sources `lib/core.sh`, routes to `cmd/<command>.sh`. Commands: install, uninstall, list, update, sync, ralph, harden, help.
 
-`cmd/harden.sh` is the first harden-loop CLI surface. It uses `lib/harden-core.sh` to draft a target-specific `rubric.md` under `docs/plans/harden/<target-slug>/` in the caller repo, refusing to overwrite an existing contract. Drafts start with `Status: draft`; after the developer edits the contract, `almanac harden <target> --approve` marks it `Status: approved` and appends an approval timestamp.
+`cmd/harden.sh` is the first harden-loop CLI surface. It uses `lib/harden-core.sh` to draft a target-specific `rubric.md` under `docs/plans/harden/<target-slug>/` in the caller repo, refusing to overwrite an existing contract. Drafts start with `Status: draft`; after the developer edits the contract, `almanac harden <target> --approve` marks it `Status: approved` and appends an approval timestamp. Run with no flags, `almanac harden <target>` runs a single read-only reviewer through the shared agent runner (`read-only` sandbox): it resolves the reviewer's provider/model/effort via the shared role config (`HARDEN_REVIEWER[_<LENS>]_{PROVIDER,MODEL,EFFORT}`), hands it a fixed lens prompt plus a JSON-Lines findings schema, then parses the structured findings (jq with an awk fallback) and prints them as a readable list. A missing target fails via `_die`.
 
 ## Shared Loop Engine (`lib/loop-core.sh`)
 
