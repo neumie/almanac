@@ -1310,6 +1310,21 @@ almanac_harden_round() {
   return "$rc"
 }
 
+# Mark a registered harden run terminal (done|failed|aborted) and clear the
+# lifecycle trap. Best-effort and idempotent: a run that never registered (empty
+# id) or a registry write that fails never aborts the loop. Routed from every
+# normal exit path of almanac_harden_run so the run leaves "running", and reused
+# by the abort trap for unexpected exits (signal, mid-round _die).
+almanac_harden_run_finalize() {
+  local root="$1"
+  local run_id="$2"
+  local status="$3"
+
+  trap - EXIT INT TERM
+  [ -n "$run_id" ] || return 0
+  almanac_loop_mark_run_status "$root" "$run_id" "$status" >/dev/null 2>&1 || true
+}
+
 # Drive the convergence loop: repeat almanac_harden_round under the gate until
 # the target converges, the round budget is exhausted, or the human ships.
 # Budget is configurable (3rd arg, else HARDEN_ROUND_BUDGET, else 5). Each round
@@ -1322,6 +1337,11 @@ almanac_harden_round() {
 # redirect the run without babysitting each worker. An optional starting directive
 # (4th arg) seeds the first round; the checkpoint's own directive (HARDEN_STEER /
 # the gum prompt) overrides it from the next round on.
+#
+# The loop registers itself in the shared run registry at start (the same contract
+# ralph emits, so it shows in the almanac hub), updates its live run-status blob
+# each round (round + lens/open-blocking summary), and marks the run done (converge
+# or ship), failed (budget hit), or aborted (signal / mid-round _die) on exit.
 almanac_harden_run() {
   local root="$1"
   local target="$2"
@@ -1329,6 +1349,7 @@ almanac_harden_run() {
   local directive="${4:-}"
   local ledger_path rubric_path round round_rc open_rows open_count acc verdict rc acc_label
   local cond_provider cond_model cond_effort steer_directive hitl_rc
+  local run_id pid lens_summary
 
   case "$budget" in
     ''|*[!0-9]*) _die "Round budget must be a positive integer: $budget" ;;
@@ -1345,6 +1366,23 @@ almanac_harden_run() {
   cond_effort="$(almanac_harden_role_field "conductor" "effort")"
   _info "Conductor: provider=$cond_provider${cond_model:+ model=$cond_model}${cond_effort:+ effort=$cond_effort}"
 
+  # Register this loop in the shared run registry — the SAME contract ralph emits
+  # (id/type/target/pid/status-file/start), so both appear in the almanac hub. The
+  # per-round fan-out keeps its own worker run dirs; this is the loop-level run.
+  # Best-effort: a registry failure must never stop a hardening run. lens_summary
+  # is the static lens list for the per-round progress blob.
+  pid="${BASHPID:-$$}"
+  run_id="$(almanac_loop_register_run "$root" "harden" "$target" "$pid" 2>/dev/null || true)"
+  lens_summary="$(almanac_harden_lenses | tr '\n' ',' | sed 's/,$//' || true)"
+  if [ -n "$run_id" ]; then
+    _info "Run registered: $run_id"
+    # Mark the run aborted on any unexpected exit (signal, mid-round _die) that
+    # leaves it still running; the normal exit paths below mark done/failed and
+    # clear this via almanac_harden_run_finalize.
+    trap 'almanac_harden_run_finalize "$root" "$run_id" aborted; exit 130' INT TERM
+    trap 'almanac_harden_run_finalize "$root" "$run_id" aborted' EXIT
+  fi
+
   round=0
   while :; do
     round=$((round + 1))
@@ -1357,6 +1395,13 @@ almanac_harden_run() {
       open_count="$(printf '%s\n' "$open_rows" | grep -c '[^[:space:]]' || true)"
     else
       open_count=0
+    fi
+
+    # Update the registry's live run-status blob so the hub/dashboard reflect the
+    # current round and a lens/open-blocking summary as the loop advances.
+    if [ -n "$run_id" ]; then
+      almanac_loop_update_run_progress "$root" "$run_id" "$round" \
+        "lenses=$lens_summary open-blocking=$open_count" >/dev/null 2>&1 || true
     fi
 
     # Report this round's kill-list (the blocking findings still open after the
@@ -1377,10 +1422,12 @@ almanac_harden_run() {
     case "$rc" in
       0)
         _success "Converged after $round round(s): acceptance met and no open blocking findings remain."
+        almanac_harden_run_finalize "$root" "$run_id" "done"
         return 0
         ;;
       2)
         _warn "Round budget ($budget) reached — $open_count open blocking finding(s) remain. Status: NON-CONVERGED."
+        almanac_harden_run_finalize "$root" "$run_id" "failed"
         return 1
         ;;
       *)
@@ -1402,6 +1449,7 @@ almanac_harden_run() {
             ;;
           *)
             _success "Shipping at round $round by request — $open_count open blocking finding(s) left unaddressed."
+            almanac_harden_run_finalize "$root" "$run_id" "done"
             return 0
             ;;
         esac
