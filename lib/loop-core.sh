@@ -1266,3 +1266,153 @@ almanac_loop_hub_overview() {
     fi
   } | almanac_loop_ui_render
 }
+
+# --- Hub per-run actions -------------------------------------------------------
+#
+# The interactive hub lets the operator act on a selected running loop: watch its
+# live status, stop it, or queue a steer directive for its next round. These are
+# pure-ish file/signal operations (no gum, no menu), so they are unit-testable and
+# also drivable non-interactively (`almanac hub --stop|--steer|--watch <id>`); the
+# gum selection menu in cmd/hub.sh is a thin TTY layer over them.
+
+# Map a run type + signal kind to the dot-file basename the loop's runner watches
+# for between rounds. ralph already consumes `.ralph-stop` (afk stop signal) and
+# `.ralph-steer` (one-shot operator/overseer directive the next iteration reads);
+# harden's files follow its prefix. Prints the basename; returns 1 for an unknown
+# type or kind.
+almanac_loop_run_signal_file() {
+  local type="$1"
+  local kind="$2"
+  local base
+
+  case "$type" in
+    ralph)  base=".ralph" ;;
+    harden) base=".harden" ;;
+    *) return 1 ;;
+  esac
+  case "$kind" in
+    stop)  printf '%s\n' "${base}-stop" ;;
+    steer) printf '%s\n' "${base}-steer" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Stop a registered run: write the run type's stop file under root (runs register
+# with root = their working dir, so the loop sees it at its next between-round
+# check) AND best-effort signal the live pid with TERM so a run blocked mid-round
+# also tears down. The pid is only signalled when it is numeric and currently
+# alive, so a dead/finished run is never killed. Returns 2 when the run is unknown
+# and 3 when its type has no stop convention.
+almanac_loop_run_stop() {
+  local root="$1"
+  local run_id="$2"
+  local status_file type pid stop_file
+
+  status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
+  [ -f "$status_file" ] || return 2
+
+  type="$(almanac_loop_status_field "$status_file" "type" || true)"
+  pid="$(almanac_loop_status_field "$status_file" "pid" || true)"
+
+  stop_file="$(almanac_loop_run_signal_file "$type" stop)" || return 3
+  printf '%s\n' "stop requested via almanac hub: $run_id" > "$root/$stop_file"
+
+  case "$pid" in
+    ''|*[!0-9]*) ;;
+    *) if kill -0 "$pid" 2>/dev/null; then kill -TERM "$pid" 2>/dev/null || true; fi ;;
+  esac
+  return 0
+}
+
+# Queue a steer directive for a running loop: write the directive to the run type's
+# steer file under root, which the loop's next round consumes (ralph reads
+# `.ralph-steer`). Returns 2 when the run is unknown, 3 when its type has no steer
+# convention, and 4 when the directive is blank.
+almanac_loop_run_steer() {
+  local root="$1"
+  local run_id="$2"
+  local directive="$3"
+  local status_file type steer_file
+
+  if [ -z "${directive//[[:space:]]/}" ]; then
+    return 4
+  fi
+
+  status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
+  [ -f "$status_file" ] || return 2
+
+  type="$(almanac_loop_status_field "$status_file" "type" || true)"
+  steer_file="$(almanac_loop_run_signal_file "$type" steer)" || return 3
+
+  printf '%s\n' "$directive" > "$root/$steer_file"
+  return 0
+}
+
+# Pure detail view of one run for the hub's per-run screen (selection confirmation
+# + watch frame): identity, live status (upgraded to `stale` when a running run's
+# pid is gone, like the running list), round/summary, and start/finish. Plain text
+# only — gum frames it later. Returns 1 when the run is unknown.
+almanac_loop_run_detail() {
+  local root="$1"
+  local run_id="$2"
+  local status_file id type target status round summary started finished live glyph
+
+  status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
+  [ -f "$status_file" ] || return 1
+
+  id="$(almanac_loop_status_field "$status_file" "id" || true)"
+  type="$(almanac_loop_status_field "$status_file" "type" || true)"
+  target="$(almanac_loop_status_field "$status_file" "target" || true)"
+  status="$(almanac_loop_status_field "$status_file" "status" || true)"
+  round="$(almanac_loop_status_field "$status_file" "round" || true)"
+  summary="$(almanac_loop_status_field "$status_file" "summary" || true)"
+  started="$(almanac_loop_status_field "$status_file" "started_at" || true)"
+  finished="$(almanac_loop_status_field "$status_file" "finished_at" || true)"
+
+  live="$status"
+  if [ "$status" = "running" ] && almanac_loop_run_is_stale "$root" "$run_id"; then
+    live="stale"
+  fi
+  glyph="$(almanac_loop_ui_status_glyph "$live")"
+
+  printf '%s  %s  %s  %s\n' "$glyph" "$live" "$type" "$target"
+  printf 'id: %s\n' "$id"
+  if [ -n "$round" ]; then printf 'round: %s\n' "$round"; fi
+  if [ -n "$summary" ]; then printf 'summary: %s\n' "$summary"; fi
+  if [ -n "$started" ]; then printf 'started: %s\n' "$started"; fi
+  if [ -n "$finished" ]; then printf 'finished: %s\n' "$finished"; fi
+  return 0
+}
+
+# Watch a run from the hub. One-shot (default, and whenever stdout is not a TTY):
+# render the run's detail once through the shared UI renderer and return — the
+# testable, scripts-safe path piped callers get. Follow (`follow` + a TTY): redraw
+# the detail every interval until the run reaches a terminal status, so the
+# operator can tail a live loop's status from the hub (ALMANAC_HUB_WATCH_INTERVAL
+# overrides the cadence). Returns 1 when the run is unknown.
+almanac_loop_run_watch() {
+  local root="$1"
+  local run_id="$2"
+  local mode="${3:-}"
+  local interval="${ALMANAC_HUB_WATCH_INTERVAL:-2}"
+  local status_file status
+
+  status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
+  [ -f "$status_file" ] || return 1
+
+  if [ "$mode" != "follow" ] || [ ! -t 1 ]; then
+    almanac_loop_run_detail "$root" "$run_id" | almanac_loop_ui_render
+    return 0
+  fi
+
+  while :; do
+    almanac_loop_ui_clear
+    almanac_loop_run_detail "$root" "$run_id" | almanac_loop_ui_render
+    status="$(almanac_loop_status_field "$status_file" "status" || true)"
+    case "$status" in
+      done|failed|aborted) break ;;
+    esac
+    sleep "$interval"
+  done
+  return 0
+}

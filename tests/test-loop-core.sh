@@ -936,6 +936,92 @@ test_hub_overview_empty_registry_shows_empty_states() {
   echo "  PASS: hub overview empty registry shows empty states"
 }
 
+# --- Hub per-run actions (crit 4: watch / stop / queue-steer) ------------------
+
+test_run_signal_file_maps_type_to_dotfile() {
+  assert_eq ".ralph-stop"   "$(almanac_loop_run_signal_file ralph stop)"   "ralph stop file basename"
+  assert_eq ".ralph-steer"  "$(almanac_loop_run_signal_file ralph steer)"  "ralph steer file basename"
+  assert_eq ".harden-stop"  "$(almanac_loop_run_signal_file harden stop)"  "harden stop file basename"
+  assert_eq ".harden-steer" "$(almanac_loop_run_signal_file harden steer)" "harden steer file basename"
+  if almanac_loop_run_signal_file bogus stop >/dev/null 2>&1; then
+    fail "unknown run type must return non-zero"
+  fi
+  if almanac_loop_run_signal_file ralph bogus >/dev/null 2>&1; then
+    fail "unknown signal kind must return non-zero"
+  fi
+  echo "  PASS: run signal file maps type to dotfile"
+}
+
+test_run_stop_writes_stopfile_and_signals() {
+  local tmp rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  # Dead pid so the best-effort TERM is a no-op (never signals the test process).
+  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "2147483647" "stop-me" "2026-05-25T12:00:00Z" >/dev/null
+
+  almanac_loop_run_stop "$tmp" "stop-me"
+  [ -f "$tmp/.ralph-stop" ] || fail "stop must write the run type's stop file under root"
+
+  rc=0; almanac_loop_run_stop "$tmp" "ghost" || rc=$?
+  assert_eq "2" "$rc" "stopping an unknown run must return 2"
+  echo "  PASS: run stop writes stop file and is best-effort"
+}
+
+test_run_steer_writes_steerfile_with_directive() {
+  local tmp rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "$$" "steer-me" "2026-05-25T12:00:00Z" >/dev/null
+
+  almanac_loop_run_steer "$tmp" "steer-me" "stop adding perf tests; the PRD scopes that out"
+  [ -f "$tmp/.ralph-steer" ] || fail "steer must write the run type's steer file under root"
+  assert_file_contains "$tmp/.ralph-steer" "stop adding perf tests" "steer file must carry the directive"
+
+  rc=0; almanac_loop_run_steer "$tmp" "ghost" "do something" || rc=$?
+  assert_eq "2" "$rc" "steering an unknown run must return 2"
+
+  rc=0; almanac_loop_run_steer "$tmp" "steer-me" "   " || rc=$?
+  assert_eq "4" "$rc" "a blank steer directive must be rejected"
+  echo "  PASS: run steer writes steer file with directive"
+}
+
+test_run_detail_renders_run_status() {
+  local tmp out rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "detail-run" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_update_run_progress "$tmp" "detail-run" "3" "lenses=security,perf open-blocking=2"
+
+  out="$(almanac_loop_run_detail "$tmp" "detail-run")"
+  assert_contains "$out" "detail-run" "detail shows the run id"
+  assert_contains "$out" "harden" "detail shows the run type"
+  assert_contains "$out" "src/app.js" "detail shows the target"
+  assert_contains "$out" "3" "detail shows the live round"
+  assert_contains "$out" "open-blocking=2" "detail shows the live summary"
+
+  rc=0; almanac_loop_run_detail "$tmp" "ghost" >/dev/null 2>&1 || rc=$?
+  assert_eq "1" "$rc" "detail for an unknown run must return 1"
+  echo "  PASS: run detail renders run status"
+}
+
+test_run_watch_one_shot_renders_detail() {
+  local tmp out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "ralph" "p/prd.md" "$$" "watch-run" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_update_run_progress "$tmp" "watch-run" "5" "iteration 5"
+
+  # No follow mode (and captured, so not a TTY): one frame, then return — never blocks.
+  out="$(ALMANAC_NO_GUM=1 almanac_loop_run_watch "$tmp" "watch-run")"
+  assert_contains "$out" "watch-run" "one-shot watch renders the run detail"
+  assert_contains "$out" "iteration 5" "one-shot watch shows the live summary"
+  echo "  PASS: run watch one-shot renders detail"
+}
+
 echo "=== Loop Core Tests ==="
 test_detects_project_marker_commands
 test_dedupes_python_markers
@@ -971,3 +1057,8 @@ test_hub_render_lists_running_with_live_status
 test_hub_render_recent_newest_first_capped
 test_hub_overview_degrades_without_gum
 test_hub_overview_empty_registry_shows_empty_states
+test_run_signal_file_maps_type_to_dotfile
+test_run_stop_writes_stopfile_and_signals
+test_run_steer_writes_steerfile_with_directive
+test_run_detail_renders_run_status
+test_run_watch_one_shot_renders_detail

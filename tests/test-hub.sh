@@ -79,8 +79,62 @@ test_hub_command_renders_registry_overview() {
   echo "  PASS: hub command renders registry overview"
 }
 
+# Criterion 4: `almanac hub --steer <id> <directive>` queues a steer directive for
+# a running loop by writing the run type's steer file under the caller's repo (the
+# loop's working dir) — the next round consumes it. Non-interactive seam the gum
+# menu's steer action also drives.
+test_hub_steer_queues_directive() {
+  local tmp out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "$$" "steer-cli" "2026-05-25T12:00:00Z" >/dev/null
+
+  out="$(cd "$tmp" && "$ALMANAC_BIN" hub --steer steer-cli "stop adding perf tests" </dev/null 2>&1)"
+  [ -f "$tmp/.ralph-steer" ] || fail "hub --steer must write the run's steer file"
+  case "$(cat "$tmp/.ralph-steer")" in
+    *"stop adding perf tests"*) ;;
+    *) fail "steer file must carry the directive" ;;
+  esac
+  echo "  PASS: hub --steer queues a directive"
+}
+
+# Criterion 4: `almanac hub --stop <id>` signals a running loop to stop by writing
+# the run type's stop file under the caller's repo. Uses a dead pid so the
+# best-effort TERM never touches the test process.
+test_hub_stop_signals_run() {
+  local tmp out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "2147483647" "stop-cli" "2026-05-25T12:00:00Z" >/dev/null
+
+  out="$(cd "$tmp" && "$ALMANAC_BIN" hub --stop stop-cli </dev/null 2>&1)"
+  [ -f "$tmp/.ralph-stop" ] || fail "hub --stop must write the run's stop file"
+  echo "  PASS: hub --stop signals a run"
+}
+
+# Criterion 4: `almanac hub --watch <id>`, off a TTY, renders the run's detail
+# once (the one-shot path) rather than blocking on a follow redraw.
+test_hub_watch_renders_run_detail() {
+  local tmp out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "watch-cli" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_update_run_progress "$tmp" "watch-cli" "4" "lenses=security open-blocking=1"
+
+  out="$(cd "$tmp" && ALMANAC_NO_GUM=1 "$ALMANAC_BIN" hub --watch watch-cli </dev/null 2>&1)"
+  assert_contains "$out" "watch-cli" "hub --watch renders the run id"
+  assert_contains "$out" "open-blocking=1" "hub --watch renders the live summary"
+  echo "  PASS: hub --watch renders run detail"
+}
+
 echo "=== Hub Tests ==="
 test_bare_almanac_non_tty_prints_help
 test_hub_command_renders_registry_overview
+test_hub_steer_queues_directive
+test_hub_stop_signals_run
+test_hub_watch_renders_run_detail
 echo ""
 echo "All hub tests passed."
