@@ -6,12 +6,15 @@ set -euo pipefail
 # in lib/core.sh; keep the two in sync.
 ALMANAC_HOME="${ALMANAC_HOME:-$(cd -P "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd -P)}"
 
-if [ ! -f "$ALMANAC_HOME/lib/loop-core.sh" ]; then
-  echo "Error: lib/loop-core.sh not found at $ALMANAC_HOME/lib/loop-core.sh" >&2
+# prompt.sh's only engine dependency is feedback detection
+# (almanac_loop_feedback_markdown), so source lib/feedback.sh directly rather
+# than the whole loop engine.
+if [ ! -f "$ALMANAC_HOME/lib/feedback.sh" ]; then
+  echo "Error: lib/feedback.sh not found at $ALMANAC_HOME/lib/feedback.sh" >&2
   exit 1
 fi
 
-source "$ALMANAC_HOME/lib/loop-core.sh"
+source "$ALMANAC_HOME/lib/feedback.sh"
 
 usage() {
   cat <<'EOF'

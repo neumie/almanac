@@ -61,7 +61,7 @@ bash skills/loop/ralph-loop/scripts/prompt.sh <name>
 If running from an installed skill path, resolve `{{SKILL_SCRIPTS}}` as in
 step 5 and run `bash {{SKILL_SCRIPTS}}/prompt.sh <name>`.
 
-The script writes `docs/plans/<name>/prompt.md`, sources `lib/loop-core.sh`,
+The script writes `docs/plans/<name>/prompt.md`, sources `lib/feedback.sh`,
 and renders feedback commands from `almanac_loop_feedback_markdown()`.
 Use the template below only as a fallback when the script is unavailable.
 

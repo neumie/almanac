@@ -32,6 +32,17 @@ if ! declare -F almanac_loop_role_config >/dev/null 2>&1; then
   unset __harden_core_dir
 fi
 
+# The feedback runner (almanac_loop_feedback_run) lives in lib/feedback.sh — the
+# fixer's objective gate (almanac_harden_report_feedback) calls it, so source it
+# directly and idempotently rather than borrowing it transitively through
+# loop-core.
+if ! declare -F almanac_loop_feedback_run >/dev/null 2>&1; then
+  __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/feedback.sh
+  source "$__harden_core_dir/feedback.sh"
+  unset __harden_core_dir
+fi
+
 # --- Role config (per-role provider / model / effort) --------------------------
 #
 # Each harden role selects its own agent config:
