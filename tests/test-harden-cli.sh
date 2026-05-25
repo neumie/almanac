@@ -270,6 +270,113 @@ test_ledger_dedupes_prior_adjudicated() {
   echo "  PASS: ledger dedupes prior adjudicated finding"
 }
 
+# Ratification engine: override the execution seam so a demonstration only
+# "reproduces" when its text contains the word reproduce. Logs each call so
+# tests can assert the seam actually executed the demonstration.
+ratify_seam_repro_on_keyword() {
+  almanac_harden_demo_reproduces() {
+    printf '%s\n' "$1" >> "$SEAM_LOG"
+    case "$1" in
+      *reproduce*) return 0 ;;
+      *) return 1 ;;
+    esac
+  }
+}
+
+test_ratify_new_reproducing_finding_is_blocking() {
+  local tmp ledger id verdict open
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  ledger="$tmp/findings.md"
+  SEAM_LOG="$tmp/seam.log"
+  : > "$SEAM_LOG"
+  ratify_seam_repro_on_keyword
+
+  id="$(almanac_harden_finding_id "correctness" "a.js:1" "real bug")"
+  verdict="$(almanac_harden_ratify "$ledger" "$id" "correctness" "high" \
+    "a.js:1" "real bug" "input X reproduce the crash" 1)"
+
+  [ "$verdict" = "blocking" ] || fail "reproducing finding should ratify as blocking (got $verdict)"
+  assert_file_contains "$SEAM_LOG" "reproduce" "ratify should execute the demonstration via the seam"
+  assert_file_contains "$ledger" "- status: open" "ratified finding should be open/blocking"
+  assert_file_contains "$ledger" "reproduced" "ratify should record that the demonstration reproduced"
+  open="$(almanac_harden_ledger_open_blocking "$ledger")"
+  assert_contains "$open" "real bug" "ratified blocking finding should appear in open-blocking"
+  echo "  PASS: ratify marks a reproducing finding blocking"
+}
+
+test_ratify_nonreproducing_finding_is_note() {
+  local tmp ledger id verdict open
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  ledger="$tmp/findings.md"
+  SEAM_LOG="$tmp/seam.log"
+  : > "$SEAM_LOG"
+  ratify_seam_repro_on_keyword
+
+  id="$(almanac_harden_finding_id "style" "a.js:2" "prefer composition")"
+  verdict="$(almanac_harden_ratify "$ledger" "$id" "style" "low" \
+    "a.js:2" "prefer composition" "I would prefer composition here" 1)"
+
+  [ "$verdict" = "note" ] || fail "non-reproducing/opinion finding should be a note (got $verdict)"
+  assert_file_contains "$SEAM_LOG" "prefer composition" "ratify should execute the demonstration via the seam"
+  assert_file_contains "$ledger" "- status: rejected-subjective" "non-reproducing finding should be a non-blocking note"
+  open="$(almanac_harden_ledger_open_blocking "$ledger")"
+  case "$open" in
+    *"prefer composition"*) fail "a note must not appear in open-blocking" ;;
+    *) ;;
+  esac
+  echo "  PASS: ratify records a non-reproducing finding as a note"
+}
+
+test_ratify_adjudicated_not_relitigated_when_not_reproducing() {
+  local tmp ledger id verdict dup
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  ledger="$tmp/findings.md"
+  SEAM_LOG="$tmp/seam.log"
+  : > "$SEAM_LOG"
+  ratify_seam_repro_on_keyword
+
+  id="$(almanac_harden_finding_id "style" "a.js:2" "prefer composition")"
+  # Pre-adjudicate as rejected-subjective in a prior round.
+  almanac_harden_ledger_append_entry "$ledger" "$id" "style" "low" \
+    "a.js:2" "prefer composition" "opinion" "rejected-subjective" 1 "opinion only" >/dev/null
+
+  verdict="$(almanac_harden_ratify "$ledger" "$id" "style" "low" \
+    "a.js:2" "prefer composition" "still just an opinion" 2)"
+
+  [ "$verdict" = "dropped" ] || fail "already-rejected finding that doesn't reproduce should drop (got $verdict)"
+  assert_file_contains "$ledger" "- status: rejected-subjective" "dropped finding stays adjudicated"
+  dup="$(grep -c "^## $id\$" "$ledger")"
+  [ "$dup" -eq 1 ] || fail "ratify must not re-add an adjudicated finding (got $dup)"
+  echo "  PASS: ratify does not re-litigate a non-reproducing adjudicated finding"
+}
+
+test_ratify_adjudicated_reopens_when_newly_reproducing() {
+  local tmp ledger id verdict open
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  ledger="$tmp/findings.md"
+  SEAM_LOG="$tmp/seam.log"
+  : > "$SEAM_LOG"
+  ratify_seam_repro_on_keyword
+
+  id="$(almanac_harden_finding_id "correctness" "a.js:3" "race condition")"
+  # Previously rejected as unreproducible; the code has since changed.
+  almanac_harden_ledger_append_entry "$ledger" "$id" "correctness" "high" \
+    "a.js:3" "race condition" "old demo" "rejected-subjective" 1 "could not reproduce" >/dev/null
+
+  verdict="$(almanac_harden_ratify "$ledger" "$id" "correctness" "high" \
+    "a.js:3" "race condition" "new input reproduce the race" 2)"
+
+  [ "$verdict" = "reopened" ] || fail "adjudicated finding that newly reproduces should reopen (got $verdict)"
+  assert_file_contains "$ledger" "- status: open" "reopened finding should be open/blocking"
+  open="$(almanac_harden_ledger_open_blocking "$ledger")"
+  assert_contains "$open" "race condition" "reopened finding should appear in open-blocking"
+  echo "  PASS: ratify reopens an adjudicated finding when it newly reproduces"
+}
+
 test_refuses_to_overwrite_existing_rubric() {
   local tmp rubric
   new_tmpdir
@@ -332,3 +439,7 @@ test_parse_findings_emits_ledger_entries
 test_parse_findings_skips_malformed
 test_ledger_appends_and_queries_open_blocking
 test_ledger_dedupes_prior_adjudicated
+test_ratify_new_reproducing_finding_is_blocking
+test_ratify_nonreproducing_finding_is_note
+test_ratify_adjudicated_not_relitigated_when_not_reproducing
+test_ratify_adjudicated_reopens_when_newly_reproducing

@@ -402,6 +402,132 @@ almanac_harden_ledger_open_blocking() {
   ' "$path"
 }
 
+# Print the recorded status of the finding with this id (empty when the id is
+# not in the ledger). Used by ratification to tell new from already-adjudicated.
+almanac_harden_ledger_status() {
+  local path="$1"
+  local id="$2"
+
+  [ -f "$path" ] || return 0
+
+  awk -v want="$id" '
+    /^## / { cur = substr($0, 4); next }
+    /^- status:/ && cur == want {
+      val = $0
+      sub(/^- status:[ \t]*/, "", val)
+      print val
+      exit
+    }
+  ' "$path"
+}
+
+# Rewrite the status (and adjudication note) of the finding with this id in
+# place, leaving every other field and finding untouched. Returns 1 when the
+# ledger file is absent.
+almanac_harden_ledger_set_status() {
+  local path="$1"
+  local id="$2"
+  local status="$3"
+  local adjudication="${4:-}"
+  local tmp
+
+  [ -f "$path" ] || return 1
+
+  tmp="$(mktemp "${path}.XXXXXX")"
+  awk -v want="$id" -v status="$status" -v adj="$adjudication" '
+    /^## / { cur = substr($0, 4); print; next }
+    cur == want && /^- status:/ { print "- status: " status; next }
+    cur == want && /^- adjudication:/ { print "- adjudication: " adj; next }
+    { print }
+  ' "$path" > "$tmp"
+  mv "$tmp" "$path"
+}
+
+# --- Ratification engine -------------------------------------------------------
+#
+# A finding is "blocking" only if its demonstration objectively reproduces
+# against the current target — never on a reviewer's assertion alone. Execution
+# of the demonstration is isolated behind a seam (almanac_harden_demo_reproduces)
+# so the decision logic is testable without running anything, and so the real
+# executor (a conductor agent-runner call) can be wired in a later slice.
+
+# Execution seam: decide whether a finding's demonstration reproduces against the
+# target. Return 0 = reproduces (real defect, blocking), non-zero = does not
+# reproduce (opinion / stale). The default is conservative — without a real
+# executor wired it treats every demonstration as non-reproducing, so opinions
+# never silently gate the loop. The convergence-loop slice overrides this with a
+# conductor agent-runner call; tests override it to drive the decision paths.
+almanac_harden_demo_reproduces() {
+  local demonstration="$1"
+  local target_path="${2:-}"
+
+  return 1
+}
+
+# Adjudicate one finding by executing its demonstration through the seam and
+# recording the outcome in the ledger. Prints the verdict:
+#   blocking - new/open finding whose demonstration reproduces (ratified, gates)
+#   note     - new/open finding that does not reproduce (non-blocking note)
+#   reopened - an already-adjudicated finding whose demonstration newly reproduces
+#   dropped  - an already-adjudicated finding that still does not reproduce
+# Already-adjudicated findings are re-litigated ONLY when they newly reproduce,
+# so a rejected opinion cannot churn the loop round after round.
+almanac_harden_ratify() {
+  local path="$1"
+  local id="$2"
+  local lens="$3"
+  local severity="$4"
+  local location="$5"
+  local claim="$6"
+  local demonstration="$7"
+  local round="${8:-1}"
+  local target_path="${9:-}"
+  local current_status reproduces status note
+
+  almanac_harden_ledger_init "$path"
+  current_status="$(almanac_harden_ledger_status "$path" "$id")"
+
+  if almanac_harden_demo_reproduces "$demonstration" "$target_path"; then
+    reproduces=1
+  else
+    reproduces=0
+  fi
+
+  case "$current_status" in
+    fixed | rejected-subjective | wontfix-per-context)
+      if [ "$reproduces" -eq 1 ]; then
+        almanac_harden_ledger_set_status "$path" "$id" "open" \
+          "reopened: demonstration reproduced at round $round"
+        printf '%s\n' "reopened"
+      else
+        printf '%s\n' "dropped"
+      fi
+      return 0
+      ;;
+  esac
+
+  if [ "$reproduces" -eq 1 ]; then
+    status="open"
+    note="ratified: demonstration reproduced at round $round"
+  else
+    status="rejected-subjective"
+    note="did not reproduce at round $round"
+  fi
+
+  if [ -z "$current_status" ]; then
+    almanac_harden_ledger_append_entry "$path" "$id" "$lens" "$severity" \
+      "$location" "$claim" "$demonstration" "$status" "$round" "$note" >/dev/null
+  else
+    almanac_harden_ledger_set_status "$path" "$id" "$status" "$note"
+  fi
+
+  if [ "$reproduces" -eq 1 ]; then
+    printf '%s\n' "blocking"
+  else
+    printf '%s\n' "note"
+  fi
+}
+
 # Run a single read-only reviewer over a target via the shared agent runner and
 # print its findings. Resolves provider/model/effort through the shared role
 # config (HARDEN_REVIEWER[_<LENS>]_{PROVIDER,MODEL,EFFORT}). _die on a missing
