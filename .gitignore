@@ -9,3 +9,8 @@ build/
 .almanac/
 providers/claude-code/skills
 .claude/settings.local.json
+
+# ralph-loop / harden-loop runtime artifacts (regenerated each run)
+docs/plans/*/ralph-codex-*.log
+docs/plans/*/agent-reports.log
+docs/plans/*/overseer.log
