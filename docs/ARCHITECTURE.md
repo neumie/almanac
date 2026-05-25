@@ -36,6 +36,10 @@ Dispatcher pattern: `bin/almanac` resolves `ALMANAC_HOME`, sources `lib/core.sh`
 
 `cmd/harden.sh` is the first harden-loop CLI surface. It uses `lib/harden-core.sh` to draft a target-specific `rubric.md` under `docs/plans/harden/<target-slug>/` in the caller repo, refusing to overwrite an existing contract. Drafts start with `Status: draft`; after the developer edits the contract, `almanac harden <target> --approve` marks it `Status: approved` and appends an approval timestamp.
 
+## Shared Loop Engine (`lib/loop-core.sh`)
+
+`lib/loop-core.sh` owns loop behavior shared by Ralph and harden-loop. Feedback detection maps project marker files to commands and renders prompt-ready markdown. The run registry records launched loops under `.almanac/runs/` in the caller repo: `index.tsv` stores id/type/target/pid/status-file/start/status, and each run gets a `status.tsv` blob that can be marked `done` or `failed` when the process exits. `.almanac/` is ignored because registry state is runtime-only.
+
 ## Validation (`lib/almanac-core.sh`)
 
 `almanac_validate_skill()` checks against the Agent Skills Open Standard:
