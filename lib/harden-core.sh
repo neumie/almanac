@@ -142,6 +142,69 @@ almanac_harden_approve_rubric() {
   mv "$tmp" "$path"
 }
 
+# Emit the rubric's acceptance criteria — the bar reviewers and ratification work
+# against. Prints every bullet line under the `## Acceptance` heading up to the
+# next `## ` section. Empty when the rubric or section is absent. Pure read.
+almanac_harden_rubric_acceptance() {
+  local path="$1"
+
+  [ -f "$path" ] || return 0
+
+  awk '
+    /^## Acceptance[[:space:]]*$/ { in_acc = 1; next }
+    in_acc && /^## / { in_acc = 0 }
+    in_acc && /^- / { print }
+  ' "$path"
+}
+
+# Append one acceptance criterion to the rubric's `## Acceptance` section. This is
+# how a ratified finding grows the bar: monotonic (criteria are only added), visible
+# (a clean diff), and append-only. The new `- [ ] <criterion>` lands at the end of
+# the Acceptance block, before the next section. Idempotent: an identical criterion
+# is never re-added (returns 1, writes nothing) so re-ratifying a reopened finding
+# cannot duplicate it. Returns 2 when the rubric or its Acceptance section is absent.
+almanac_harden_rubric_append_criterion() {
+  local path="$1"
+  local criterion="$2"
+  local tmp
+
+  [ -f "$path" ] || return 2
+  grep -q '^## Acceptance[[:space:]]*$' "$path" || return 2
+
+  if grep -Fxq -- "- [ ] $criterion" "$path"; then
+    return 1
+  fi
+
+  tmp="$(mktemp "${path}.XXXXXX")"
+  awk -v crit="$criterion" '
+    /^## Acceptance[[:space:]]*$/ { print; in_acc = 1; next }
+    in_acc && /^## / {
+      print "- [ ] " crit
+      inserted = 1
+      in_acc = 0
+      for (i = 1; i <= nb; i++) print blanks[i]
+      nb = 0
+      print
+      next
+    }
+    in_acc && /^[[:space:]]*$/ { nb++; blanks[nb] = $0; next }
+    in_acc {
+      for (i = 1; i <= nb; i++) print blanks[i]
+      nb = 0
+      print
+      next
+    }
+    { print }
+    END {
+      if (in_acc && !inserted) {
+        print "- [ ] " crit
+        for (i = 1; i <= nb; i++) print blanks[i]
+      }
+    }
+  ' "$path" > "$tmp"
+  mv "$tmp" "$path"
+}
+
 # Emit the configured reviewer lens set, one lens per line. Defaults to the five
 # PRD lenses; override at runtime via HARDEN_LENSES (comma- or whitespace-
 # separated). The lens set determines the reviewer count — there is no enforced
@@ -155,11 +218,20 @@ almanac_harden_lenses() {
 }
 
 # Build the fixed prompt for one read-only reviewer over a target, including the
-# JSON-Lines findings schema. Kept separate so the schema can grow without
-# touching orchestration. (Prompt strings are not asserted in tests by design.)
+# JSON-Lines findings schema. When a rubric path is given and exists, the rubric's
+# acceptance criteria are embedded as the bar the reviewer judges against, so
+# reviewers consume the contract rather than an implicit standard. Kept separate so
+# the schema can grow without touching orchestration. (Exact prompt wording is not
+# asserted in tests by design; that the rubric bar is consumed is.)
 almanac_harden_reviewer_prompt() {
   local target="$1"
   local lens="${2:-correctness}"
+  local rubric_path="${3:-}"
+  local rubric_bar=""
+
+  if [ -n "$rubric_path" ] && [ -f "$rubric_path" ]; then
+    rubric_bar="$(almanac_harden_rubric_acceptance "$rubric_path")"
+  fi
 
   cat <<EOF
 You are a read-only code reviewer. Lens: ${lens}.
@@ -168,6 +240,19 @@ Review the target below for ${lens} defects only. You cannot modify any files;
 this is a read-only review.
 
 Target: ${target}
+EOF
+
+  if [ -n "$rubric_bar" ]; then
+    cat <<EOF
+
+Judge the target against this acceptance bar (the rubric contract). A finding is
+only blocking if it violates a criterion below or demonstrably breaks behavior:
+
+${rubric_bar}
+EOF
+  fi
+
+  cat <<EOF
 
 Report each defect as one JSON object per line (JSON Lines) and output nothing
 else — no prose, no markdown fences. Each object must use this schema:
@@ -480,6 +565,11 @@ almanac_harden_demo_reproduces() {
 #   dropped  - an already-adjudicated finding that still does not reproduce
 # Already-adjudicated findings are re-litigated ONLY when they newly reproduce,
 # so a rejected opinion cannot churn the loop round after round.
+#
+# When a rubric path is given, a finding that reproduces (blocking or reopened)
+# also appends a falsifiable criterion to the rubric's `## Acceptance` — the bar
+# grows monotonically and visibly with every ratified defect. Notes and drops
+# never touch the rubric, so opinions cannot raise the bar.
 almanac_harden_ratify() {
   local path="$1"
   local id="$2"
@@ -490,6 +580,7 @@ almanac_harden_ratify() {
   local demonstration="$7"
   local round="${8:-1}"
   local target_path="${9:-}"
+  local rubric_path="${10:-}"
   local current_status reproduces status note
 
   almanac_harden_ledger_init "$path"
@@ -499,6 +590,14 @@ almanac_harden_ratify() {
     reproduces=1
   else
     reproduces=0
+  fi
+
+  # A ratified (reproducing) finding grows the rubric bar, regardless of whether
+  # it is newly raised or a reopened prior finding. Idempotent on the criterion
+  # text, so a reopen never duplicates an already-listed criterion.
+  if [ "$reproduces" -eq 1 ] && [ -n "$rubric_path" ]; then
+    almanac_harden_rubric_append_criterion "$rubric_path" \
+      "${claim} — must not reproduce (lens: ${lens}, at ${location})" >/dev/null || true
   fi
 
   case "$current_status" in
@@ -548,7 +647,7 @@ almanac_harden_ratify() {
 almanac_harden_fanout() {
   local root="$1"
   local target="$2"
-  local target_path run_id ledger_path lens provider model effort
+  local target_path run_id ledger_path rubric_path lens provider model effort
   local worker_id prompt_file pidfile pid result_file status_file wstatus
   local added total_added i
   local -a lenses=() worker_ids=() worker_pids=() prompt_files=()
@@ -571,6 +670,7 @@ almanac_harden_fanout() {
 
   run_id="$(almanac_loop_run_id "harden" "$target")"
   ledger_path="$(almanac_harden_ledger_path "$root" "$target")"
+  rubric_path="$(almanac_harden_rubric_path "$root" "$target")"
   almanac_harden_ledger_init "$ledger_path"
 
   _info "Hardening $target — fanning out ${#lenses[@]} read-only reviewer(s)"
@@ -582,7 +682,9 @@ almanac_harden_fanout() {
 
     worker_id="reviewer-$lens"
     prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-prompt.XXXXXX")"
-    almanac_harden_reviewer_prompt "$target" "$lens" > "$prompt_file"
+    # Reviewers judge against the rubric when one exists (read gracefully when
+    # absent, e.g. an ad-hoc bare run with no drafted contract yet).
+    almanac_harden_reviewer_prompt "$target" "$lens" "$rubric_path" > "$prompt_file"
 
     # Capture the worker pid via a file (not $(...)): worker_start backgrounds
     # the agent as a child of THIS shell, so it stays waitable. A command

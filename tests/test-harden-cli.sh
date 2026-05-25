@@ -505,11 +505,126 @@ test_approve_requires_existing_rubric() {
   echo "  PASS: approve requires existing rubric"
 }
 
+# --- Rubric as the bar (draft -> consume -> grow) ----------------------------
+
+test_rubric_acceptance_lists_only_acceptance_criteria() {
+  local tmp rubric acc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  rubric="$tmp/rubric.md"
+  almanac_harden_write_rubric "$tmp" "src/app.js" "lock behavior"
+  rubric="$tmp/docs/plans/harden/src-app-js/rubric.md"
+
+  acc="$(almanac_harden_rubric_acceptance "$rubric")"
+
+  assert_contains "$acc" "Project feedback loops pass after fixes." "acceptance should list the rubric's criteria"
+  case "$acc" in
+    *"## In Scope"*) fail "acceptance should stop at the next section heading" ;;
+    *) ;;
+  esac
+  case "$acc" in
+    *"- src/app.js"*) fail "acceptance should not bleed into the In Scope bullets" ;;
+    *) ;;
+  esac
+  echo "  PASS: rubric acceptance lists only acceptance criteria"
+}
+
+test_rubric_append_criterion_is_append_only_and_idempotent() {
+  local tmp rubric body count
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  almanac_harden_write_rubric "$tmp" "src/app.js" "lock behavior"
+  rubric="$tmp/docs/plans/harden/src-app-js/rubric.md"
+
+  almanac_harden_rubric_append_criterion "$rubric" "null input must not crash parse()"
+  assert_file_contains "$rubric" "- [ ] null input must not crash parse()" "criterion should be appended"
+  # Original acceptance criteria survive (append-only, never rewritten).
+  assert_file_contains "$rubric" "Project feedback loops pass after fixes." "append must preserve existing criteria"
+  # The new criterion lands inside the Acceptance section, before In Scope.
+  body="$(almanac_harden_rubric_acceptance "$rubric")"
+  assert_contains "$body" "null input must not crash parse()" "new criterion should be inside the Acceptance section"
+
+  # Idempotent: re-appending the same criterion is a no-op (returns 1, no dup).
+  if almanac_harden_rubric_append_criterion "$rubric" "null input must not crash parse()"; then
+    fail "re-appending an identical criterion should report a no-op"
+  fi
+  count="$(grep -c -- "- \[ \] null input must not crash parse()" "$rubric")"
+  [ "$count" -eq 1 ] || fail "identical criterion must not be duplicated (got $count)"
+  echo "  PASS: rubric append is append-only and idempotent"
+}
+
+test_reviewer_prompt_consumes_rubric_bar() {
+  local tmp rubric prompt
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  almanac_harden_write_rubric "$tmp" "src/app.js" "lock behavior"
+  rubric="$tmp/docs/plans/harden/src-app-js/rubric.md"
+  almanac_harden_rubric_append_criterion "$rubric" "tokens older than 1h are rejected"
+
+  prompt="$(almanac_harden_reviewer_prompt "src/app.js" "security" "$rubric")"
+
+  assert_contains "$prompt" "tokens older than 1h are rejected" "reviewer prompt should embed the rubric acceptance bar"
+  # Without a rubric the prompt still builds (graceful for ad-hoc bare runs).
+  prompt="$(almanac_harden_reviewer_prompt "src/app.js" "security")"
+  assert_contains "$prompt" "read-only code reviewer" "reviewer prompt should build without a rubric"
+  echo "  PASS: reviewer prompt consumes the rubric bar"
+}
+
+test_ratify_blocking_grows_rubric_acceptance() {
+  local tmp rubric ledger id verdict
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  SEAM_LOG="$tmp/seam.log"
+  : > "$SEAM_LOG"
+  ratify_seam_repro_on_keyword
+  almanac_harden_write_rubric "$tmp" "src/app.js" "lock behavior"
+  rubric="$tmp/docs/plans/harden/src-app-js/rubric.md"
+  ledger="$tmp/findings.md"
+
+  id="$(almanac_harden_finding_id "correctness" "a.js:1" "off-by-one")"
+  verdict="$(almanac_harden_ratify "$ledger" "$id" "correctness" "high" \
+    "a.js:1" "off-by-one" "input X reproduce the crash" 1 "" "$rubric")"
+
+  [ "$verdict" = "blocking" ] || fail "reproducing finding should ratify blocking (got $verdict)"
+  assert_file_contains "$rubric" "off-by-one — must not reproduce (lens: correctness, at a.js:1)" \
+    "a ratified blocking finding should append a criterion to the rubric"
+  # Original criteria are untouched (monotonic growth, not rewrite).
+  assert_file_contains "$rubric" "Project feedback loops pass after fixes." "rubric growth must be append-only"
+  echo "  PASS: ratify blocking grows rubric acceptance"
+}
+
+test_ratify_note_leaves_rubric_unchanged() {
+  local tmp rubric ledger id verdict before after
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  SEAM_LOG="$tmp/seam.log"
+  : > "$SEAM_LOG"
+  ratify_seam_repro_on_keyword
+  almanac_harden_write_rubric "$tmp" "src/app.js" "lock behavior"
+  rubric="$tmp/docs/plans/harden/src-app-js/rubric.md"
+  ledger="$tmp/findings.md"
+  before="$(cat "$rubric")"
+
+  id="$(almanac_harden_finding_id "style" "a.js:2" "prefer composition")"
+  verdict="$(almanac_harden_ratify "$ledger" "$id" "style" "low" \
+    "a.js:2" "prefer composition" "I would prefer composition here" 1 "" "$rubric")"
+
+  [ "$verdict" = "note" ] || fail "opinion finding should be a note (got $verdict)"
+  after="$(cat "$rubric")"
+  [ "$before" = "$after" ] || fail "a non-reproducing note must not grow the rubric bar"
+  echo "  PASS: ratify note leaves rubric unchanged"
+}
+
 echo "=== Harden CLI Tests ==="
 test_creates_draft_rubric_for_target_and_goal
 test_refuses_to_overwrite_existing_rubric
 test_approves_existing_draft_rubric
 test_approve_requires_existing_rubric
+test_rubric_acceptance_lists_only_acceptance_criteria
+test_rubric_append_criterion_is_append_only_and_idempotent
+test_reviewer_prompt_consumes_rubric_bar
+test_ratify_blocking_grows_rubric_acceptance
+test_ratify_note_leaves_rubric_unchanged
 test_review_runs_single_reviewer_and_prints_findings
 test_fanout_spawns_reviewer_per_lens_and_aggregates
 test_review_errors_on_missing_target
