@@ -1341,6 +1341,185 @@ test_ratify_open_threads_conductor_config_to_seam() {
   echo "  PASS: ratify_open threads the conductor provider to the execution seam"
 }
 
+# Fake conductor: runs as the codex binary the agent runner invokes, writes the
+# requested verdict token to --output-last-message, and logs its args so tests can
+# assert the conductor identity flowed through. verdict: reproduces | not-reproduces
+# | fail (fail exits non-zero to model an un-runnable demonstration).
+write_fake_conductor_codex() {
+  local fakebin="$1"
+  local verdict="$2"
+  local args_log="${3:-}"
+
+  mkdir -p "$fakebin"
+  cat > "$fakebin/codex" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+[ -n "$args_log" ] && printf '%s\n' "\$*" > "$args_log"
+result_file=""
+while [ "\$#" -gt 0 ]; do
+  case "\$1" in
+    --output-last-message) shift; result_file="\${1:-}" ;;
+  esac
+  shift || true
+done
+
+if [ "$verdict" = "fail" ]; then
+  printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"conductor crashed"}}'
+  exit 7
+fi
+
+[ -n "\$result_file" ] && printf '%s\n' \
+  "I executed the demonstration against the current code." \
+  "HARDEN_VERDICT=$verdict" > "\$result_file"
+printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"ratifying"}}'
+EOF
+  chmod +x "$fakebin/codex"
+}
+
+# Criteria (69.1/69.3): the executor runs a finding's demonstration THROUGH the
+# resolved conductor provider (the shared agent runner), honoring the (provider,
+# model, effort) it is handed — not a host marker. A confirmed reproduction → 0.
+test_demo_reproduces_executes_through_conductor_provider() {
+  local tmp fakebin args rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  source "$ROOT/lib/harden-core.sh"   # ensure the real seam, not a prior test's stub
+  fakebin="$tmp/bin"
+  write_fake_conductor_codex "$fakebin" "reproduces" "$tmp/conductor-args.txt"
+
+  rc=0
+  PATH="$fakebin:$PATH" almanac_harden_demo_reproduces \
+    "failing test: input [] returns -1" "$tmp/src/app.js" "codex" "gpt-judge" "high" \
+    >/dev/null 2>&1 || rc=$?
+
+  assert_eq "0" "$rc" "a demonstration the conductor confirms reproduces must return 0 (blocking)"
+  args="$(cat "$tmp/conductor-args.txt")"
+  assert_contains "$args" "--model gpt-judge" "the executor must run through the handed conductor model"
+  assert_contains "$args" "model_reasoning_effort=\"high\"" "the executor must run through the handed conductor effort"
+  echo "  PASS: demo_reproduces executes the demonstration through the conductor provider"
+}
+
+# Criterion (69.2): the verdict is driven by the execution RESULT — a conductor
+# that does not reproduce the finding yields a non-blocking note (non-zero).
+test_demo_does_not_reproduce_on_negative_verdict() {
+  local tmp fakebin rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  source "$ROOT/lib/harden-core.sh"
+  fakebin="$tmp/bin"
+  write_fake_conductor_codex "$fakebin" "not-reproduces" ""
+
+  rc=0
+  PATH="$fakebin:$PATH" almanac_harden_demo_reproduces \
+    "I would prefer composition here" "$tmp/x" "codex" "" "" >/dev/null 2>&1 || rc=$?
+
+  assert_eq "1" "$rc" "a demonstration the conductor does not reproduce must return non-zero (note)"
+  echo "  PASS: demo_reproduces returns a note when the conductor does not reproduce it"
+}
+
+# Criterion (69.4): malformed / un-runnable demonstrations are handled cleanly —
+# always a non-blocking note, never a hang or a crash. Covers an empty
+# demonstration (no provider is spawned), an unresolved conductor provider, and a
+# conductor that exits non-zero.
+test_demo_reproduces_handles_empty_and_failing_cleanly() {
+  local tmp fakebin rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  source "$ROOT/lib/harden-core.sh"
+  fakebin="$tmp/bin"
+
+  # Empty demonstration: nothing to execute -> note, and the provider is not spawned.
+  write_fake_conductor_codex "$fakebin" "reproduces" "$tmp/should-not-run.txt"
+  rc=0
+  PATH="$fakebin:$PATH" almanac_harden_demo_reproduces "" "$tmp/x" "codex" "" "" \
+    >/dev/null 2>&1 || rc=$?
+  assert_eq "1" "$rc" "an empty demonstration must be a non-blocking note"
+  [ ! -f "$tmp/should-not-run.txt" ] || fail "no conductor must be spawned for an empty demonstration"
+
+  # No conductor provider resolved -> conservative note (nothing to execute through).
+  rc=0
+  PATH="$fakebin:$PATH" almanac_harden_demo_reproduces "input X reproduces" "$tmp/x" "" "" "" \
+    >/dev/null 2>&1 || rc=$?
+  assert_eq "1" "$rc" "an unresolved conductor provider must fall back to a note"
+
+  # A conductor that crashes / cannot run the demonstration -> note, never a hang.
+  write_fake_conductor_codex "$fakebin" "fail" ""
+  rc=0
+  PATH="$fakebin:$PATH" almanac_harden_demo_reproduces "input X reproduces" "$tmp/x" "codex" "" "" \
+    >/dev/null 2>&1 || rc=$?
+  assert_eq "1" "$rc" "a failed / un-runnable conductor call must degrade to a note, not crash"
+  echo "  PASS: demo_reproduces handles empty and failing demonstrations cleanly"
+}
+
+# Criteria (69.2/69.5): end to end through the ratification engine with the REAL
+# seam and a fake conductor (no real model calls). The conductor's execution
+# result — not the reviewer's assertion — decides blocking vs. note.
+test_ratify_blocking_and_note_via_real_conductor_execution() {
+  local tmp fakebin ledger id verdict
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  source "$ROOT/lib/harden-core.sh"   # real seam, not the keyword stub
+  fakebin="$tmp/bin"
+  ledger="$tmp/findings.md"
+
+  # Conductor reproduces -> ratify marks it blocking, driven by execution.
+  write_fake_conductor_codex "$fakebin" "reproduces" ""
+  id="$(almanac_harden_finding_id "correctness" "a.js:1" "real bug")"
+  verdict="$(PATH="$fakebin:$PATH" almanac_harden_ratify "$ledger" "$id" \
+    "correctness" "high" "a.js:1" "real bug" "input X crashes it" 1 "$tmp" "" "codex" "" "")"
+  [ "$verdict" = "blocking" ] || fail "a finding the conductor reproduces must ratify blocking (got $verdict)"
+
+  # Conductor does NOT reproduce -> note, even though the reviewer asserted a bug.
+  write_fake_conductor_codex "$fakebin" "not-reproduces" ""
+  id="$(almanac_harden_finding_id "style" "a.js:2" "prefer composition")"
+  verdict="$(PATH="$fakebin:$PATH" almanac_harden_ratify "$ledger" "$id" \
+    "style" "low" "a.js:2" "prefer composition" "I would prefer composition" 1 "$tmp" "" "codex" "" "")"
+  [ "$verdict" = "note" ] || fail "a finding the conductor does not reproduce must be a note (got $verdict)"
+  echo "  PASS: ratify decides blocking vs. note from the conductor's execution result"
+}
+
+# Criterion (69.6): an end-to-end --loop run where a finding keeps reproducing
+# (real ratify + real conductor seam) stays on the kill-list across every round
+# and the loop does NOT converge — it runs to the budget and reports NON-CONVERGED.
+# This proves the harden loop is load-bearing against a real defect.
+test_loop_does_not_converge_on_reproducing_finding() {
+  local tmp fakebin output rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  source "$ROOT/lib/harden-core.sh"   # real ratify + real demo_reproduces
+  mkdir -p "$tmp/src"
+  printf '%s\n' "code" > "$tmp/src/app.js"
+  fakebin="$tmp/bin"
+  write_fake_conductor_codex "$fakebin" "reproduces" ""
+
+  # Fan-out surfaces one real defect; the real ratify path + conductor confirm it
+  # reproduces, so it stays blocking. The fixer cannot retire it (no-op) — a defect
+  # that keeps reproducing. Fan-out is idempotent while the finding is still open.
+  almanac_harden_fanout() {
+    local root="$1" target="$2" round="$3" lp id open
+    lp="$(almanac_harden_ledger_path "$root" "$target")"
+    almanac_harden_ledger_init "$lp"
+    open="$(almanac_harden_ledger_open_blocking "$lp")"
+    case "$open" in
+      *off-by-one*) return 0 ;;
+    esac
+    id="$(almanac_harden_finding_id correctness "src/app.js:10" "off-by-one")"
+    almanac_harden_ledger_append_entry "$lp" "$id" correctness high \
+      "src/app.js:10" "off-by-one" "input [] reproduces the crash" open "$round" "" >/dev/null
+  }
+  almanac_harden_fix() { return 0; }
+
+  output="$(cd "$tmp" && HARDEN_HITL=continue HARDEN_CONDUCTOR_PROVIDER=codex \
+    PATH="$fakebin:$PATH" almanac_harden_run "$tmp" "src/app.js" 3 2>&1)" && rc=0 || rc=$?
+
+  [ "$rc" -eq 1 ] || fail "a loop with a finding that keeps reproducing must NOT converge (got rc=$rc)"
+  assert_contains "$output" "NON-CONVERGED" "a reproducing finding must drive the loop to the budget, not convergence"
+  assert_contains "$output" "off-by-one" "the reproducing finding must stay on the kill-list across rounds"
+  source "$ROOT/lib/harden-core.sh"
+  echo "  PASS: loop does not converge while a finding keeps reproducing"
+}
+
 # Criterion (64.6): the dashboard's render logic is a pure function — given
 # already-gathered state it returns the printable rows, with no file I/O, clock,
 # or terminal. Pins that all five required fields render (PRD: reviewer status,
@@ -1633,3 +1812,8 @@ test_role_config_mixes_providers_across_lenses
 test_role_config_overrides_each_role_via_env
 test_role_config_independent_of_host
 test_ratify_open_threads_conductor_config_to_seam
+test_demo_reproduces_executes_through_conductor_provider
+test_demo_does_not_reproduce_on_negative_verdict
+test_demo_reproduces_handles_empty_and_failing_cleanly
+test_ratify_blocking_and_note_via_real_conductor_execution
+test_loop_does_not_converge_on_reproducing_finding
