@@ -426,6 +426,58 @@ test_once_codex_propagates_provider_failure() {
   echo "  PASS: once codex propagates provider failure through the seam"
 }
 
+# afk.sh routes its default (non-verbose) codex provider invocation through the
+# shared agent_run seam (#66 — ralph migration). The seam must build afk's exact
+# codex invocation (--json, --output-last-message, danger-full-access) honoring
+# RALPH_MODEL/RALPH_EFFORT, stream the live agent-message text, capture the raw
+# stream AND merged stderr (2>&1) to the per-iteration session log, and afk both
+# prints the final result and reads it back for <promise> extraction — byte-for-
+# byte as the old inline pipe did.
+test_afk_codex_routes_provider_invocation_through_seam() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  SKIP: afk codex seam routing (jq not available)"
+    return 0
+  fi
+
+  local tmp fakebin argv_file codex_log out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  argv_file="$tmp/codex-argv.txt"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_codex_recording "$fakebin"
+
+  out=$(cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex RALPH_NO_OVERSEE=1 \
+    RALPH_MODEL=fake-model RALPH_EFFORT=high FAKE_CODEX_ARGV="$argv_file" \
+    bash "$AFK_SCRIPT" demo 1)
+
+  # Live agent-message stream reaches stdout via the seam's codex jq filter.
+  printf '%s' "$out" | grep -Fq "FAKE_CODEX_STREAM_TEXT" \
+    || fail "afk codex should stream the agent-message text through the seam"
+  # afk prints the seam's captured final result.
+  printf '%s' "$out" | grep -Fq "fake codex final" \
+    || fail "afk codex should print the seam's final result"
+
+  # The seam built afk's codex invocation, honoring model + effort.
+  [ -f "$argv_file" ] || fail "fake codex should have been invoked"
+  assert_file_contains "$argv_file" "--json" "codex invocation should request json events"
+  assert_file_contains "$argv_file" "--output-last-message" "codex invocation should capture the final message"
+  assert_file_contains "$argv_file" "--sandbox" "codex invocation should set a sandbox"
+  assert_file_contains "$argv_file" "danger-full-access" "afk codex sandbox should be danger-full-access"
+  assert_file_contains "$argv_file" "fake-model" "codex invocation should honor RALPH_MODEL"
+  assert_file_contains "$argv_file" "high" "codex invocation should honor RALPH_EFFORT"
+
+  # The per-iteration session log captures the raw stream AND merged stderr.
+  codex_log="$tmp/docs/plans/demo/ralph-codex-iteration-1.log"
+  [ -f "$codex_log" ] || fail "afk codex should write the session log via the seam"
+  assert_file_contains "$codex_log" "FAKE_CODEX_STREAM_TEXT" "session log should capture the raw codex event stream"
+  assert_file_contains "$codex_log" "FAKE_CODEX_STDERR_LINE" "session log should capture codex stderr (merge-stderr 2>&1)"
+  echo "  PASS: afk routes codex provider invocation through the shared seam"
+}
+
 echo "=== Ralph Run Registry Tests ==="
 test_once_registers_and_marks_run_done
 test_once_marks_run_failed_on_provider_error
@@ -437,3 +489,4 @@ test_once_codex_propagates_provider_failure
 test_afk_registers_and_marks_run_done
 test_afk_marks_run_failed_on_provider_error
 test_afk_emits_live_run_progress_contract
+test_afk_codex_routes_provider_invocation_through_seam

@@ -89,13 +89,6 @@ stream_text='
   end
 '
 final_result='select(.type == "result").result // empty'
-codex_stream_text='
-  if .type == "item.completed" and .item.type == "agent_message" then
-    .item.text | . + "\n\n"
-  else
-    empty
-  end
-'
 
 push_ralph_commits() {
   if git remote get-url origin >/dev/null 2>&1; then
@@ -543,6 +536,8 @@ $ralph_commits"
       codex_log="docs/plans/${PRD_NAME}/ralph-codex-iteration-${i}.log"
       echo "Codex session log: $codex_log"
       if [ "${RALPH_CODEX_VERBOSE:-}" = "1" ]; then
+        # Raw-output mode stays inline: the shared seam is always --json, but
+        # verbose mode wants codex's plain output with no stream filter.
         codex \
           --ask-for-approval never \
           exec \
@@ -554,26 +549,30 @@ $ralph_commits"
           "${EFFORT_ARG[@]}" \
           "$prompt"
       else
-        set -o pipefail
-        if ! codex \
-          --ask-for-approval never \
-          exec \
-          --cd "$PWD" \
-          --sandbox danger-full-access \
-          --color never \
-          --json \
-          --output-last-message "$tmpfile" \
-          "${MODEL_ARG[@]}" \
-          "${EFFORT_ARG[@]}" \
-          "$prompt" 2>&1 \
-          | tee "$codex_log" \
-          | jq -Rj --unbuffered "fromjson? // empty | objects | ( $codex_stream_text )"; then
-          set +o pipefail
+        # Default codex path routes through the shared agent_run seam in stream
+        # mode rather than an inline codex exec (#66 — ralph migration onto the
+        # engine). The seam builds the same invocation (--json
+        # --output-last-message, --sandbox danger-full-access, plus --model/-c
+        # effort), tees the raw stream to the per-iteration session log, and pipes
+        # the live agent-message text through the same jq filter — console output
+        # is unchanged. merge-stderr preserves afk's `codex ... 2>&1 | tee` so
+        # codex's stderr still lands in the log. RALPH_MODEL/RALPH_EFFORT pass
+        # straight through as the seam's model/effort, and the seam preserves
+        # codex's exit via PIPESTATUS (afk kept pipefail before; the seam owns
+        # that now). The result lands in $tmpfile (the seam's
+        # --output-last-message target) so the <promise> extraction below reads it
+        # back unchanged. On failure we print the same log tail.
+        codex_prompt_file=$(mktemp)
+        printf '%s' "$prompt" > "$codex_prompt_file"
+        if ! almanac_loop_agent_run \
+          codex "${RALPH_MODEL:-}" "${RALPH_EFFORT:-}" danger-full-access \
+          "$codex_prompt_file" "$tmpfile" "$codex_log" stream merge-stderr; then
+          rm -f "$codex_prompt_file"
           echo "Codex failed. Last log lines:"
           tail -n 40 "$codex_log" || true
           exit 1
         fi
-        set +o pipefail
+        rm -f "$codex_prompt_file"
         cat "$tmpfile"
       fi
 
