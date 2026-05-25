@@ -62,6 +62,9 @@ almanac install codex                        # same, for ~/.codex/AGENTS.md
 almanac install <provider>   Install for a provider
 almanac uninstall <provider> Remove from a provider
 almanac list                 List available providers and install status
+almanac ralph                Launch the interactive Ralph loop CLI
+almanac harden <target> --goal "<goal>"
+                             Draft a harden-loop rubric for a target
 almanac update               Update almanac (git pull + re-install)
 almanac sync                 Check adapted skills for upstream changes
 almanac help                 Show help

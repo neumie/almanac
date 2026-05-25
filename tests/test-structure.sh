@@ -36,6 +36,7 @@ check "cmd/uninstall.sh"
 check "cmd/update.sh"
 check "cmd/list.sh"
 check "cmd/ralph.sh"
+check "cmd/harden.sh"
 check "cmd/help.sh"
 check "cmd/sync.sh"
 check "install.sh"
@@ -45,6 +46,7 @@ check "skills/loop/ralph-loop/scripts/prompt.sh"
 check "lib/core.sh"
 check "lib/almanac-core.sh"
 check "lib/loop-core.sh"
+check "lib/harden-core.sh"
 
 # Claude Code adapter
 check "providers/claude-code/.claude-plugin/plugin.json"
@@ -60,6 +62,7 @@ check "tests/test-structure.sh"
 check "tests/test-skills.sh"
 check "tests/test-loop-core.sh"
 check "tests/test-ralph-prompt.sh"
+check "tests/test-harden-cli.sh"
 
 # Docs
 check "docs/ARCHITECTURE.md"

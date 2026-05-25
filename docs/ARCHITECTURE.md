@@ -32,7 +32,9 @@ Setup stubs with symlink instructions for each provider's skill discovery path. 
 
 ## CLI (`bin/almanac`)
 
-Dispatcher pattern: `bin/almanac` resolves `ALMANAC_HOME`, sources `lib/core.sh`, routes to `cmd/<command>.sh`. Commands: install, uninstall, list, update, sync, help.
+Dispatcher pattern: `bin/almanac` resolves `ALMANAC_HOME`, sources `lib/core.sh`, routes to `cmd/<command>.sh`. Commands: install, uninstall, list, update, sync, ralph, harden, help.
+
+`cmd/harden.sh` is the first harden-loop CLI surface. It uses `lib/harden-core.sh` to draft a target-specific `rubric.md` under `docs/plans/harden/<target-slug>/` in the caller repo, refusing to overwrite an existing contract.
 
 ## Validation (`lib/almanac-core.sh`)
 

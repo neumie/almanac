@@ -19,7 +19,7 @@ COMMAND="${1:-}"
 [[ -n "$COMMAND" ]] && shift
 
 case "$COMMAND" in
-  install|uninstall|update|list|sync|ralph|help)
+  install|uninstall|update|list|sync|ralph|harden|help)
     source "$ALMANAC_HOME/cmd/${COMMAND}.sh"
     ;;
   "")
