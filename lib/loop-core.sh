@@ -440,19 +440,41 @@ almanac_loop_agent_codex_stream_filter() {
 JQ
 }
 
+# Run a provider command, optionally merging its stderr into stdout (2>&1) when
+# $1 is "1". Used as the producer at the head of the stream pipeline below so the
+# merge can be toggled without duplicating the whole pipeline. The function's
+# exit code is the provider's, so PIPESTATUS[0] in the calling pipeline still
+# reflects the producer rather than this wrapper.
+almanac_loop_agent_producer() {
+  local merge="$1"; shift
+  if [ "$merge" = "1" ]; then
+    "$@" 2>&1
+  else
+    "$@"
+  fi
+}
+
 # Run a provider command live: tee its raw event stream to $events_file AND pipe
 # it through the provider's jq filter to stdout, so the caller sees progress as
 # it happens. Crucially, the PRODUCER's exit code wins (via PIPESTATUS), not the
 # jq filter's — a provider failure must propagate even though it is piped. errexit
 # is suspended around the pipeline (a no-match grep / empty filter must not abort
 # a set -e caller) and restored afterwards. Degrades to a raw tee when jq is
-# absent so output is never silently dropped.
-# Usage: almanac_loop_agent_stream <provider> <events_file> <cmd> [args...]
+# absent so output is never silently dropped. When $merge_stderr requests it, the
+# provider's stderr is folded into the captured/streamed output (2>&1) —
+# preserving ralph once.sh's `codex ... 2>&1 | tee` log capture; default leaves
+# stderr on the terminal.
+# Usage: almanac_loop_agent_stream <provider> <events_file> <merge_stderr> <cmd> [args...]
 almanac_loop_agent_stream() {
   local provider="$1"; shift
   local events_file="$1"; shift
+  local merge_stderr="$1"; shift
 
-  local filter prefilter=0 rc had_e=0
+  local filter prefilter=0 rc had_e=0 merge=0
+  case "$merge_stderr" in
+    merge-stderr|stderr|on|1) merge=1 ;;
+  esac
+
   case "$(almanac_loop_agent_provider_key "$provider")" in
     claude|claude-code) filter="$(almanac_loop_agent_claude_stream_filter)"; prefilter=1 ;;
     codex)              filter="$(almanac_loop_agent_codex_stream_filter)" ;;
@@ -463,14 +485,14 @@ almanac_loop_agent_stream() {
   set +e
   if command -v jq >/dev/null 2>&1 && [ -n "$filter" ]; then
     if [ "$prefilter" -eq 1 ]; then
-      "$@" | tee "$events_file" | grep --line-buffered '^{' \
+      almanac_loop_agent_producer "$merge" "$@" | tee "$events_file" | grep --line-buffered '^{' \
         | jq -Rj --unbuffered "fromjson? // empty | objects | ( $filter )"
     else
-      "$@" | tee "$events_file" \
+      almanac_loop_agent_producer "$merge" "$@" | tee "$events_file" \
         | jq -Rj --unbuffered "fromjson? // empty | objects | ( $filter )"
     fi
   else
-    "$@" | tee "$events_file"
+    almanac_loop_agent_producer "$merge" "$@" | tee "$events_file"
   fi
   rc=${PIPESTATUS[0]}
   [ "$had_e" -eq 1 ] && set -e
@@ -488,6 +510,7 @@ almanac_loop_agent_run() {
   local result_file="$6"
   local events_file="${7:-}"
   local stream_mode="${8:-}"
+  local merge_stderr="${9:-}"
   local provider_key prompt stream=0 rc
 
   [ -n "$provider" ] || return 2
@@ -535,7 +558,7 @@ almanac_loop_agent_run() {
 
       if [ "$stream" -eq 1 ]; then
         rc=0
-        almanac_loop_agent_stream "codex" "$events_file" \
+        almanac_loop_agent_stream "codex" "$events_file" "$merge_stderr" \
           codex "${codex_args[@]}" "$prompt" || rc=$?
         [ "$rc" -eq 0 ] || return "$rc"
       else
@@ -567,7 +590,7 @@ almanac_loop_agent_run() {
         # Stream mode tees live assistant text to stdout; the helper preserves
         # claude's exit via PIPESTATUS so a failure still propagates past the pipe.
         rc=0
-        almanac_loop_agent_stream "claude" "$events_file" \
+        almanac_loop_agent_stream "claude" "$events_file" "$merge_stderr" \
           claude "${claude_args[@]}" "$prompt" || rc=$?
         [ "$rc" -eq 0 ] || return "$rc"
       else

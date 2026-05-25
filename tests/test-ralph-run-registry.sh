@@ -66,6 +66,40 @@ EOF
   chmod +x "$fakebin/codex"
 }
 
+# Fake codex that records its argv (to $FAKE_CODEX_ARGV, one arg per line),
+# writes a diagnostic to stderr (to exercise the seam's merge-stderr 2>&1 log
+# capture), writes a final message to --output-last-message, and emits one
+# item.completed/agent_message line the codex stream filter matches. Exit code
+# overridable via $FAKE_CODEX_EXIT.
+write_fake_codex_recording() {
+  local fakebin="$1"
+
+  mkdir -p "$fakebin"
+  cat > "$fakebin/codex" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+[ -n "${FAKE_CODEX_ARGV:-}" ] && printf '%s\n' "$@" > "$FAKE_CODEX_ARGV"
+result_file=""
+exit_code="${FAKE_CODEX_EXIT:-0}"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output-last-message)
+      shift
+      result_file="${1:-}"
+      ;;
+  esac
+  shift || true
+done
+
+printf '%s\n' "FAKE_CODEX_STDERR_LINE" >&2
+[ -n "$result_file" ] && printf '%s\n' "fake codex final" > "$result_file"
+printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"FAKE_CODEX_STREAM_TEXT"}}'
+exit "$exit_code"
+EOF
+  chmod +x "$fakebin/codex"
+}
+
 # Fake claude that records its argv (to $FAKE_CLAUDE_ARGV, one arg per line) and
 # emits a minimal stream-json event sequence: an init model line, one assistant
 # text block, and a result. Exit code overridable via $FAKE_CLAUDE_EXIT.
@@ -312,12 +346,94 @@ test_once_claude_propagates_provider_failure() {
   echo "  PASS: once claude propagates provider failure through the seam"
 }
 
+# once.sh routes its default (non-verbose) codex provider invocation through the
+# shared agent_run seam (#66 — ralph migration). The seam must build once.sh's
+# exact codex invocation (--json, --output-last-message, danger-full-access)
+# honoring RALPH_MODEL/RALPH_EFFORT, stream the live agent-message text, capture
+# the raw stream AND merged stderr (2>&1) to the session log, and once.sh prints
+# the final result — byte-for-byte as the old inline pipe did.
+test_once_codex_routes_provider_invocation_through_seam() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  SKIP: once codex seam routing (jq not available)"
+    return 0
+  fi
+
+  local tmp fakebin argv_file codex_log out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  argv_file="$tmp/codex-argv.txt"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_codex_recording "$fakebin"
+
+  out=$(cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex \
+    RALPH_MODEL=fake-model RALPH_EFFORT=high FAKE_CODEX_ARGV="$argv_file" \
+    bash "$ONCE_SCRIPT" demo)
+
+  # Live agent-message stream reaches stdout via the seam's codex jq filter.
+  printf '%s' "$out" | grep -Fq "FAKE_CODEX_STREAM_TEXT" \
+    || fail "once codex should stream the agent-message text through the seam"
+  # once.sh prints the seam's captured final result.
+  printf '%s' "$out" | grep -Fq "fake codex final" \
+    || fail "once codex should print the seam's final result"
+
+  # The seam built once.sh's codex invocation, honoring model + effort.
+  [ -f "$argv_file" ] || fail "fake codex should have been invoked"
+  assert_file_contains "$argv_file" "--json" "codex invocation should request json events"
+  assert_file_contains "$argv_file" "--output-last-message" "codex invocation should capture the final message"
+  assert_file_contains "$argv_file" "--sandbox" "codex invocation should set a sandbox"
+  assert_file_contains "$argv_file" "danger-full-access" "once codex sandbox should be danger-full-access"
+  assert_file_contains "$argv_file" "fake-model" "codex invocation should honor RALPH_MODEL"
+  assert_file_contains "$argv_file" "high" "codex invocation should honor RALPH_EFFORT"
+
+  # The session log captures the raw stream AND merged stderr (2>&1 preserved).
+  codex_log="$tmp/docs/plans/demo/ralph-codex-once.log"
+  [ -f "$codex_log" ] || fail "once codex should write the session log via the seam"
+  assert_file_contains "$codex_log" "FAKE_CODEX_STREAM_TEXT" "session log should capture the raw codex event stream"
+  assert_file_contains "$codex_log" "FAKE_CODEX_STDERR_LINE" "session log should capture codex stderr (merge-stderr 2>&1)"
+  echo "  PASS: once routes codex provider invocation through the shared seam"
+}
+
+# A failing codex provider must propagate through the seam so once.sh prints the
+# failure tail and exits nonzero, marking the run failed.
+test_once_codex_propagates_provider_failure() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  SKIP: once codex failure propagation (jq not available)"
+    return 0
+  fi
+
+  local tmp fakebin index_file
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_codex_recording "$fakebin"
+
+  if (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex FAKE_CODEX_EXIT=5 \
+    bash "$ONCE_SCRIPT" demo >/dev/null 2>&1); then
+    fail "once should fail when the codex provider exits nonzero (seam PIPESTATUS)"
+  fi
+
+  index_file="$tmp/.almanac/runs/index.tsv"
+  [ -f "$index_file" ] || fail "failed once codex should still write run index"
+  assert_file_contains "$index_file" $'failed' "failed once codex should mark run failed"
+  echo "  PASS: once codex propagates provider failure through the seam"
+}
+
 echo "=== Ralph Run Registry Tests ==="
 test_once_registers_and_marks_run_done
 test_once_marks_run_failed_on_provider_error
 test_once_emits_live_run_progress_contract
 test_once_claude_routes_provider_invocation_through_seam
 test_once_claude_propagates_provider_failure
+test_once_codex_routes_provider_invocation_through_seam
+test_once_codex_propagates_provider_failure
 test_afk_registers_and_marks_run_done
 test_afk_marks_run_failed_on_provider_error
 test_afk_emits_live_run_progress_contract

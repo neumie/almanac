@@ -107,6 +107,35 @@ EOF
   chmod +x "$fakebin/claude"
 }
 
+# Fake codex that writes a diagnostic to stderr (before its json events) so the
+# seam's opt-in merge-stderr (2>&1) capture can be exercised. Emits an
+# item.completed/agent_message line the codex stream filter matches.
+write_fake_codex_stderr_agent() {
+  local fakebin="$1"
+
+  mkdir -p "$fakebin"
+  cat > "$fakebin/codex" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+result_file=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output-last-message)
+      shift
+      result_file="${1:-}"
+      ;;
+  esac
+  shift || true
+done
+
+printf '%s\n' "codex-stderr-diagnostic" >&2
+[ -n "$result_file" ] && printf '%s\n' "codex final" > "$result_file"
+printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"codex streamed: hardened"}}'
+EOF
+  chmod +x "$fakebin/codex"
+}
+
 write_fake_failing_agent() {
   local fakebin="$1"
   local name="$2"
@@ -600,6 +629,42 @@ test_agent_runner_stream_mode_propagates_failure() {
   echo "  PASS: agent runner stream mode propagates provider failure"
 }
 
+# Opt-in merge-stderr mode (the 9th arg). When requested, the seam runs the
+# provider with 2>&1 so its stderr is captured into the event log alongside
+# stdout — preserving ralph once.sh's `codex ... 2>&1 | tee` behavior. Default
+# off leaves stderr on the terminal, unchanged for every existing stream caller.
+# This is the substrate the codex routing slice of the ralph migration needs
+# (issue #66 criterion 1).
+test_agent_runner_stream_merge_stderr_is_opt_in() {
+  local tmp fakebin prompt result events_default events_merge out
+  command -v jq >/dev/null 2>&1 || { echo "  SKIP: agent runner merge-stderr (no jq)"; return 0; }
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  prompt="$tmp/prompt.md"
+  result="$tmp/result.txt"
+  events_default="$tmp/events-default.jsonl"
+  events_merge="$tmp/events-merge.jsonl"
+
+  printf '%s\n' "review target" > "$prompt"
+  write_fake_codex_stderr_agent "$fakebin"
+
+  # Default stream mode (no 9th arg): provider stderr stays off the event log.
+  PATH="$fakebin:$PATH" almanac_loop_agent_run "codex" "" "" "danger-full-access" "$prompt" "$result" "$events_default" stream >/dev/null 2>&1
+  if grep -Fq "codex-stderr-diagnostic" "$events_default"; then
+    fail "default stream mode must not capture provider stderr in the event log"
+  fi
+
+  # merge-stderr: provider stderr is captured into the event log (2>&1).
+  out="$(PATH="$fakebin:$PATH" almanac_loop_agent_run "codex" "" "" "danger-full-access" "$prompt" "$result" "$events_merge" stream merge-stderr)"
+  assert_file_contains "$events_merge" "codex-stderr-diagnostic" "merge-stderr should capture provider stderr in the event log"
+  assert_contains "$out" "codex streamed: hardened" "merge-stderr should still stream the agent-message text live"
+  case "$out" in
+    *"codex-stderr-diagnostic"*) fail "merge-stderr must not leak the raw stderr line onto the filtered live stdout" ;;
+  esac
+  echo "  PASS: agent runner merge-stderr is opt-in"
+}
+
 test_worker_start_tracks_background_agent() {
   local tmp fakebin prompt pid status_file events_file result_file args
   new_tmpdir
@@ -744,6 +809,7 @@ test_agent_runner_propagates_claude_failure
 test_agent_runner_streams_claude_live_text
 test_agent_runner_streams_codex_live_text
 test_agent_runner_stream_mode_propagates_failure
+test_agent_runner_stream_merge_stderr_is_opt_in
 test_worker_start_tracks_background_agent
 test_worker_health_classifies_states
 test_worker_health_of_reads_state
