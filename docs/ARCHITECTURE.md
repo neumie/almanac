@@ -38,7 +38,7 @@ Dispatcher pattern: `bin/almanac` resolves `ALMANAC_HOME`, sources `lib/core.sh`
 
 ## Shared Loop Engine (`lib/loop-core.sh`)
 
-`lib/loop-core.sh` owns loop behavior shared by Ralph and harden-loop. Feedback detection maps project marker files to commands and renders prompt-ready markdown. The run registry records launched loops under `.almanac/runs/` in the caller repo: `index.tsv` stores id/type/target/pid/status-file/start/status, and each run gets a `status.tsv` blob that can be marked `done` or `failed` when the process exits. `.almanac/` is ignored because registry state is runtime-only.
+`lib/loop-core.sh` owns loop behavior shared by Ralph and harden-loop. Feedback detection maps project marker files to commands and renders prompt-ready markdown. The run registry records launched loops under `.almanac/runs/` in the caller repo: `index.tsv` stores id/type/target/pid/status-file/start/status, and each run gets a `status.tsv` blob that can be marked `done` or `failed` when the process exits. `ralph-loop`'s `once.sh` registers the PRD run before starting the provider and marks it at process exit. `.almanac/` is ignored because registry state is runtime-only.
 
 ## Validation (`lib/almanac-core.sh`)
 
