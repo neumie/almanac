@@ -817,3 +817,191 @@ almanac_harden_fanout() {
 
   _success "Aggregated $total_added new finding(s) into ${ledger_path#"$root"/}"
 }
+
+# --- Single sequential fixer + feedback verdict --------------------------------
+#
+# After reviewers fan out and the conductor ratifies findings, ONE write-capable
+# fixer applies changes for the open blocking findings, in place, in the working
+# tree. v1 is deliberately a single sequential agent — no worktrees, no parallel
+# writers — so there is never a merge conflict to reconcile and any regression
+# test the fixer writes simply persists on disk. The fixer then runs the
+# project's feedback loops (shared detection + runner) and reports a verdict per
+# loop, so the objective half of "bulletproof" is enforced every round.
+
+# Build the prompt for the single sequential fixer. It receives the kill-list
+# (the open blocking findings) and the rubric bar, and is told to apply minimal
+# fixes AND leave a regression test per finding so the fix stays enforced. Exact
+# wording is not asserted by tests by design; that the fixer runs write-capable
+# and its output persists is.
+almanac_harden_fixer_prompt() {
+  local target="$1"
+  local findings_text="$2"
+  local rubric_path="${3:-}"
+  local rubric_bar=""
+
+  if [ -n "$rubric_path" ] && [ -f "$rubric_path" ]; then
+    rubric_bar="$(almanac_harden_rubric_acceptance "$rubric_path")"
+  fi
+
+  cat <<EOF
+You are a single sequential fixer with write access to the repository. Apply the
+minimal changes that resolve every blocking finding below for the target. For
+each finding, add or update a regression test that fails before your fix and
+passes after, so the defect cannot silently return.
+
+Target: ${target}
+
+Blocking findings to fix:
+${findings_text}
+EOF
+
+  if [ -n "$rubric_bar" ]; then
+    cat <<EOF
+
+Your changes must satisfy this acceptance bar (the rubric contract):
+
+${rubric_bar}
+EOF
+  fi
+
+  cat <<EOF
+
+Do not weaken, skip, or delete existing tests, and do not edit the rubric. Leave
+the working tree building and the project's feedback loops (tests / typecheck /
+lint) green.
+EOF
+}
+
+# Run the single sequential fixer over the target's open blocking findings, then
+# run the project's feedback loops and report a pass/fail verdict per loop.
+#
+# One agent, write-capable (sandbox=workspace-write, NOT read-only), in place: no
+# worktree, so any regression tests it generates persist in the repo after the
+# run. Sequential by construction — a single foreground agent call — so there are
+# never concurrent writers. The fixer's agent call is bracketed by the rubric
+# immutability guard (snapshot before, verify after) so a write-capable fixer
+# cannot move the goalposts mid-run; legitimate rubric growth happens earlier, in
+# ratification, outside this bracket. On a clean fixer exit every open blocking
+# finding is marked `fixed` in the ledger; the next round's reviewers/ratify
+# reopen anything that still reproduces, so a still-broken finding cannot be
+# silently closed. A no-op (prints a note, returns 0) when there are no open
+# blocking findings. Returns the provider's exit code on a fixer failure, leaving
+# the findings open.
+almanac_harden_fix() {
+  local root="$1"
+  local target="$2"
+  local round="${3:-1}"
+  local target_path ledger_path rubric_path open findings_text count
+  local provider model effort prompt_file result_file events_file rubric_snapshot rc
+  local id lens severity location claim demonstration
+
+  case "$target" in
+    /*) target_path="$target" ;;
+    *)  target_path="$root/$target" ;;
+  esac
+
+  if [ ! -e "$target_path" ]; then
+    _die "Harden target not found: $target"
+  fi
+
+  ledger_path="$(almanac_harden_ledger_path "$root" "$target")"
+  rubric_path="$(almanac_harden_rubric_path "$root" "$target")"
+
+  open="$(almanac_harden_ledger_open_blocking "$ledger_path")"
+  if [ -z "$open" ]; then
+    _info "No open blocking findings to fix."
+    return 0
+  fi
+
+  count="$(printf '%s\n' "$open" | grep -c .)"
+
+  # Render the kill-list into the fixer prompt's findings block.
+  findings_text="$(
+    while IFS=$'\t' read -r id lens severity location claim demonstration; do
+      [ -n "$id" ] || continue
+      printf -- '- [%s] %s: %s (at %s)\n    demo: %s\n' \
+        "${severity:-?}" "${lens:-?}" "${claim:-?}" "${location:-?}" "${demonstration:-?}"
+    done <<INNER
+$open
+INNER
+  )"
+
+  provider="$(almanac_loop_role_field "harden" "fixer" "" "provider" "claude")"
+  model="$(almanac_loop_role_field "harden" "fixer" "" "model" "")"
+  effort="$(almanac_loop_role_field "harden" "fixer" "" "effort" "")"
+
+  prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-fixer-prompt.XXXXXX")"
+  result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-fixer-result.XXXXXX")"
+  events_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-fixer-events.XXXXXX")"
+  almanac_harden_fixer_prompt "$target" "$findings_text" "$rubric_path" > "$prompt_file"
+
+  # The rubric is immutable to agents during a run. The fixer is write-capable,
+  # so bracket its agent call: snapshot before, verify (revert + warn) after.
+  rubric_snapshot=""
+  if [ -f "$rubric_path" ]; then
+    rubric_snapshot="$(almanac_harden_rubric_snapshot "$rubric_path")" || rubric_snapshot=""
+  fi
+
+  _info "Fixing $count open blocking finding(s) with one sequential fixer (provider=$provider, write-capable)"
+
+  rc=0
+  almanac_loop_agent_run "$provider" "$model" "$effort" "workspace-write" \
+    "$prompt_file" "$result_file" "$events_file" >/dev/null || rc=$?
+
+  rm -f "$prompt_file" "$result_file" "$events_file"
+
+  if [ -n "$rubric_snapshot" ]; then
+    almanac_harden_rubric_verify "$rubric_path" "$rubric_snapshot" || true
+  fi
+
+  if [ "$rc" -ne 0 ]; then
+    _warn "Fixer failed (exit $rc); blocking findings remain open."
+    return "$rc"
+  fi
+
+  # The single fixer addresses the whole kill-list; mark each open blocking
+  # finding fixed. A finding that still reproduces is reopened next round.
+  while IFS=$'\t' read -r id lens severity location claim demonstration; do
+    [ -n "$id" ] || continue
+    almanac_harden_ledger_set_status "$ledger_path" "$id" "fixed" \
+      "fixed by sequential fixer at round $round"
+  done <<INNER
+$open
+INNER
+
+  _success "Applied fixes for $count finding(s); regenerated tests persist in the working tree."
+
+  # Objective gate: run the detected feedback loops and report a verdict per loop.
+  almanac_harden_report_feedback "$root"
+}
+
+# Run the project's feedback loops via the shared runner and print a pass/fail
+# verdict per loop. Returns the runner's aggregate (0 = all green, non-zero =
+# any failed) so a caller (the convergence gate, later) can act on it.
+almanac_harden_report_feedback() {
+  local root="$1"
+  local verdicts cmd verdict rc
+
+  _info "Running project feedback loops:"
+
+  rc=0
+  verdicts="$(almanac_loop_feedback_run "$root")" || rc=$?
+
+  if [ -z "$verdicts" ]; then
+    _info "  (no feedback loops detected)"
+    return 0
+  fi
+
+  while IFS=$'\t' read -r cmd verdict; do
+    [ -n "$cmd" ] || continue
+    if [ "$verdict" = "pass" ]; then
+      _success "  PASS  $cmd"
+    else
+      _warn "  FAIL  $cmd"
+    fi
+  done <<INNER
+$verdicts
+INNER
+
+  return "$rc"
+}

@@ -664,3 +664,44 @@ almanac_loop_feedback_markdown() {
     printf '%s\n' "- (none detected)"
   fi
 }
+
+# Run every detected feedback loop for the project at $root and emit one TSV
+# verdict row per loop: <command>\t<pass|fail>. Each command runs from $root
+# (combined output captured to $log_dir/<slug>.log when a log dir is given,
+# else discarded). Returns 0 only when every loop passed and non-zero when any
+# failed, so a caller can gate on the aggregate while still reading the per-loop
+# verdicts. This is the runner half of the shared feedback engine; detection is
+# almanac_loop_feedback_commands, shared with Ralph, so both consumers run the
+# same objective gate without per-project config.
+almanac_loop_feedback_run() {
+  local root="${1:-.}"
+  local log_dir="${2:-}"
+  local command verdict log_file slug
+  local any_fail=0
+
+  if [ -n "$log_dir" ]; then
+    mkdir -p "$log_dir"
+  fi
+
+  while IFS= read -r command; do
+    [ -n "$command" ] || continue
+
+    if [ -n "$log_dir" ]; then
+      slug="$(printf '%s' "$command" | tr -cs 'A-Za-z0-9' '-')"
+      log_file="$log_dir/${slug}.log"
+    else
+      log_file="/dev/null"
+    fi
+
+    if ( cd "$root" && eval "$command" ) > "$log_file" 2>&1; then
+      verdict="pass"
+    else
+      verdict="fail"
+      any_fail=1
+    fi
+
+    printf '%s\t%s\n' "$command" "$verdict"
+  done < <(almanac_loop_feedback_commands "$root")
+
+  return "$any_fail"
+}

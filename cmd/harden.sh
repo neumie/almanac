@@ -10,6 +10,7 @@ usage() {
   printf '%s\n' "  almanac harden <target>"
   printf '%s\n' "  almanac harden <target> --goal <goal>"
   printf '%s\n' "  almanac harden <target> --approve"
+  printf '%s\n' "  almanac harden <target> --fix"
   printf '%s\n' ""
   printf '%s\n' "With no flags, fans out one read-only reviewer per lens over the target,"
   printf '%s\n' "aggregates their findings into the ledger, and prints them. Configure the"
@@ -18,11 +19,14 @@ usage() {
   printf '%s\n' "a target with no rubric runs ad-hoc."
   printf '%s\n' "With --goal, creates docs/plans/harden/<target-slug>/rubric.md in the repo."
   printf '%s\n' "With --approve, approves an edited draft rubric."
+  printf '%s\n' "With --fix, runs one sequential write-capable fixer over the open blocking"
+  printf '%s\n' "findings, then runs the project feedback loops and reports a verdict per loop."
 }
 
 TARGET=""
 GOAL=""
 APPROVE=0
+FIX=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -37,6 +41,9 @@ while [ "$#" -gt 0 ]; do
       ;;
     --approve)
       APPROVE=1
+      ;;
+    --fix)
+      FIX=1
       ;;
     --)
       shift
@@ -60,6 +67,14 @@ done
   usage
   _die "Missing harden target"
 }
+
+if [ "$FIX" -eq 1 ]; then
+  [ -z "$GOAL" ] || _die "Use either --goal or --fix, not both"
+  [ "$APPROVE" -eq 0 ] || _die "Use either --approve or --fix, not both"
+
+  almanac_harden_fix "$PWD" "$TARGET"
+  exit 0
+fi
 
 if [ "$APPROVE" -eq 1 ]; then
   [ -z "$GOAL" ] || _die "Use either --goal or --approve, not both"

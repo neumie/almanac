@@ -289,6 +289,111 @@ test_fanout_blocks_until_rubric_approved() {
   echo "  PASS: fan-out blocks until the rubric is approved"
 }
 
+# Fake codex fixer: records the sandbox it was launched with and simulates a
+# write-capable fixer by writing a regression test into the working tree, so the
+# single-sequential-fixer path is exercised without a real model call.
+write_fake_fixer_codex() {
+  local fakebin="$1"
+  local sandbox_log="$2"
+  local testfile="$3"
+
+  mkdir -p "$fakebin"
+  cat > "$fakebin/codex" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+result_file=""
+sandbox=""
+while [ "\$#" -gt 0 ]; do
+  case "\$1" in
+    --output-last-message) shift; result_file="\${1:-}" ;;
+    --sandbox) shift; sandbox="\${1:-}" ;;
+  esac
+  shift || true
+done
+
+printf '%s\n' "\$sandbox" > "$sandbox_log"
+mkdir -p "\$(dirname "$testfile")"
+printf '%s\n' "regression test demonstrating the finding" > "$testfile"
+
+[ -n "\$result_file" ] && printf '%s\n' "applied fixes" > "\$result_file"
+printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"fixing"}}'
+EOF
+  chmod +x "$fakebin/codex"
+}
+
+# Criteria (61.1/61.4) + (61.2/61.3): a single write-capable sequential fixer
+# applies the open blocking findings in place (no worktree), the regression test
+# it generates persists in the repo, and the engine then runs the detected
+# feedback loops reporting a verdict per loop.
+test_fix_applies_open_blocking_and_persists_tests() {
+  local tmp fakebin ledger id output testfile open sandbox
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  mkdir -p "$tmp/src"
+  printf '%s\n' "code" > "$tmp/src/app.js"
+  # A detectable, green feedback loop so the fixer can report a pass verdict.
+  mkdir -p "$tmp/tests"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$tmp/tests/test-skills.sh"
+  chmod +x "$tmp/tests/test-skills.sh"
+
+  # Seed the ledger with one open blocking finding (the kill-list).
+  ledger="$tmp/docs/plans/harden/src-app-js/findings.md"
+  id="$(almanac_harden_finding_id "correctness" "src/app.js:10" "off-by-one")"
+  almanac_harden_ledger_append_entry "$ledger" "$id" "correctness" "high" \
+    "src/app.js:10" "off-by-one" "input [] returns -1" "open" 1 "" >/dev/null
+
+  fakebin="$tmp/bin"
+  testfile="$tmp/tests/regression-off-by-one.sh"
+  write_fake_fixer_codex "$fakebin" "$tmp/fixer-sandbox.txt" "$testfile"
+
+  output="$(cd "$tmp" && HARDEN_FIXER_PROVIDER=codex PATH="$fakebin:$PATH" \
+    "$ALMANAC" harden src/app.js --fix 2>&1)"
+
+  # 61.1: the fixer ran write-capable (workspace-write), never read-only.
+  sandbox="$(cat "$tmp/fixer-sandbox.txt")"
+  [ "$sandbox" = "workspace-write" ] || fail "fixer should run write-capable workspace-write (got '$sandbox')"
+
+  # 61.4: the generated regression test persists in the repo after the fix.
+  [ -f "$testfile" ] || fail "fixer-generated regression test should persist in the repo"
+
+  # The fixed finding is no longer open-blocking and is marked fixed.
+  open="$(almanac_harden_ledger_open_blocking "$ledger")"
+  case "$open" in
+    *"off-by-one"*) fail "a fixed finding must not remain open-blocking" ;;
+    *) ;;
+  esac
+  assert_file_contains "$ledger" "- status: fixed" "fixer should mark the finding fixed in the ledger"
+
+  # 61.2/61.3: the detected feedback loop ran and reported a per-loop verdict.
+  assert_contains "$output" "tests/test-skills.sh" "fixer should run the detected feedback loop"
+  assert_contains "$output" "PASS" "fixer should report a pass verdict for a green feedback loop"
+  echo "  PASS: fix applies open blocking findings and persists generated tests"
+}
+
+# When there are no open blocking findings, the fixer is a no-op: it spawns no
+# agent and runs no feedback loops.
+test_fix_is_noop_without_open_blocking() {
+  local tmp fakebin output
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  mkdir -p "$tmp/src"
+  printf '%s\n' "code" > "$tmp/src/app.js"
+
+  fakebin="$tmp/bin"
+  write_fake_fixer_codex "$fakebin" "$tmp/fixer-sandbox.txt" "$tmp/should-not-exist.sh"
+
+  output="$(cd "$tmp" && HARDEN_FIXER_PROVIDER=codex PATH="$fakebin:$PATH" \
+    "$ALMANAC" harden src/app.js --fix 2>&1)"
+
+  assert_contains "$output" "No open blocking findings" "fixer should report nothing to fix"
+  [ ! -f "$tmp/fixer-sandbox.txt" ] || fail "no fixer agent should spawn when there is nothing to fix"
+  [ ! -f "$tmp/should-not-exist.sh" ] || fail "the fixer must not run when there are no open blocking findings"
+  echo "  PASS: fix is a no-op without open blocking findings"
+}
+
 test_review_errors_on_missing_target() {
   local tmp output
   new_tmpdir
@@ -759,6 +864,8 @@ test_rubric_guard_keeps_untouched_rubric
 test_review_runs_single_reviewer_and_prints_findings
 test_fanout_spawns_reviewer_per_lens_and_aggregates
 test_fanout_blocks_until_rubric_approved
+test_fix_applies_open_blocking_and_persists_tests
+test_fix_is_noop_without_open_blocking
 test_review_errors_on_missing_target
 test_format_findings_skips_malformed_lines
 test_format_findings_reports_empty

@@ -189,6 +189,57 @@ EOF
   echo "  PASS: detects repo test scripts"
 }
 
+test_no_markers_yields_no_commands() {
+  local tmp actual
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  # An empty project (no marker files at all) detects nothing — the runner then
+  # has no objective gate to run rather than erroring.
+  actual="$(almanac_loop_feedback_commands "$tmp")"
+
+  assert_eq "" "$actual" "a project with no marker files should yield no feedback commands"
+  echo "  PASS: no markers yields no commands"
+}
+
+test_feedback_run_reports_per_loop_verdict() {
+  local tmp verdicts rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  # Two detectable repo test scripts: one green, one red, so the runner must
+  # emit a distinct pass/fail verdict per loop and a non-zero aggregate.
+  mkdir -p "$tmp/tests"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$tmp/tests/test-skills.sh"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 1' > "$tmp/tests/test-structure.sh"
+  chmod +x "$tmp/tests/test-skills.sh" "$tmp/tests/test-structure.sh"
+
+  rc=0
+  verdicts="$(almanac_loop_feedback_run "$tmp")" || rc=$?
+
+  assert_contains "$verdicts" $'bash tests/test-skills.sh\tpass' "a green loop should report pass"
+  assert_contains "$verdicts" $'bash tests/test-structure.sh\tfail' "a red loop should report fail"
+  [ "$rc" -ne 0 ] || fail "the aggregate must be non-zero when any loop fails"
+  echo "  PASS: feedback run reports per-loop verdict"
+}
+
+test_feedback_run_passes_when_all_green() {
+  local tmp verdicts rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  mkdir -p "$tmp/tests"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$tmp/tests/test-skills.sh"
+  chmod +x "$tmp/tests/test-skills.sh"
+
+  rc=0
+  verdicts="$(almanac_loop_feedback_run "$tmp")" || rc=$?
+
+  assert_contains "$verdicts" $'bash tests/test-skills.sh\tpass' "the green loop should report pass"
+  [ "$rc" -eq 0 ] || fail "the aggregate must be zero when every loop passes"
+  echo "  PASS: feedback run passes when all loops green"
+}
+
 test_registers_run_in_registry() {
   local tmp run_id status_file index_file expected_index
   new_tmpdir
@@ -415,6 +466,9 @@ echo "=== Loop Core Tests ==="
 test_detects_project_marker_commands
 test_dedupes_python_markers
 test_detects_repo_test_scripts
+test_no_markers_yields_no_commands
+test_feedback_run_reports_per_loop_verdict
+test_feedback_run_passes_when_all_green
 test_registers_run_in_registry
 test_marks_registered_run_done
 test_resolves_role_config_with_lens_overrides
