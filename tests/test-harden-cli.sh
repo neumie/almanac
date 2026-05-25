@@ -108,6 +108,47 @@ test_creates_draft_rubric_for_target_and_goal() {
   echo "  PASS: creates draft rubric for target and goal"
 }
 
+# Criterion (60.1): the conductor drafts a rubric with ALL required sections from
+# target + goal. Pins every heading the rubric-contract module mandates (PRD:
+# Goal, Acceptance, In/Out scope, Severity, Context) so a future edit that drops
+# a section fails loudly instead of silently shrinking the contract.
+test_draft_rubric_includes_all_required_sections() {
+  local tmp rubric
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  (cd "$tmp" && "$ALMANAC" harden src/widget.js --goal "no crash on empty input" >/dev/null)
+
+  rubric="$tmp/docs/plans/harden/src-widget-js/rubric.md"
+  [ -f "$rubric" ] || fail "draft should create the rubric"
+  assert_file_contains "$rubric" "## Goal" "rubric must include Goal section"
+  assert_file_contains "$rubric" "## Acceptance" "rubric must include Acceptance section"
+  assert_file_contains "$rubric" "## In Scope" "rubric must include In Scope section"
+  assert_file_contains "$rubric" "## Out of Scope" "rubric must include Out of Scope section"
+  assert_file_contains "$rubric" "## Severity" "rubric must include Severity section"
+  assert_file_contains "$rubric" "## Context" "rubric must include Context section"
+  echo "  PASS: draft rubric includes all required sections"
+}
+
+# Criterion (60.6): works on an ad-hoc target with no prior docs/plans entry —
+# the rubric is created on the fly (PRD story 26). Asserts the plan tree does NOT
+# exist before the run (truly ad-hoc) and is materialised by the draft.
+test_draft_rubric_created_on_the_fly_for_adhoc_target() {
+  local tmp rubric
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  [ ! -e "$tmp/docs/plans" ] || fail "ad-hoc target must start with no docs/plans entry"
+
+  (cd "$tmp" && "$ALMANAC" harden some/adhoc/module.py --goal "harden ad-hoc module" >/dev/null)
+
+  rubric="$tmp/docs/plans/harden/some-adhoc-module-py/rubric.md"
+  [ -f "$rubric" ] || fail "rubric should be created on the fly for an ad-hoc target"
+  assert_file_contains "$rubric" "Status: draft" "on-the-fly rubric should start as draft"
+  assert_file_contains "$rubric" "Target: some/adhoc/module.py" "on-the-fly rubric should record the ad-hoc target"
+  echo "  PASS: draft rubric created on the fly for ad-hoc target"
+}
+
 test_review_runs_single_reviewer_and_prints_findings() {
   local tmp fakebin output args
   new_tmpdir
@@ -703,6 +744,8 @@ test_rubric_guard_keeps_untouched_rubric() {
 
 echo "=== Harden CLI Tests ==="
 test_creates_draft_rubric_for_target_and_goal
+test_draft_rubric_includes_all_required_sections
+test_draft_rubric_created_on_the_fly_for_adhoc_target
 test_refuses_to_overwrite_existing_rubric
 test_approves_existing_draft_rubric
 test_approve_requires_existing_rubric
