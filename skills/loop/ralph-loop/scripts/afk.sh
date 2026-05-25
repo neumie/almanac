@@ -90,8 +90,8 @@ stream_text='
 '
 final_result='select(.type == "result").result // empty'
 codex_stream_text='
-  if .type == "event_msg" and .payload.type == "agent_message" then
-    .payload.message | . + "\n\n"
+  if .type == "item.completed" and .item.type == "agent_message" then
+    .item.text | . + "\n\n"
   else
     empty
   end
@@ -524,7 +524,7 @@ for ((i=1; i<=$ITERATIONS; i++)); do
         "$prompt" \
       | grep --line-buffered '^{' \
       | tee "$tmpfile" \
-      | jq -Rj --unbuffered "fromjson? // empty | ( $stream_text )"
+      | jq -Rj --unbuffered "fromjson? // empty | objects | ( $stream_text )"
 
       result=$(jq -r "$final_result" "$tmpfile")
       ;;
@@ -565,7 +565,7 @@ $ralph_commits"
           "${EFFORT_ARG[@]}" \
           "$prompt" 2>&1 \
           | tee "$codex_log" \
-          | jq -Rj --unbuffered "fromjson? // empty | ( $codex_stream_text )"; then
+          | jq -Rj --unbuffered "fromjson? // empty | objects | ( $codex_stream_text )"; then
           set +o pipefail
           echo "Codex failed. Last log lines:"
           tail -n 40 "$codex_log" || true
