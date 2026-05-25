@@ -1036,16 +1036,20 @@ almanac_loop_ui_clear() {
   fi
 }
 
-# Pure state -> glyph mapping for a worker health state. Plain unicode, no color,
-# no gum, so the dashboard composer that calls it stays deterministic.
+# Pure state -> glyph mapping for a worker-health OR run-lifecycle state. Plain
+# unicode, no color, no gum, so the dashboard/hub composer that calls it stays
+# deterministic. Worker health: running/stalled/idle/looping/done/failed. Run
+# lifecycle adds `stale` (a running entry whose pid is gone) and `aborted`.
 almanac_loop_ui_status_glyph() {
   case "$1" in
     running) printf '%s\n' "●" ;;
     stalled) printf '%s\n' "◐" ;;
+    stale)   printf '%s\n' "◌" ;;
     idle)    printf '%s\n' "○" ;;
     looping) printf '%s\n' "↻" ;;
     done)    printf '%s\n' "✔" ;;
     failed)  printf '%s\n' "✘" ;;
+    aborted) printf '%s\n' "■" ;;
     *)       printf '%s\n' "•" ;;
   esac
 }
@@ -1155,4 +1159,110 @@ almanac_loop_worker_health_of() {
   [ "$age" -ge 0 ] 2>/dev/null || age=0
 
   almanac_loop_worker_health "${status:-running}" "$age" "$count" "$repeat" "$stall" "$loop"
+}
+
+# --- Hub overview --------------------------------------------------------------
+#
+# The interactive hub (`almanac` in a TTY, or `almanac hub`) is the front door to
+# every loop. Its read views are PURE registry projections so they are testable
+# off a terminal and degrade to plain text without gum; the interactive menus
+# (new-run, per-run watch/stop/steer) layer on top of these.
+
+# Project the run registry into one of the hub's two lists as plain printable
+# rows (text only — gum frames them later, so this stays unit-testable off a
+# TTY). `which` selects the section:
+#   running — every run whose lifecycle status is still `running`, carrying its
+#             live round/summary from the run-status blob; a running entry whose
+#             pid is gone is surfaced as `stale` (almanac_loop_run_is_stale) so a
+#             crashed run is visible rather than silently lost.
+#   recent  — the finished runs (done/failed/aborted), newest finish first,
+#             capped at `limit` (default 10).
+# Each row is "<glyph>  <state>  <type>  <target>  <detail>  [<id>]". Returns 1
+# (no rows) when the section is empty so the caller can print an empty-state line.
+almanac_loop_hub_render() {
+  local root="$1"
+  local which="$2"
+  local limit="${3:-10}"
+  local rows id type target pid status_rel started status
+  local blob round summary finished detail glyph live count
+
+  rows="$(almanac_loop_list_runs "$root")" || return 1
+  count=0
+
+  if [ "$which" = "recent" ]; then
+    local sortable=""
+    while IFS=$'\t' read -r id type target pid status_rel started status; do
+      [ -n "$id" ] || continue
+      case "$status" in
+        done|failed|aborted) ;;
+        *) continue ;;
+      esac
+      blob="$(almanac_loop_run_status_file "$root" "$id")"
+      finished="$(almanac_loop_status_field "$blob" "finished_at" 2>/dev/null || true)"
+      [ -n "$finished" ] || finished="$started"
+      sortable+="$finished"$'\t'"$id"$'\t'"$type"$'\t'"$target"$'\t'"$status"$'\n'
+    done <<< "$rows"
+    [ -n "$sortable" ] || return 1
+    while IFS=$'\t' read -r finished id type target status; do
+      [ -n "$id" ] || continue
+      glyph="$(almanac_loop_ui_status_glyph "$status")"
+      printf '%s  %s  %s  %s  %s  [%s]\n' "$glyph" "$status" "$type" "$target" "$finished" "$id"
+      count=$((count + 1))
+      if [ "$count" -ge "$limit" ]; then break; fi
+    done < <(printf '%s' "$sortable" | sort -t$'\t' -k1,1r)
+    if [ "$count" -gt 0 ]; then return 0; fi
+    return 1
+  fi
+
+  # which == running (default)
+  while IFS=$'\t' read -r id type target pid status_rel started status; do
+    [ -n "$id" ] || continue
+    [ "$status" = "running" ] || continue
+    blob="$(almanac_loop_run_status_file "$root" "$id")"
+    round="$(almanac_loop_status_field "$blob" "round" 2>/dev/null || true)"
+    summary="$(almanac_loop_status_field "$blob" "summary" 2>/dev/null || true)"
+    live="running"
+    if almanac_loop_run_is_stale "$root" "$id"; then
+      live="stale"
+    fi
+    glyph="$(almanac_loop_ui_status_glyph "$live")"
+    detail=""
+    if [ -n "$round" ]; then detail="round $round"; fi
+    if [ -n "$summary" ]; then detail="${detail:+$detail  }$summary"; fi
+    if [ -z "$detail" ]; then detail="—"; fi
+    printf '%s  %s  %s  %s  %s  [%s]\n' "$glyph" "$live" "$type" "$target" "$detail" "$id"
+    count=$((count + 1))
+  done <<< "$rows"
+  if [ "$count" -gt 0 ]; then return 0; fi
+  return 1
+}
+
+# Compose the hub's read-only overview screen: a Running section (live loops from
+# the registry) and a Recent section (last finished loops), each framed through
+# the shared ui renderer so it shows as a gum panel on a TTY and plain text
+# without gum. This is the whole hub output off a TTY and the status screen the
+# interactive hub draws around its menu. Each section prints an empty-state line
+# when there are no matching runs.
+almanac_loop_hub_overview() {
+  local root="$1"
+  local recent_limit="${2:-10}"
+  local running recent
+
+  {
+    printf '%s\n' "almanac — loop hub"
+    printf '\n'
+    printf '%s\n' "Running"
+    if running="$(almanac_loop_hub_render "$root" running)"; then
+      printf '%s\n' "$running"
+    else
+      printf '%s\n' "  (no running loops)"
+    fi
+    printf '\n'
+    printf '%s\n' "Recent"
+    if recent="$(almanac_loop_hub_render "$root" recent "$recent_limit")"; then
+      printf '%s\n' "$recent"
+    else
+      printf '%s\n' "  (no recent loops)"
+    fi
+  } | almanac_loop_ui_render
 }

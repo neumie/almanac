@@ -19,11 +19,18 @@ COMMAND="${1:-}"
 [[ -n "$COMMAND" ]] && shift
 
 case "$COMMAND" in
-  install|uninstall|update|list|sync|ralph|harden|doctor|help)
+  install|uninstall|update|list|sync|ralph|harden|hub|doctor|help)
     source "$ALMANAC_HOME/cmd/${COMMAND}.sh"
     ;;
   "")
-    source "$ALMANAC_HOME/cmd/help.sh"
+    # Bare `almanac`: open the interactive hub when run in a TTY; otherwise
+    # (piped / non-interactive) print help so scripts that call bare almanac
+    # don't break and never block on a menu.
+    if [ -t 0 ] && [ -t 1 ]; then
+      source "$ALMANAC_HOME/cmd/hub.sh"
+    else
+      source "$ALMANAC_HOME/cmd/help.sh"
+    fi
     ;;
   *)
     _error "Unknown command: $COMMAND"

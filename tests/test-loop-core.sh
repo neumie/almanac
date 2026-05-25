@@ -850,6 +850,92 @@ test_ui_render_degrades_without_gum() {
   echo "  PASS: ui render degrades without gum"
 }
 
+test_hub_render_lists_running_with_live_status() {
+  local tmp out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  # A live run (this process's pid), a crashed run (dead pid, never marked), and
+  # a finished run.
+  almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "harden-live" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_update_run_progress "$tmp" "harden-live" "2" "reviewers: security,perf"
+  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "2147483647" "ralph-dead" "2026-05-25T12:01:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "harden" "src/old.js" "$$" "harden-fin" "2026-05-25T11:00:00Z" >/dev/null
+  almanac_loop_mark_run_status "$tmp" "harden-fin" "done" "2026-05-25T11:30:00Z"
+
+  out="$(almanac_loop_hub_render "$tmp" running)"
+  assert_contains "$out" "harden-live" "running list includes the live harden run"
+  assert_contains "$out" "round 2" "running list shows the live round"
+  assert_contains "$out" "reviewers: security,perf" "running list shows the live summary"
+  assert_contains "$out" "running" "live run is shown running"
+  assert_contains "$out" "ralph-dead" "running list includes the crashed run"
+  assert_contains "$out" "stale" "a running entry with a dead pid is surfaced as stale"
+  case "$out" in
+    *harden-fin*) fail "running list must exclude finished runs" ;;
+  esac
+  echo "  PASS: hub render lists running with live status"
+}
+
+test_hub_render_recent_newest_first_capped() {
+  local tmp out first
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "harden" "a.js" "$$" "fin-old" "2026-05-25T10:00:00Z" >/dev/null
+  almanac_loop_mark_run_status "$tmp" "fin-old" "done" "2026-05-25T10:10:00Z"
+  almanac_loop_register_run "$tmp" "ralph" "b/prd.md" "$$" "fin-mid" "2026-05-25T11:00:00Z" >/dev/null
+  almanac_loop_mark_run_status "$tmp" "fin-mid" "failed" "2026-05-25T11:10:00Z"
+  almanac_loop_register_run "$tmp" "harden" "c.js" "$$" "fin-new" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_mark_run_status "$tmp" "fin-new" "aborted" "2026-05-25T12:10:00Z"
+  # A still-running run never appears under recent.
+  almanac_loop_register_run "$tmp" "harden" "d.js" "$$" "still-live" "2026-05-25T12:05:00Z" >/dev/null
+
+  out="$(almanac_loop_hub_render "$tmp" recent)"
+  assert_contains "$out" "fin-new" "recent includes finished runs"
+  assert_contains "$out" "aborted" "recent shows the terminal status"
+  case "$out" in
+    *still-live*) fail "recent must exclude running runs" ;;
+  esac
+  first="$(printf '%s\n' "$out" | head -1)"
+  assert_contains "$first" "fin-new" "recent is ordered newest finish first"
+
+  # limit caps the number of rows, dropping the oldest.
+  out="$(almanac_loop_hub_render "$tmp" recent 2)"
+  assert_eq "2" "$(printf '%s\n' "$out" | grep -c '[^[:space:]]')" "recent honors the limit"
+  case "$out" in
+    *fin-old*) fail "recent limit should drop the oldest run" ;;
+  esac
+  echo "  PASS: hub render recent newest first capped"
+}
+
+test_hub_overview_degrades_without_gum() {
+  local tmp out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "ov-live" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "ralph" "p/prd.md" "$$" "ov-done" "2026-05-25T11:00:00Z" >/dev/null
+  almanac_loop_mark_run_status "$tmp" "ov-done" "done" "2026-05-25T11:30:00Z"
+
+  out="$(ALMANAC_NO_GUM=1 almanac_loop_hub_overview "$tmp")"
+  assert_contains "$out" "Running" "overview has a running section"
+  assert_contains "$out" "Recent" "overview has a recent section"
+  assert_contains "$out" "ov-live" "overview lists the running run"
+  assert_contains "$out" "ov-done" "overview lists the finished run"
+  echo "  PASS: hub overview degrades without gum"
+}
+
+test_hub_overview_empty_registry_shows_empty_states() {
+  local tmp out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  out="$(ALMANAC_NO_GUM=1 almanac_loop_hub_overview "$tmp")"
+  assert_contains "$out" "no running loops" "empty registry shows a running empty-state"
+  assert_contains "$out" "no recent loops" "empty registry shows a recent empty-state"
+  echo "  PASS: hub overview empty registry shows empty states"
+}
+
 echo "=== Loop Core Tests ==="
 test_detects_project_marker_commands
 test_dedupes_python_markers
@@ -881,3 +967,7 @@ test_worker_health_classifies_states
 test_worker_health_of_reads_state
 test_worker_watch_streams_event_log
 test_ui_render_degrades_without_gum
+test_hub_render_lists_running_with_live_status
+test_hub_render_recent_newest_first_capped
+test_hub_overview_degrades_without_gum
+test_hub_overview_empty_registry_shows_empty_states

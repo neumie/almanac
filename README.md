@@ -59,6 +59,8 @@ almanac install codex                        # same, for ~/.codex/AGENTS.md
 ## CLI
 
 ```
+almanac                      Open the interactive loop hub (in a TTY); else print help
+almanac hub                  Open the interactive loop hub (list running/recent loops)
 almanac install <provider>   Install for a provider
 almanac uninstall <provider> Remove from a provider
 almanac list                 List available providers and install status
