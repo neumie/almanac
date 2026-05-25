@@ -65,6 +65,7 @@ check "tests/test-skills.sh"
 check "tests/test-loop-core.sh"
 check "tests/test-ralph-prompt.sh"
 check "tests/test-ralph-run-registry.sh"
+check "tests/test-ralph-smoke.sh"
 check "tests/test-harden-cli.sh"
 
 # Docs
