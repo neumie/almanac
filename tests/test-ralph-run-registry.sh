@@ -66,6 +66,28 @@ EOF
   chmod +x "$fakebin/codex"
 }
 
+# Fake claude that records its argv (to $FAKE_CLAUDE_ARGV, one arg per line) and
+# emits a minimal stream-json event sequence: an init model line, one assistant
+# text block, and a result. Exit code overridable via $FAKE_CLAUDE_EXIT.
+write_fake_claude() {
+  local fakebin="$1"
+
+  mkdir -p "$fakebin"
+  cat > "$fakebin/claude" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+[ -n "${FAKE_CLAUDE_ARGV:-}" ] && printf '%s\n' "$@" > "$FAKE_CLAUDE_ARGV"
+exit_code="${FAKE_CLAUDE_EXIT:-0}"
+
+printf '%s\n' '{"type":"system","subtype":"init","model":"fake-claude-model"}'
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"FAKE_CLAUDE_ASSISTANT_TEXT"}]}}'
+printf '%s\n' '{"type":"result","result":"fake claude final"}'
+exit "$exit_code"
+EOF
+  chmod +x "$fakebin/claude"
+}
+
 test_once_registers_and_marks_run_done() {
   local tmp fakebin index_file status_file status_rel
   new_tmpdir
@@ -219,10 +241,83 @@ test_afk_emits_live_run_progress_contract() {
   echo "  PASS: afk emits the live run-status progress contract"
 }
 
+# once.sh routes its claude provider invocation through the shared agent_run
+# seam (#66 — ralph migration). The seam must build once.sh's exact claude
+# invocation (acceptEdits, stream-json) honoring RALPH_MODEL/RALPH_EFFORT and
+# stream the live assistant text to stdout byte-for-byte as before.
+test_once_claude_routes_provider_invocation_through_seam() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  SKIP: once claude seam routing (jq not available)"
+    return 0
+  fi
+
+  local tmp fakebin argv_file out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  argv_file="$tmp/claude-argv.txt"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_claude "$fakebin"
+
+  out=$(cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=claude \
+    RALPH_MODEL=fake-model RALPH_EFFORT=high FAKE_CLAUDE_ARGV="$argv_file" \
+    bash "$ONCE_SCRIPT" demo)
+
+  # Live assistant stream reaches stdout via the seam's claude jq filter.
+  printf '%s' "$out" | grep -Fq "Claude model: fake-claude-model" \
+    || fail "once claude should stream the init model line through the seam"
+  printf '%s' "$out" | grep -Fq "FAKE_CLAUDE_ASSISTANT_TEXT" \
+    || fail "once claude should stream the assistant text through the seam"
+
+  # The seam built once.sh's claude invocation, honoring model + effort.
+  [ -f "$argv_file" ] || fail "fake claude should have been invoked"
+  assert_file_contains "$argv_file" "--output-format" "claude invocation should request a structured output format"
+  assert_file_contains "$argv_file" "stream-json" "claude invocation should request stream-json"
+  assert_file_contains "$argv_file" "--permission-mode" "claude invocation should set a permission mode"
+  assert_file_contains "$argv_file" "acceptEdits" "once claude permission mode should be acceptEdits"
+  assert_file_contains "$argv_file" "fake-model" "claude invocation should honor RALPH_MODEL"
+  assert_file_contains "$argv_file" "high" "claude invocation should honor RALPH_EFFORT"
+  echo "  PASS: once routes claude provider invocation through the shared seam"
+}
+
+# A failing claude provider must propagate through the seam's pipe (PIPESTATUS)
+# so once.sh exits nonzero and the run is marked failed.
+test_once_claude_propagates_provider_failure() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  SKIP: once claude failure propagation (jq not available)"
+    return 0
+  fi
+
+  local tmp fakebin index_file
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_claude "$fakebin"
+
+  if (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=claude FAKE_CLAUDE_EXIT=5 \
+    bash "$ONCE_SCRIPT" demo >/dev/null 2>&1); then
+    fail "once should fail when the claude provider exits nonzero (seam PIPESTATUS)"
+  fi
+
+  index_file="$tmp/.almanac/runs/index.tsv"
+  [ -f "$index_file" ] || fail "failed once claude should still write run index"
+  assert_file_contains "$index_file" $'failed' "failed once claude should mark run failed"
+  echo "  PASS: once claude propagates provider failure through the seam"
+}
+
 echo "=== Ralph Run Registry Tests ==="
 test_once_registers_and_marks_run_done
 test_once_marks_run_failed_on_provider_error
 test_once_emits_live_run_progress_contract
+test_once_claude_routes_provider_invocation_through_seam
+test_once_claude_propagates_provider_failure
 test_afk_registers_and_marks_run_done
 test_afk_marks_run_failed_on_provider_error
 test_afk_emits_live_run_progress_contract

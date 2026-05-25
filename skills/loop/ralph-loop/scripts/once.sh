@@ -41,15 +41,6 @@ if [ -n "${RALPH_MODEL:-}" ]; then
 fi
 EFFORT_ARG=()
 
-stream_text='
-  if .type == "system" and .subtype == "init" and (.model // "") != "" then
-    "Claude model: \(.model)\r\n\n"
-  elif .type == "assistant" then
-    .message.content[]? | select(.type == "text").text // empty | gsub("\n"; "\r\n") | . + "\r\n\n"
-  else
-    empty
-  end
-'
 codex_stream_text='
   if .type == "item.completed" and .item.type == "agent_message" then
     .item.text | . + "\n\n"
@@ -116,17 +107,26 @@ ralph_commits=$(git log --grep="RALPH($PRD_NAME)" -n 10 --format="%H%n%ad%n%B---
 
 case "$PROVIDER" in
   claude)
+    # Provider invocation goes through the shared agent_run seam in stream mode
+    # rather than an inline claude exec (#66 — ralph migration onto the engine).
+    # The seam builds the same invocation once.sh used (--print --output-format
+    # stream-json --verbose --permission-mode acceptEdits, plus --model/--effort),
+    # tees the raw event stream to its events file, and pipes the live assistant
+    # text to stdout through the same jq filter — so console output is unchanged.
+    # workspace-write maps to acceptEdits (once.sh's permission mode);
+    # RALPH_MODEL/RALPH_EFFORT pass straight through as the seam's model/effort.
+    # Unlike the old inline pipe (no pipefail), the seam preserves claude's exit
+    # via PIPESTATUS, so a provider failure now propagates instead of being
+    # swallowed — matching the codex branch and the agent-runner contract.
     prompt="@$PROMPT Previous RALPH commits: $ralph_commits"
-    claude \
-      --print \
-      --output-format stream-json \
-      --verbose \
-      --permission-mode acceptEdits \
-      "${MODEL_ARG[@]}" \
-      "${EFFORT_ARG[@]}" \
-      "$prompt" \
-    | grep --line-buffered '^{' \
-    | jq -Rj --unbuffered "fromjson? // empty | objects | ( $stream_text )"
+    claude_prompt_file=$(mktemp)
+    claude_events_file=$(mktemp)
+    claude_result_file=$(mktemp)
+    printf '%s' "$prompt" > "$claude_prompt_file"
+    almanac_loop_agent_run \
+      claude "${RALPH_MODEL:-}" "${RALPH_EFFORT:-}" workspace-write \
+      "$claude_prompt_file" "$claude_result_file" "$claude_events_file" stream
+    rm -f "$claude_prompt_file" "$claude_events_file" "$claude_result_file"
     ;;
   codex)
     prompt="# OUTPUT STYLE
