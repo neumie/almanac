@@ -194,6 +194,76 @@ almanac_loop_mark_run_status() {
   almanac_loop_write_run_status "$status_file" "$run_id" "$type" "$target" "$pid" "$status_rel" "$started_at" "$status" "$finished_at"
 }
 
+almanac_loop_env_key_part() {
+  printf '%s' "$1" \
+    | tr '[:lower:]' '[:upper:]' \
+    | sed 's/[^A-Z0-9][^A-Z0-9]*/_/g; s/^_//; s/_$//'
+}
+
+almanac_loop_env_value() {
+  local name="$1"
+
+  if [ "${!name+x}" ]; then
+    printf '%s\n' "${!name}"
+    return 0
+  fi
+
+  return 1
+}
+
+almanac_loop_role_field() {
+  [ "$#" -ge 5 ] || return 2
+
+  local prefix="$1"
+  local role="$2"
+  local lens="$3"
+  local field="$4"
+  local default_value="$5"
+  local prefix_key role_key lens_key field_key candidate value
+
+  prefix_key="$(almanac_loop_env_key_part "$prefix")"
+  role_key="$(almanac_loop_env_key_part "$role")"
+  lens_key="$(almanac_loop_env_key_part "$lens")"
+  field_key="$(almanac_loop_env_key_part "$field")"
+
+  if [ -n "$lens_key" ]; then
+    candidate="${prefix_key}_${role_key}_${lens_key}_${field_key}"
+    if value="$(almanac_loop_env_value "$candidate")"; then
+      printf '%s\n' "$value"
+      return 0
+    fi
+  fi
+
+  candidate="${prefix_key}_${role_key}_${field_key}"
+  if value="$(almanac_loop_env_value "$candidate")"; then
+    printf '%s\n' "$value"
+    return 0
+  fi
+
+  candidate="${prefix_key}_${field_key}"
+  if value="$(almanac_loop_env_value "$candidate")"; then
+    printf '%s\n' "$value"
+    return 0
+  fi
+
+  printf '%s\n' "$default_value"
+}
+
+almanac_loop_role_config() {
+  [ "$#" -ge 2 ] || return 2
+
+  local prefix="$1"
+  local role="$2"
+  local lens="${3:-}"
+  local default_provider="${4:-}"
+  local default_model="${5:-}"
+  local default_effort="${6:-}"
+
+  printf 'provider\t%s\n' "$(almanac_loop_role_field "$prefix" "$role" "$lens" "provider" "$default_provider")"
+  printf 'model\t%s\n' "$(almanac_loop_role_field "$prefix" "$role" "$lens" "model" "$default_model")"
+  printf 'effort\t%s\n' "$(almanac_loop_role_field "$prefix" "$role" "$lens" "effort" "$default_effort")"
+}
+
 almanac_loop_feedback_commands() {
   local root="${1:-.}"
 

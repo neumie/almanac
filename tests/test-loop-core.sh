@@ -163,9 +163,55 @@ test_marks_registered_run_done() {
   echo "  PASS: marks registered run done"
 }
 
+test_resolves_role_config_with_lens_overrides() {
+  local expected actual
+
+  expected=$(cat <<'EOF'
+provider	codex
+model	security-model
+effort	medium
+EOF
+)
+
+  actual="$(
+    HARDEN_PROVIDER=claude \
+    HARDEN_MODEL=default-model \
+    HARDEN_EFFORT=medium \
+    HARDEN_REVIEWER_PROVIDER=codex \
+    HARDEN_REVIEWER_SECURITY_MODEL=security-model \
+    almanac_loop_role_config "harden" "reviewer" "security" "fallback-provider" "fallback-model" "low"
+  )"
+
+  assert_eq "$expected" "$actual" "lens config should layer lens, role, shared, then defaults"
+  echo "  PASS: resolves role config with lens overrides"
+}
+
+test_resolves_role_config_with_ralph_style_fallbacks() {
+  local expected actual
+
+  expected=$(cat <<'EOF'
+provider	claude
+model	sonnet
+effort	high
+EOF
+)
+
+  actual="$(
+    RALPH_PROVIDER=claude \
+    RALPH_MODEL=sonnet \
+    RALPH_EFFORT=high \
+    almanac_loop_role_config "ralph" "worker" "" "codex" "" "medium"
+  )"
+
+  assert_eq "$expected" "$actual" "shared config should support Ralph-style global overrides"
+  echo "  PASS: resolves role config with Ralph-style fallbacks"
+}
+
 echo "=== Loop Core Tests ==="
 test_detects_project_marker_commands
 test_dedupes_python_markers
 test_detects_repo_test_scripts
 test_registers_run_in_registry
 test_marks_registered_run_done
+test_resolves_role_config_with_lens_overrides
+test_resolves_role_config_with_ralph_style_fallbacks
