@@ -314,6 +314,50 @@ test_agent_runner_invokes_claude_with_common_config() {
   echo "  PASS: agent runner invokes claude with common config"
 }
 
+test_worker_start_tracks_background_agent() {
+  local tmp fakebin prompt pid status_file events_file result_file args
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  prompt="$tmp/prompt.md"
+
+  printf '%s\n' "review target" > "$prompt"
+  write_fake_codex_agent "$fakebin" "$tmp/codex-args.txt"
+
+  PATH="$fakebin:$PATH" almanac_loop_worker_start \
+    "$tmp" \
+    "harden-demo-001" \
+    "reviewer-security" \
+    "codex" \
+    "gpt-worker" \
+    "high" \
+    "read-only" \
+    "$prompt" \
+    "2026-05-25T12:00:00Z" > "$tmp/worker-pid.txt"
+
+  pid="$(cat "$tmp/worker-pid.txt")"
+  wait "$pid"
+
+  status_file="$tmp/.almanac/runs/harden-demo-001/workers/reviewer-security/status.tsv"
+  events_file="$tmp/.almanac/runs/harden-demo-001/workers/reviewer-security/events.jsonl"
+  result_file="$tmp/.almanac/runs/harden-demo-001/workers/reviewer-security/result.txt"
+
+  [ -f "$status_file" ] || fail "worker should write status file"
+  [ -f "$events_file" ] || fail "worker should write event log"
+  [ -f "$result_file" ] || fail "worker should write result file"
+  assert_file_contains "$status_file" $'id\treviewer-security' "worker status should record id"
+  assert_file_contains "$status_file" $'run_id\tharden-demo-001' "worker status should record run id"
+  assert_file_contains "$status_file" $'provider\tcodex' "worker status should record provider"
+  assert_file_contains "$status_file" $'sandbox\tread-only' "worker status should record sandbox"
+  assert_file_contains "$status_file" $'status\tdone' "worker status should mark successful completion"
+  assert_file_contains "$status_file" $'exit_code\t0' "worker status should record exit code"
+  assert_file_contains "$events_file" "codex event" "worker should stream agent events to log"
+  assert_file_contains "$result_file" "codex final: review target" "worker should capture agent result"
+  args="$(cat "$tmp/codex-args.txt")"
+  assert_contains "$args" "--sandbox read-only" "worker should pass sandbox through agent runner"
+  echo "  PASS: worker start tracks background agent"
+}
+
 echo "=== Loop Core Tests ==="
 test_detects_project_marker_commands
 test_dedupes_python_markers
@@ -324,3 +368,4 @@ test_resolves_role_config_with_lens_overrides
 test_resolves_role_config_with_ralph_style_fallbacks
 test_agent_runner_invokes_codex_with_common_config
 test_agent_runner_invokes_claude_with_common_config
+test_worker_start_tracks_background_agent
