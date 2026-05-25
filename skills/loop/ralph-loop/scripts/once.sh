@@ -124,7 +124,7 @@ case "$PROVIDER" in
       "${EFFORT_ARG[@]}" \
       "$prompt" \
     | grep --line-buffered '^{' \
-    | jq --unbuffered -rj "$stream_text"
+    | jq -Rj --unbuffered "fromjson? // empty | ( $stream_text )"
     ;;
   codex)
     prompt="# OUTPUT STYLE
@@ -164,7 +164,7 @@ $ralph_commits"
         "${EFFORT_ARG[@]}" \
         "$prompt" 2>&1 \
         | tee "$codex_log" \
-        | jq --unbuffered -rj "$codex_stream_text"; then
+        | jq -Rj --unbuffered "fromjson? // empty | ( $codex_stream_text )"; then
         set +o pipefail
         echo "Codex failed. Last log lines:"
         tail -n 40 "$codex_log" || true
