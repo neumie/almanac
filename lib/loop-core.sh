@@ -1011,6 +1011,20 @@ almanac_loop_ui_has_gum() {
   return 0
 }
 
+# Like almanac_loop_ui_has_gum, but for the interactive SELECTORS (choose / input
+# / confirm). They are called inside `$( … )` to capture the chosen value, so
+# their stdout is a pipe and `[ -t 1 ]` is ALWAYS false — which wrongly forced the
+# plain menus even with gum installed on a real terminal. gum interacts via the
+# controlling terminal, not stdout, so gate on stderr being a TTY (`[ -t 2 ]`):
+# true inside command substitution on a real terminal, false when piped/captured
+# (tests, scripts), so the plain fallback still kicks in off a TTY.
+almanac_loop_ui_has_gum_interactive() {
+  [ -z "${ALMANAC_NO_GUM:-}" ] || return 1
+  command -v gum >/dev/null 2>&1 || return 1
+  [ -t 2 ] || return 1
+  return 0
+}
+
 # Style a block of text read from stdin: a rounded gum panel when gum styling is
 # available, otherwise the text passed straight through. Presentation only; the
 # content is identical either way, so the dashboard degrades gracefully and stays
@@ -1099,7 +1113,7 @@ almanac_loop_ui_choose() {
   local header="$1"
   shift
   local reply
-  if almanac_loop_ui_has_gum; then
+  if almanac_loop_ui_has_gum_interactive; then
     printf '%s\n' "$@" | gum choose --header "$header"
     return
   fi
@@ -1117,7 +1131,7 @@ almanac_loop_ui_input() {
   local header="$1"
   local default="${2:-}"
   local reply
-  if almanac_loop_ui_has_gum; then
+  if almanac_loop_ui_has_gum_interactive; then
     if [ -n "$default" ]; then
       gum input --header "$header" --value "$default"
     else
@@ -1142,7 +1156,7 @@ almanac_loop_ui_input() {
 almanac_loop_ui_confirm() {
   local prompt="$1"
   local reply
-  if almanac_loop_ui_has_gum; then
+  if almanac_loop_ui_has_gum_interactive; then
     gum confirm "$prompt"
     return
   fi
