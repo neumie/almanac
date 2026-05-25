@@ -15,6 +15,11 @@ if [ -z "${RALPH_SNAPSHOT:-}" ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 fi
 
 SCRIPT_DIR="${RALPH_REAL_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)}"
+# ALMANAC_HOME bootstrap — same standardized snippet as the other entry points
+# (mirrors almanac_resolve_home in lib/core.sh), resolved off SCRIPT_DIR rather
+# than ${BASH_SOURCE[0]} because the snapshot-exec guard above runs us from an
+# immutable temp copy; RALPH_REAL_DIR is the real scripts dir.
+ALMANAC_HOME="${ALMANAC_HOME:-$(cd -P "$SCRIPT_DIR/../../../.." && pwd -P)}"
 source "$SCRIPT_DIR/ralph-run-registry.sh"
 
 if [ -z "$1" ]; then

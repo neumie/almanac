@@ -1,19 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-resolve_script_dir() {
-  local source_dir source_path
-  source_path="${BASH_SOURCE[0]}"
-  while [ -h "$source_path" ]; do
-    source_dir="$(cd -P "$(dirname "$source_path")" && pwd)"
-    source_path="$(readlink "$source_path")"
-    [[ "$source_path" != /* ]] && source_path="$source_dir/$source_path"
-  done
-  cd -P "$(dirname "$source_path")" && pwd
-}
-
-SCRIPT_DIR="$(resolve_script_dir)"
-ALMANAC_HOME="${ALMANAC_HOME:-$(cd "$SCRIPT_DIR/../../../.." && pwd)}"
+# ALMANAC_HOME bootstrap — prefer an exported value, else self-resolve
+# symlink-safe (pwd -P) at this file's known depth. Mirrors almanac_resolve_home
+# in lib/core.sh; keep the two in sync.
+ALMANAC_HOME="${ALMANAC_HOME:-$(cd -P "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd -P)}"
 
 if [ ! -f "$ALMANAC_HOME/lib/loop-core.sh" ]; then
   echo "Error: lib/loop-core.sh not found at $ALMANAC_HOME/lib/loop-core.sh" >&2

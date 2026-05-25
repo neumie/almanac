@@ -3,15 +3,10 @@
 
 set -euo pipefail
 
-# Resolve ALMANAC_HOME (handles symlinks)
-SCRIPT_PATH="${BASH_SOURCE[0]}"
-while [ -h "$SCRIPT_PATH" ]; do
-  SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
-  SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
-  [[ $SCRIPT_PATH != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
-done
-SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
-export ALMANAC_HOME="$(cd -P "$SCRIPT_DIR/.." && pwd)"
+# ALMANAC_HOME bootstrap — prefer an exported value, else self-resolve
+# symlink-safe (pwd -P) at this file's known depth (bin/ -> ".."). Mirrors
+# almanac_resolve_home in lib/core.sh; keep the two in sync.
+export ALMANAC_HOME="${ALMANAC_HOME:-$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)}"
 
 source "$ALMANAC_HOME/lib/core.sh"
 

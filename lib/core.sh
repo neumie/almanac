@@ -19,6 +19,35 @@ _warn()    { echo -e "${_YELLOW}[warn]${_RESET} $*"; }
 _error()   { echo -e "${_RED}[error]${_RESET} $*" >&2; }
 _die()     { _error "$@"; exit 1; }
 
+# --- ALMANAC_HOME resolution -----------------------------------------------
+# Canonical resolver and single source of truth for locating the real repo root
+# from an entry point. Prefer an already-exported ALMANAC_HOME; otherwise resolve
+# the caller's own path to its physical directory (pwd -P, so the install
+# dir-symlink ~/.claude/skills/almanac/<name> -> repo/skills/<category>/<name>
+# and a plain checkout both land on the real repo) and climb <depth> parents to
+# the repo root.
+#
+# Entry points can't call this until core.sh is sourced, so each inlines an
+# identical one-line bootstrap that mirrors it (the standardized snippet):
+#   ALMANAC_HOME="${ALMANAC_HOME:-$(cd -P "$(dirname "${BASH_SOURCE[0]}")/<REL>" && pwd -P)}"
+# where <REL> is the file's known depth below the root (bin/ -> "..",
+# skills/<cat>/<name>/scripts/ -> "../../../.."). Keep snippet and function in
+# sync; this function is the tested form (tests/test-home-resolve.sh).
+almanac_resolve_home() {
+  local src="${1:?almanac_resolve_home: source path required}" depth="${2:-0}"
+  if [ -n "${ALMANAC_HOME:-}" ]; then
+    printf '%s\n' "$ALMANAC_HOME"
+    return 0
+  fi
+  local home
+  home="$(cd -P "$(dirname "$src")" && pwd -P)"
+  while [ "$depth" -gt 0 ]; do
+    home="$(dirname "$home")"
+    depth=$((depth - 1))
+  done
+  printf '%s\n' "$home"
+}
+
 # Providers with adapters
 almanac_providers() {
   for dir in "$ALMANAC_HOME"/providers/*/; do

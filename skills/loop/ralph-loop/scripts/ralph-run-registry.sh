@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # ralph-run-registry.sh - Ralph launcher run registry helpers.
 
-# pwd -P resolves the install symlink (~/.claude/skills/almanac/<name> -> repo),
-# so ALMANAC_HOME points at the real repo whether launched from repo or install path.
-RALPH_REGISTRY_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-ALMANAC_HOME="${ALMANAC_HOME:-$(cd "$RALPH_REGISTRY_SCRIPT_DIR/../../../.." && pwd -P)}"
+# ALMANAC_HOME bootstrap — prefer an exported value, else self-resolve
+# symlink-safe (pwd -P) at this file's known depth. Mirrors almanac_resolve_home
+# in lib/core.sh; keep the two in sync. pwd -P resolves the install dir-symlink
+# (~/.claude/skills/almanac/<name> -> repo), so this points at the real repo
+# whether launched from the repo or the install path.
+ALMANAC_HOME="${ALMANAC_HOME:-$(cd -P "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd -P)}"
 
 if [ ! -f "$ALMANAC_HOME/lib/loop-core.sh" ]; then
   echo "Error: lib/loop-core.sh not found at $ALMANAC_HOME/lib/loop-core.sh" >&2

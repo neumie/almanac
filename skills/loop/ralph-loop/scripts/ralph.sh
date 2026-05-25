@@ -9,8 +9,10 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-ALMANAC_HOME="${ALMANAC_HOME:-$(cd "$SCRIPT_DIR/../../../.." && pwd -P)}"
+# ALMANAC_HOME bootstrap — prefer an exported value, else self-resolve
+# symlink-safe (pwd -P) at this file's known depth. Mirrors almanac_resolve_home
+# in lib/core.sh; keep the two in sync.
+ALMANAC_HOME="${ALMANAC_HOME:-$(cd -P "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd -P)}"
 
 for _lib in core loop-core loop-launcher; do
   if [ ! -f "$ALMANAC_HOME/lib/${_lib}.sh" ]; then
