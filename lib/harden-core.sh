@@ -323,13 +323,17 @@ almanac_harden_lenses() {
 # Build the fixed prompt for one read-only reviewer over a target, including the
 # JSON-Lines findings schema. When a rubric path is given and exists, the rubric's
 # acceptance criteria are embedded as the bar the reviewer judges against, so
-# reviewers consume the contract rather than an implicit standard. Kept separate so
-# the schema can grow without touching orchestration. (Exact prompt wording is not
-# asserted in tests by design; that the rubric bar is consumed is.)
+# reviewers consume the contract rather than an implicit standard. An optional
+# steering directive (4th arg) is embedded too, so an operator who redirects the
+# run at the HITL checkpoint (e.g. "focus on the auth module") reaches the
+# reviewers on the next round. Kept separate so the schema can grow without
+# touching orchestration. (Exact prompt wording is not asserted in tests by
+# design; that the rubric bar and the steer directive are consumed is.)
 almanac_harden_reviewer_prompt() {
   local target="$1"
   local lens="${2:-correctness}"
   local rubric_path="${3:-}"
+  local directive="${4:-}"
   local rubric_bar=""
 
   if [ -n "$rubric_path" ] && [ -f "$rubric_path" ]; then
@@ -352,6 +356,16 @@ Judge the target against this acceptance bar (the rubric contract). A finding is
 only blocking if it violates a criterion below or demonstrably breaks behavior:
 
 ${rubric_bar}
+EOF
+  fi
+
+  if [ -n "$directive" ]; then
+    cat <<EOF
+
+The operator steered this run with the directive below — follow it and prioritize
+the findings it points you toward:
+
+${directive}
 EOF
   fi
 
@@ -765,6 +779,7 @@ almanac_harden_fanout() {
   local root="$1"
   local target="$2"
   local round="${3:-1}"
+  local directive="${4:-}"
   local target_path run_id ledger_path rubric_path lens provider model effort
   local worker_id prompt_file pidfile pid result_file status_file wstatus
   local added total_added i
@@ -818,8 +833,9 @@ almanac_harden_fanout() {
     worker_id="reviewer-$lens"
     prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-prompt.XXXXXX")"
     # Reviewers judge against the rubric when one exists (read gracefully when
-    # absent, e.g. an ad-hoc bare run with no drafted contract yet).
-    almanac_harden_reviewer_prompt "$target" "$lens" "$rubric_path" > "$prompt_file"
+    # absent, e.g. an ad-hoc bare run with no drafted contract yet) and follow an
+    # operator steer directive when one was set at the HITL checkpoint.
+    almanac_harden_reviewer_prompt "$target" "$lens" "$rubric_path" "$directive" > "$prompt_file"
 
     # Capture the worker pid via a file (not $(...)): worker_start backgrounds
     # the agent as a child of THIS shell, so it stays waitable. A command
@@ -891,13 +907,16 @@ almanac_harden_fanout() {
 
 # Build the prompt for the single sequential fixer. It receives the kill-list
 # (the open blocking findings) and the rubric bar, and is told to apply minimal
-# fixes AND leave a regression test per finding so the fix stays enforced. Exact
-# wording is not asserted by tests by design; that the fixer runs write-capable
-# and its output persists is.
+# fixes AND leave a regression test per finding so the fix stays enforced. An
+# optional steering directive (4th arg) is embedded too, so a mid-run redirect at
+# the HITL checkpoint reaches the fixer. Exact wording is not asserted by tests by
+# design; that the fixer runs write-capable, its output persists, and it consumes
+# the steer directive is.
 almanac_harden_fixer_prompt() {
   local target="$1"
   local findings_text="$2"
   local rubric_path="${3:-}"
+  local directive="${4:-}"
   local rubric_bar=""
 
   if [ -n "$rubric_path" ] && [ -f "$rubric_path" ]; then
@@ -922,6 +941,15 @@ EOF
 Your changes must satisfy this acceptance bar (the rubric contract):
 
 ${rubric_bar}
+EOF
+  fi
+
+  if [ -n "$directive" ]; then
+    cat <<EOF
+
+The operator steered this run with the directive below — apply it while you fix:
+
+${directive}
 EOF
   fi
 
@@ -957,6 +985,7 @@ almanac_harden_fix() {
   local root="$1"
   local target="$2"
   local round="${3:-1}"
+  local directive="${4:-}"
   local target_path ledger_path rubric_path open findings_text count
   local provider model effort prompt_file result_file events_file rubric_snapshot rc
   local id lens severity location claim demonstration
@@ -999,7 +1028,7 @@ INNER
   prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-fixer-prompt.XXXXXX")"
   result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-fixer-result.XXXXXX")"
   events_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-fixer-events.XXXXXX")"
-  almanac_harden_fixer_prompt "$target" "$findings_text" "$rubric_path" > "$prompt_file"
+  almanac_harden_fixer_prompt "$target" "$findings_text" "$rubric_path" "$directive" > "$prompt_file"
 
   # The rubric is immutable to agents during a run. The fixer is write-capable,
   # so bracket its agent call: snapshot before, verify (revert + warn) after.
@@ -1198,22 +1227,29 @@ $rows
 INNER
 }
 
-# HITL checkpoint between rounds: let the human ship the current state or keep
-# going. Returns 0 = continue (run another round), 1 = ship (stop, accept now).
-# HARDEN_HITL ("ship"|"continue") drives it non-interactively (tests, headless
-# runs). With a TTY it prompts — gum choose when gum is present, a plain `read`
-# otherwise (graceful degradation, keeping almanac's zero-dep promise). With no
-# TTY and no override it defaults to continue so an unattended loop keeps working
-# toward convergence rather than blocking on input.
+# HITL checkpoint between rounds: let the human ship the current state, keep
+# going, or steer the run. Returns a distinct code per choice:
+#   0 = continue (run another round, directive unchanged)
+#   1 = ship (stop, accept the current state now)
+#   2 = steer (redirect/amend the run — the directive is echoed on stdout for the
+#       caller to thread into the next round's reviewers and fixer)
+# HARDEN_HITL ("ship"|"continue"|"steer") drives the choice non-interactively
+# (tests, headless runs); on "steer" the directive comes from HARDEN_STEER. With a
+# TTY it prompts — gum choose/input when gum is present, a plain `read` otherwise
+# (graceful degradation, keeping almanac's zero-dep promise). With no TTY and no
+# override it defaults to continue so an unattended loop keeps working toward
+# convergence rather than blocking on input. The prompt text goes to stderr so
+# stdout carries only the steer directive.
 almanac_harden_hitl_checkpoint() {
   local choice="${HARDEN_HITL:-}"
+  local directive="${HARDEN_STEER:-}"
   local reply
 
   if [ -z "$choice" ]; then
     if [ -t 0 ] && command -v gum >/dev/null 2>&1; then
-      choice="$(gum choose --header "Round complete — ship current state or continue?" continue ship)" || choice="continue"
+      choice="$(gum choose --header "Round complete — ship, continue, or steer?" continue ship steer)" || choice="continue"
     elif [ -t 0 ]; then
-      printf 'Ship current state or continue? [continue/ship] ' >&2
+      printf 'Ship, continue, or steer the run? [continue/ship/steer] ' >&2
       read -r reply || reply=""
       choice="$reply"
     else
@@ -1222,8 +1258,28 @@ almanac_harden_hitl_checkpoint() {
   fi
 
   case "$choice" in
-    ship|s|S|SHIP) return 1 ;;
-    *) return 0 ;;
+    ship|s|S|SHIP)
+      return 1
+      ;;
+    steer|st|STEER|redirect|amend)
+      # Collect a directive to redirect (or amend) the next round, unless one was
+      # supplied non-interactively via HARDEN_STEER. Echo it on stdout; the prompt
+      # itself goes to stderr so the caller captures only the directive.
+      if [ -z "$directive" ]; then
+        if [ -t 0 ] && command -v gum >/dev/null 2>&1; then
+          directive="$(gum input --header "Steer the run (redirect/amend)" --placeholder "e.g. focus on the auth module; treat perf findings as notes")" || directive=""
+        elif [ -t 0 ]; then
+          printf 'Steering directive: ' >&2
+          read -r reply || reply=""
+          directive="$reply"
+        fi
+      fi
+      printf '%s\n' "$directive"
+      return 2
+      ;;
+    *)
+      return 0
+      ;;
   esac
 }
 
@@ -1232,17 +1288,20 @@ almanac_harden_hitl_checkpoint() {
 # loops. The round's exit code is the feedback verdict (0 = all loops green) so
 # the loop can fold it into the acceptance signal. A fixer failure is reported but
 # does not abort the round — the next round's reviewers re-surface anything still
-# broken. The per-round kill-list + verdict are reported by almanac_harden_run.
+# broken. An optional steer directive (4th arg) is threaded into both the reviewer
+# fan-out and the fixer, so a mid-run redirect reaches the agents. The per-round
+# kill-list + verdict are reported by almanac_harden_run.
 almanac_harden_round() {
   local root="$1"
   local target="$2"
   local round="${3:-1}"
+  local directive="${4:-}"
   local rc
 
-  almanac_harden_fanout "$root" "$target" "$round"
+  almanac_harden_fanout "$root" "$target" "$round" "$directive"
   almanac_harden_ratify_open "$root" "$target" "$round"
 
-  if ! almanac_harden_fix "$root" "$target" "$round"; then
+  if ! almanac_harden_fix "$root" "$target" "$round" "$directive"; then
     _warn "Fixer did not complete cleanly this round; unaddressed findings carry to the next round."
   fi
 
@@ -1256,12 +1315,20 @@ almanac_harden_round() {
 # Budget is configurable (3rd arg, else HARDEN_ROUND_BUDGET, else 5). Each round
 # prints its kill-list and a verdict. Returns 0 when converged or shipped, 1 when
 # the budget is hit without convergence (clear NON-CONVERGED status).
+#
+# Between rounds the human can steer at the HITL checkpoint: a steer directive
+# (echoed by almanac_harden_hitl_checkpoint, captured here) is carried forward and
+# threaded into every subsequent round's reviewers and fixer, so the operator can
+# redirect the run without babysitting each worker. An optional starting directive
+# (4th arg) seeds the first round; the checkpoint's own directive (HARDEN_STEER /
+# the gum prompt) overrides it from the next round on.
 almanac_harden_run() {
   local root="$1"
   local target="$2"
   local budget="${3:-${HARDEN_ROUND_BUDGET:-5}}"
+  local directive="${4:-}"
   local ledger_path rubric_path round round_rc open_rows open_count acc verdict rc acc_label
-  local cond_provider cond_model cond_effort
+  local cond_provider cond_model cond_effort steer_directive hitl_rc
 
   case "$budget" in
     ''|*[!0-9]*) _die "Round budget must be a positive integer: $budget" ;;
@@ -1283,7 +1350,7 @@ almanac_harden_run() {
     round=$((round + 1))
     _info "=== Harden round $round/$budget ==="
 
-    almanac_harden_round "$root" "$target" "$round" && round_rc=0 || round_rc=$?
+    almanac_harden_round "$root" "$target" "$round" "$directive" && round_rc=0 || round_rc=$?
 
     open_rows="$(almanac_harden_ledger_open_blocking "$ledger_path")"
     if [ -n "$open_rows" ]; then
@@ -1317,11 +1384,27 @@ almanac_harden_run() {
         return 1
         ;;
       *)
-        if almanac_harden_hitl_checkpoint; then
-          continue
-        fi
-        _success "Shipping at round $round by request — $open_count open blocking finding(s) left unaddressed."
-        return 0
+        # HITL checkpoint: continue, ship, or steer. A steer (rc 2) echoes the
+        # new directive on stdout; capture it and thread it into the next round.
+        steer_directive="$(almanac_harden_hitl_checkpoint)" && hitl_rc=0 || hitl_rc=$?
+        case "$hitl_rc" in
+          2)
+            directive="$steer_directive"
+            if [ -n "$directive" ]; then
+              _info "Steering applied for the next round: $directive"
+            else
+              _info "Steering directive cleared for the next round."
+            fi
+            continue
+            ;;
+          0)
+            continue
+            ;;
+          *)
+            _success "Shipping at round $round by request — $open_count open blocking finding(s) left unaddressed."
+            return 0
+            ;;
+        esac
         ;;
     esac
   done

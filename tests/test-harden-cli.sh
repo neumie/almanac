@@ -1053,6 +1053,106 @@ test_run_hitl_ship_stops_early() {
   echo "  PASS: HITL ship stops the loop early"
 }
 
+# --- Steer keys / HITL redirect (criterion 64.4) ------------------------------
+
+# The HITL checkpoint offers a third choice — steer — that captures a directive
+# and signals the loop (return 2) to redirect the next round; ship (1) and
+# continue (0) are unchanged. Driven non-interactively via HARDEN_HITL/HARDEN_STEER
+# so it is testable without a terminal.
+test_hitl_steer_captures_directive() {
+  local out rc
+
+  out="$(HARDEN_HITL=steer HARDEN_STEER="focus on the auth module" almanac_harden_hitl_checkpoint)" && rc=0 || rc=$?
+  [ "$rc" -eq 2 ] || fail "steering should return code 2 (got $rc)"
+  assert_eq "focus on the auth module" "$out" "steer should echo the captured directive on stdout"
+
+  HARDEN_HITL=ship almanac_harden_hitl_checkpoint >/dev/null && rc=0 || rc=$?
+  [ "$rc" -eq 1 ] || fail "ship should still return 1 (got $rc)"
+
+  HARDEN_HITL=continue almanac_harden_hitl_checkpoint >/dev/null && rc=0 || rc=$?
+  [ "$rc" -eq 0 ] || fail "continue should still return 0 (got $rc)"
+
+  echo "  PASS: HITL steer captures a directive and returns a distinct code"
+}
+
+# A steer directive threads into the reviewer prompt so a mid-run redirect reaches
+# the reviewers (exact wording is not asserted; that the directive is consumed is).
+test_reviewer_prompt_embeds_steer_directive() {
+  local prompt
+  prompt="$(almanac_harden_reviewer_prompt "src/app.js" "security" "" "focus on the auth module")"
+  assert_contains "$prompt" "focus on the auth module" "reviewer prompt should embed the steer directive"
+  assert_contains "$prompt" "steered this run" "reviewer prompt should label the steer directive"
+  # Without a directive the steer block is absent.
+  prompt="$(almanac_harden_reviewer_prompt "src/app.js" "security")"
+  case "$prompt" in
+    *"steered this run"*) fail "reviewer prompt must not add a steer block without a directive" ;;
+  esac
+  echo "  PASS: reviewer prompt embeds the steer directive"
+}
+
+# A steer directive threads into the fixer prompt too, so a redirect reaches the
+# write-capable fixer.
+test_fixer_prompt_embeds_steer_directive() {
+  local prompt
+  prompt="$(almanac_harden_fixer_prompt "src/app.js" "- [high] correctness: bug" "" "treat perf findings as notes")"
+  assert_contains "$prompt" "treat perf findings as notes" "fixer prompt should embed the steer directive"
+  assert_contains "$prompt" "steered this run" "fixer prompt should label the steer directive"
+  prompt="$(almanac_harden_fixer_prompt "src/app.js" "- [high] correctness: bug")"
+  case "$prompt" in
+    *"steered this run"*) fail "fixer prompt must not add a steer block without a directive" ;;
+  esac
+  echo "  PASS: fixer prompt embeds the steer directive"
+}
+
+# Criterion (64.4): steering at the HITL checkpoint redirects the run — the
+# directive captured there threads into the NEXT round's reviewers and fixer.
+# Round 1 runs with no directive, the gate says continue, the steer sets the
+# directive, and round 2 runs with it before converging. The overridden round
+# records the directive it was handed (its 4th arg) and retires findings via a
+# real ledger so the real gate drives termination.
+test_run_steer_threads_directive_into_round() {
+  local tmp output rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  mkdir -p "$tmp/src"
+  printf '%s\n' "code" > "$tmp/src/app.js"
+  RUN_REMAIN="$tmp/remain"
+  echo 2 > "$RUN_REMAIN"
+  STEER_LOG="$tmp/steer.log"
+  : > "$STEER_LOG"
+
+  almanac_harden_round() {
+    local root="$1" target="$2" round="$3" directive="${4:-}" lp n i
+    printf 'round %s directive=[%s]\n' "$round" "$directive" >> "$STEER_LOG"
+    lp="$(almanac_harden_ledger_path "$root" "$target")"
+    n="$(cat "$RUN_REMAIN")"
+    if [ "$n" -gt 0 ]; then n=$((n - 1)); fi
+    echo "$n" > "$RUN_REMAIN"
+    rm -f "$lp"
+    almanac_harden_ledger_init "$lp"
+    i=1
+    while [ "$i" -le "$n" ]; do
+      almanac_harden_ledger_append_entry "$lp" "f-r$round-$i" correctness high \
+        "src/app.js:$i" "open bug $i" "demo $i" open "$round" "" >/dev/null
+      i=$((i + 1))
+    done
+    return 0
+  }
+
+  output="$(HARDEN_HITL=steer HARDEN_STEER="focus on the auth module" \
+    almanac_harden_run "$tmp" "src/app.js" 10 2>&1)" && rc=0 || rc=$?
+
+  [ "$rc" -eq 0 ] || fail "a steered run that then converges should exit successfully (got $rc)"
+  assert_contains "$output" "Steering applied for the next round: focus on the auth module" \
+    "the loop should report the steer being applied"
+  assert_file_contains "$STEER_LOG" "round 1 directive=[]" "round 1 runs before any steer, with no directive"
+  assert_file_contains "$STEER_LOG" "round 2 directive=[focus on the auth module]" \
+    "the steer directive should thread into the next round"
+
+  source "$ROOT/lib/harden-core.sh"
+  echo "  PASS: steering threads the directive into the next round"
+}
+
 # --- Role config (per-role provider/model/effort) -----------------------------
 
 test_role_config_resolves_all_three_roles() {
@@ -1427,6 +1527,10 @@ test_round_runs_steps_in_sequence
 test_run_converges_and_advances_rounds
 test_run_caps_at_round_budget
 test_run_hitl_ship_stops_early
+test_hitl_steer_captures_directive
+test_reviewer_prompt_embeds_steer_directive
+test_fixer_prompt_embeds_steer_directive
+test_run_steer_threads_directive_into_round
 test_role_config_resolves_all_three_roles
 test_role_config_mixes_providers_across_lenses
 test_role_config_overrides_each_role_via_env
