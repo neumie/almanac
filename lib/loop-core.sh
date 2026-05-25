@@ -35,6 +35,18 @@ if ! declare -F almanac_provider_default >/dev/null 2>&1; then
   unset __loop_core_dir
 fi
 
+# The run-status record (canonical field list + set/get-by-name) lives in
+# lib/run.sh. The run registry below writes/reads run status through it, and
+# almanac_loop_status_field is a thin alias over its reader — source it
+# idempotently. pwd -P resolves the install symlink so the sibling run.sh is
+# found from either path.
+if ! declare -F almanac_loop_record_set >/dev/null 2>&1; then
+  __loop_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/run.sh
+  source "$__loop_core_dir/run.sh"
+  unset __loop_core_dir
+fi
+
 almanac_loop_slug() {
   local raw="$1"
   local slug
@@ -96,57 +108,20 @@ almanac_loop_run_index_file() {
   printf '%s/index.tsv\n' "$(almanac_loop_registry_dir "$root")"
 }
 
-# Write a run's status.tsv blob — the per-run detail view the hub reads. The
-# index.tsv is the lightweight list pointer (id/type/target/pid/status-file/
-# start/status); this blob carries the same identity PLUS the live progress the
-# index does not: `round` (harden round / ralph iteration) and `summary` (a
-# worker/lens summary line). round/summary are optional trailing args (default
-# empty) so existing 9-arg callers stay correct and every blob still carries the
-# keys, blank until a progress update fills them. The contract is identical for
-# harden and ralph — both write this same shape.
-almanac_loop_write_run_status() {
-  local status_file="$1"
-  local run_id="$2"
-  local type="$3"
-  local target="$4"
-  local pid="$5"
-  local status_rel="$6"
-  local started_at="$7"
-  local status="$8"
-  local finished_at="$9"
-  local round="${10:-}"
-  local summary="${11:-}"
+# The run's status.tsv blob — the per-run detail view the hub reads — is the
+# run-status RECORD: its canonical field list and the set/get-by-name accessors
+# live in lib/run.sh (almanac_loop_record_*). The registry functions below seed
+# and update it through that record, so the schema (id/type/target/pid/
+# status_file/started_at/status + the live finished_at/round/summary) is never
+# enumerated here. The index.tsv is a separate lightweight list pointer (the
+# record's first seven fields), written below.
 
-  {
-    printf 'id\t%s\n' "$run_id"
-    printf 'type\t%s\n' "$type"
-    printf 'target\t%s\n' "$target"
-    printf 'pid\t%s\n' "$pid"
-    printf 'status_file\t%s\n' "$status_rel"
-    printf 'started_at\t%s\n' "$started_at"
-    printf 'status\t%s\n' "$status"
-    printf 'finished_at\t%s\n' "$finished_at"
-    printf 'round\t%s\n' "$round"
-    printf 'summary\t%s\n' "$summary"
-  } > "$status_file"
-}
-
+# Thin back-compat alias for the record's generic tab-field reader, kept for the
+# worker-status and hub read paths that read a field by name. The implementation
+# (and the run-status record's canonical getter) is almanac_loop_record_get in
+# lib/run.sh.
 almanac_loop_status_field() {
-  local status_file="$1"
-  local wanted="$2"
-  local key value rest
-
-  while IFS=$'\t' read -r key value rest; do
-    if [ "$key" = "$wanted" ]; then
-      if [ -n "${rest:-}" ]; then
-        value="${value}"$'\t'"${rest}"
-      fi
-      printf '%s\n' "$value"
-      return 0
-    fi
-  done < "$status_file"
-
-  return 1
+  almanac_loop_record_get "$@"
 }
 
 almanac_loop_register_run() {
@@ -189,7 +164,11 @@ almanac_loop_register_run() {
     printf 'id\ttype\ttarget\tpid\tstatus_file\tstarted_at\tstatus\n' > "$index_file"
   fi
 
-  almanac_loop_write_run_status "$status_file" "$run_id" "$type" "$target" "$pid" "$status_rel" "$started_at" "running" ""
+  # Seed the run-status record by naming only the fields known at launch; the
+  # record fills the rest (finished_at/round/summary blank) from the canonical
+  # schema. The index row is the lightweight pointer (the record's first seven
+  # fields).
+  almanac_loop_record_set "$status_file" "id=$run_id" "type=$type" "target=$target" "pid=$pid" "status_file=$status_rel" "started_at=$started_at" "status=running"
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$run_id" "$type" "$target" "$pid" "$status_rel" "$started_at" "running" >> "$index_file"
   printf '%s\n' "$run_id"
 }
@@ -201,7 +180,7 @@ almanac_loop_mark_run_status() {
   local run_id="$2"
   local status="$3"
   local finished_at="${4:-}"
-  local status_file index_file tmp type target pid status_rel started_at round summary
+  local status_file index_file tmp
 
   case "$status" in
     done|failed|aborted) ;;
@@ -218,14 +197,6 @@ almanac_loop_mark_run_status() {
     finished_at="$(almanac_loop_now_utc)"
   fi
 
-  type="$(almanac_loop_status_field "$status_file" "type")"
-  target="$(almanac_loop_status_field "$status_file" "target")"
-  pid="$(almanac_loop_status_field "$status_file" "pid")"
-  status_rel="$(almanac_loop_status_field "$status_file" "status_file")"
-  started_at="$(almanac_loop_status_field "$status_file" "started_at")"
-  round="$(almanac_loop_status_field "$status_file" "round" || true)"
-  summary="$(almanac_loop_status_field "$status_file" "summary" || true)"
-
   tmp="$(mktemp "${index_file}.XXXXXX")"
   if ! awk -v run_id="$run_id" -v status="$status" '
     BEGIN { FS = OFS = "\t" }
@@ -239,7 +210,9 @@ almanac_loop_mark_run_status() {
   fi
   mv "$tmp" "$index_file"
 
-  almanac_loop_write_run_status "$status_file" "$run_id" "$type" "$target" "$pid" "$status_rel" "$started_at" "$status" "$finished_at" "$round" "$summary"
+  # Set only the lifecycle fields; record_set round-trips id/type/target/pid/
+  # status_file/started_at/round/summary, so the schema is never re-enumerated.
+  almanac_loop_record_set "$status_file" "status=$status" "finished_at=$finished_at"
 }
 
 # Update a live run's progress mid-flight: rewrite its status.tsv with a new
@@ -256,20 +229,14 @@ almanac_loop_update_run_progress() {
   local run_id="$2"
   local round="${3:-}"
   local summary="${4:-}"
-  local status_file type target pid status_rel started_at status finished_at
+  local status_file
 
   status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
   [ -f "$status_file" ] || return 2
 
-  type="$(almanac_loop_status_field "$status_file" "type")"
-  target="$(almanac_loop_status_field "$status_file" "target")"
-  pid="$(almanac_loop_status_field "$status_file" "pid")"
-  status_rel="$(almanac_loop_status_field "$status_file" "status_file")"
-  started_at="$(almanac_loop_status_field "$status_file" "started_at")"
-  status="$(almanac_loop_status_field "$status_file" "status")"
-  finished_at="$(almanac_loop_status_field "$status_file" "finished_at" || true)"
-
-  almanac_loop_write_run_status "$status_file" "$run_id" "$type" "$target" "$pid" "$status_rel" "$started_at" "$status" "$finished_at" "$round" "$summary"
+  # Set only the live-progress fields; record_set preserves the identity and
+  # lifecycle (status/start/finish) fields untouched.
+  almanac_loop_record_set "$status_file" "round=$round" "summary=$summary"
 }
 
 # Detect a stale registry entry: a run whose recorded status is still `running`
