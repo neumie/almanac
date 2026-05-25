@@ -18,9 +18,18 @@ fi
 PRD_NAME="$1"
 PROMPT="docs/plans/${PRD_NAME}/prompt.md"
 
+# Iteration-agent role config resolves through the shared engine helper
+# (almanac_loop_role_field): RALPH_AGENT_<FIELD> -> RALPH_<FIELD> -> default, the
+# same precedence harden's roles use (#66 crit 3 — ralph uses the shared role
+# config). RALPH_PROVIDER/RALPH_MODEL/RALPH_EFFORT still work (the fallback); the
+# new RALPH_AGENT_* keys now override per-role. An explicit provider config wins;
+# absent it, ralph's CLI auto-detection (CODEX_THREAD_ID, then installed CLI)
+# stays — that runtime detection is ralph-specific, not a role-config concern.
 detect_provider() {
-  if [ -n "${RALPH_PROVIDER:-}" ]; then
-    echo "$RALPH_PROVIDER"
+  local configured
+  configured="$(almanac_loop_role_field ralph agent "" provider "")"
+  if [ -n "$configured" ]; then
+    echo "$configured"
   elif [ -n "${CODEX_THREAD_ID:-}" ] && command -v codex >/dev/null 2>&1; then
     echo "codex"
   elif command -v claude >/dev/null 2>&1; then
@@ -34,10 +43,13 @@ detect_provider() {
 
 PROVIDER="$(detect_provider | tr '[:upper:]' '[:lower:]')"
 
-# Model override: set RALPH_MODEL env var. Unset = provider default.
+# Model/effort overrides resolve through the same shared role-config helper.
+# Unset = provider default.
+AGENT_MODEL="$(almanac_loop_role_field ralph agent "" model "")"
+AGENT_EFFORT="$(almanac_loop_role_field ralph agent "" effort "")"
 MODEL_ARG=()
-if [ -n "${RALPH_MODEL:-}" ]; then
-  MODEL_ARG=(--model "$RALPH_MODEL")
+if [ -n "$AGENT_MODEL" ]; then
+  MODEL_ARG=(--model "$AGENT_MODEL")
 fi
 EFFORT_ARG=()
 
@@ -53,11 +65,11 @@ case "$PROVIDER" in
       exit 1
     fi
     PROVIDER_DISPLAY="Claude Code"
-    MODEL_DISPLAY="${RALPH_MODEL:-Claude Code default (resolved on session start)}"
-    if [ -n "${RALPH_EFFORT:-}" ]; then
-      EFFORT_ARG=(--effort "$RALPH_EFFORT")
+    MODEL_DISPLAY="${AGENT_MODEL:-Claude Code default (resolved on session start)}"
+    if [ -n "$AGENT_EFFORT" ]; then
+      EFFORT_ARG=(--effort "$AGENT_EFFORT")
     fi
-    EFFORT_DISPLAY="${RALPH_EFFORT:-provider default}"
+    EFFORT_DISPLAY="${AGENT_EFFORT:-provider default}"
     PERMISSION_DISPLAY="acceptEdits"
     ;;
   codex)
@@ -66,11 +78,11 @@ case "$PROVIDER" in
       exit 1
     fi
     PROVIDER_DISPLAY="Codex"
-    MODEL_DISPLAY="${RALPH_MODEL:-Codex default}"
-    if [ -n "${RALPH_EFFORT:-}" ]; then
-      EFFORT_ARG=(-c "model_reasoning_effort=\"$RALPH_EFFORT\"")
+    MODEL_DISPLAY="${AGENT_MODEL:-Codex default}"
+    if [ -n "$AGENT_EFFORT" ]; then
+      EFFORT_ARG=(-c "model_reasoning_effort=\"$AGENT_EFFORT\"")
     fi
-    EFFORT_DISPLAY="${RALPH_EFFORT:-provider default}"
+    EFFORT_DISPLAY="${AGENT_EFFORT:-provider default}"
     PERMISSION_DISPLAY="approval never, sandbox danger-full-access"
     ;;
   *)
@@ -105,8 +117,8 @@ case "$PROVIDER" in
     # stream-json --verbose --permission-mode acceptEdits, plus --model/--effort),
     # tees the raw event stream to its events file, and pipes the live assistant
     # text to stdout through the same jq filter — so console output is unchanged.
-    # workspace-write maps to acceptEdits (once.sh's permission mode);
-    # RALPH_MODEL/RALPH_EFFORT pass straight through as the seam's model/effort.
+    # workspace-write maps to acceptEdits (once.sh's permission mode); the
+    # role-resolved AGENT_MODEL/AGENT_EFFORT feed the seam's model/effort.
     # Unlike the old inline pipe (no pipefail), the seam preserves claude's exit
     # via PIPESTATUS, so a provider failure now propagates instead of being
     # swallowed — matching the codex branch and the agent-runner contract.
@@ -116,7 +128,7 @@ case "$PROVIDER" in
     claude_result_file=$(mktemp)
     printf '%s' "$prompt" > "$claude_prompt_file"
     almanac_loop_agent_run \
-      claude "${RALPH_MODEL:-}" "${RALPH_EFFORT:-}" workspace-write \
+      claude "$AGENT_MODEL" "$AGENT_EFFORT" workspace-write \
       "$claude_prompt_file" "$claude_result_file" "$claude_events_file" stream
     rm -f "$claude_prompt_file" "$claude_events_file" "$claude_result_file"
     ;;
@@ -153,14 +165,14 @@ $ralph_commits"
       # --sandbox danger-full-access, plus --model/-c effort), tees the raw stream
       # to the session log, and pipes the live agent-message text through the same
       # jq filter — console output is unchanged. merge-stderr preserves once.sh's
-      # `codex ... 2>&1 | tee` so codex's stderr still lands in the log.
-      # RALPH_MODEL/RALPH_EFFORT pass straight through as the seam's model/effort,
+      # `codex ... 2>&1 | tee` so codex's stderr still lands in the log. The
+      # role-resolved AGENT_MODEL/AGENT_EFFORT feed the seam's model/effort,
       # and the seam preserves codex's exit via PIPESTATUS (once.sh kept pipefail
       # before; the seam owns that now). On failure we print the same log tail.
       codex_prompt_file=$(mktemp)
       printf '%s' "$prompt" > "$codex_prompt_file"
       if ! almanac_loop_agent_run \
-        codex "${RALPH_MODEL:-}" "${RALPH_EFFORT:-}" danger-full-access \
+        codex "$AGENT_MODEL" "$AGENT_EFFORT" danger-full-access \
         "$codex_prompt_file" "$codex_result" "$codex_log" stream merge-stderr; then
         rm -f "$codex_prompt_file"
         echo "Codex failed. Last log lines:"

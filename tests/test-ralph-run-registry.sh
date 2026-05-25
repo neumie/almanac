@@ -34,6 +34,16 @@ assert_file_contains() {
   fi
 }
 
+assert_file_lacks() {
+  local file="$1"
+  local needle="$2"
+  local message="$3"
+
+  if grep -Fq -- "$needle" "$file"; then
+    fail "$message"
+  fi
+}
+
 new_tmpdir() {
   NEW_TMPDIR=$(mktemp -d)
   TMPDIRS+=("$NEW_TMPDIR")
@@ -558,6 +568,107 @@ test_afk_claude_propagates_provider_failure() {
   echo "  PASS: afk claude propagates provider failure through the seam"
 }
 
+# once.sh resolves its iteration-agent model/effort through the shared role-config
+# helper (almanac_loop_role_field), so the per-role RALPH_AGENT_* keys override the
+# bare RALPH_* keys (#66 crit 3 — ralph uses the shared role config). The seam's
+# codex invocation must carry the AGENT-role model/effort, not the bare-env ones.
+test_once_resolves_agent_model_via_shared_role_config() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  SKIP: once agent role-config (jq not available)"
+    return 0
+  fi
+
+  local tmp fakebin argv_file
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  argv_file="$tmp/codex-argv.txt"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_codex_recording "$fakebin"
+
+  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex \
+    RALPH_AGENT_MODEL=agentrolemodel RALPH_MODEL=baseenvmodel \
+    RALPH_AGENT_EFFORT=agentroleeffort RALPH_EFFORT=baseenveffort \
+    FAKE_CODEX_ARGV="$argv_file" bash "$ONCE_SCRIPT" demo >/dev/null)
+
+  [ -f "$argv_file" ] || fail "fake codex should have been invoked"
+  assert_file_contains "$argv_file" "agentrolemodel" "once should resolve RALPH_AGENT_MODEL over RALPH_MODEL via shared role config"
+  assert_file_lacks "$argv_file" "baseenvmodel" "once should not pass RALPH_MODEL when RALPH_AGENT_MODEL is set"
+  assert_file_contains "$argv_file" "agentroleeffort" "once should resolve RALPH_AGENT_EFFORT over RALPH_EFFORT via shared role config"
+  assert_file_lacks "$argv_file" "baseenveffort" "once should not pass RALPH_EFFORT when RALPH_AGENT_EFFORT is set"
+  echo "  PASS: once resolves the agent model/effort via the shared role config"
+}
+
+# afk.sh resolves its iteration-agent model/effort through the shared role-config
+# helper too, so RALPH_AGENT_* overrides RALPH_* (#66 crit 3).
+test_afk_resolves_agent_model_via_shared_role_config() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  SKIP: afk agent role-config (jq not available)"
+    return 0
+  fi
+
+  local tmp fakebin argv_file
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  argv_file="$tmp/codex-argv.txt"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_codex_recording "$fakebin"
+
+  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex RALPH_NO_OVERSEE=1 \
+    RALPH_AGENT_MODEL=agentrolemodel RALPH_MODEL=baseenvmodel \
+    RALPH_AGENT_EFFORT=agentroleeffort RALPH_EFFORT=baseenveffort \
+    FAKE_CODEX_ARGV="$argv_file" bash "$AFK_SCRIPT" demo 1 >/dev/null)
+
+  [ -f "$argv_file" ] || fail "fake codex should have been invoked"
+  assert_file_contains "$argv_file" "agentrolemodel" "afk should resolve RALPH_AGENT_MODEL over RALPH_MODEL via shared role config"
+  assert_file_lacks "$argv_file" "baseenvmodel" "afk should not pass RALPH_MODEL when RALPH_AGENT_MODEL is set"
+  assert_file_contains "$argv_file" "agentroleeffort" "afk should resolve RALPH_AGENT_EFFORT over RALPH_EFFORT via shared role config"
+  assert_file_lacks "$argv_file" "baseenveffort" "afk should not pass RALPH_EFFORT when RALPH_AGENT_EFFORT is set"
+  echo "  PASS: afk resolves the agent model/effort via the shared role config"
+}
+
+# once.sh resolves its iteration-agent provider through the shared role-config
+# helper, so RALPH_AGENT_PROVIDER selects the provider over auto-detection (#66
+# crit 3). With both providers on PATH, auto-detect would pick claude; the
+# AGENT-role provider key must win and select codex instead.
+test_once_resolves_agent_provider_via_shared_role_config() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  SKIP: once agent provider role-config (jq not available)"
+    return 0
+  fi
+
+  local tmp fakebin codex_argv claude_argv
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  codex_argv="$tmp/codex-argv.txt"
+  claude_argv="$tmp/claude-argv.txt"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_codex_recording "$fakebin"
+  write_fake_claude "$fakebin"
+
+  # No RALPH_PROVIDER — only the AGENT-role key. Both CLIs are on PATH, so the
+  # bare auto-detection would resolve claude; role config must select codex.
+  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_AGENT_PROVIDER=codex \
+    FAKE_CODEX_ARGV="$codex_argv" FAKE_CLAUDE_ARGV="$claude_argv" \
+    bash "$ONCE_SCRIPT" demo >/dev/null)
+
+  [ -f "$codex_argv" ] || fail "RALPH_AGENT_PROVIDER=codex should select the codex provider via shared role config"
+  [ -f "$claude_argv" ] && fail "RALPH_AGENT_PROVIDER=codex must not fall through to claude auto-detection"
+  assert_file_contains "$codex_argv" "--json" "the selected codex provider should run through the seam"
+  echo "  PASS: once resolves the agent provider via the shared role config"
+}
+
 echo "=== Ralph Run Registry Tests ==="
 test_once_registers_and_marks_run_done
 test_once_marks_run_failed_on_provider_error
@@ -572,3 +683,6 @@ test_afk_emits_live_run_progress_contract
 test_afk_codex_routes_provider_invocation_through_seam
 test_afk_claude_routes_provider_invocation_through_seam
 test_afk_claude_propagates_provider_failure
+test_once_resolves_agent_model_via_shared_role_config
+test_afk_resolves_agent_model_via_shared_role_config
+test_once_resolves_agent_provider_via_shared_role_config
