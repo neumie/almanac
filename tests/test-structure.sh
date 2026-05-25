@@ -49,6 +49,7 @@ check "skills/loop/ralph-loop/scripts/ralph-run-registry.sh"
 check "lib/core.sh"
 check "lib/almanac-core.sh"
 check "lib/loop-core.sh"
+check "lib/loop-launcher.sh"
 check "lib/harden-core.sh"
 
 # Claude Code adapter

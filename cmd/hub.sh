@@ -23,6 +23,7 @@
 set -euo pipefail
 
 source "$ALMANAC_HOME/lib/loop-core.sh"
+source "$ALMANAC_HOME/lib/loop-launcher.sh"
 
 ROOT="$PWD"
 
@@ -73,68 +74,16 @@ almanac_hub_launch_new() {
   exec bash "$ALMANAC_HOME/bin/almanac" "${argv[@]}"
 }
 
-# List the repo's PRDs (docs/plans/<name>/prd.md) and let the operator pick one
-# via the shared selector (gum choose, or a plain numbered menu without gum).
-# Prints the chosen PRD name; returns 1 when there are none to choose.
-almanac_hub_pick_prd() {
-  local dir prds=()
-  for dir in docs/plans/*/; do
-    [ -f "${dir}prd.md" ] || continue
-    prds+=("$(basename "$dir")")
-  done
-  [ "${#prds[@]}" -gt 0 ] || { _warn "No PRDs found in docs/plans/"; return 1; }
-  almanac_loop_ui_choose "Select PRD" "${prds[@]}"
-}
-
-# Interactive New-run flow: pick ralph or harden, gather config via the shared
-# gum-or-plain selectors, preview, then launch. Composes the same argv/env the
-# `--new` seam does, so the launch path is identical interactive vs. scripted.
-# TTY only (the caller guards); returns to the hub menu if the operator cancels.
+# Interactive New-run flow: pick the loop type, then hand off to the shared
+# almanac launcher (almanac_loop_launch), which gathers that loop's config
+# through the same gum seam, summarises, confirms, and execs the runner. No
+# config logic lives here — one launcher, one UX, shared with `almanac ralph`
+# and `almanac harden`. On confirm the launcher execs (hands over the terminal);
+# if the operator cancels first it returns here and the menu loop continues.
 almanac_hub_new_run() {
-  local type opts=() prd mode iters provider model effort lenses rounds target env_raw argv_raw
-
+  local type
   type="$(almanac_loop_ui_choose "New run — pick a loop" ralph harden)" || return 0
-  case "$type" in
-    ralph)
-      prd="$(almanac_hub_pick_prd)" || return 0
-      [ -n "$prd" ] || return 0
-      opts+=("prd=$prd")
-      mode="$(almanac_loop_ui_choose "Mode" afk once)" || return 0
-      opts+=("mode=$mode")
-      provider="$(almanac_loop_ui_choose "Provider" codex claude)" || return 0
-      opts+=("provider=$provider")
-      model="$(almanac_loop_ui_input "Model (blank = provider default)")" || return 0
-      [ -n "$model" ] && opts+=("model=$model")
-      effort="$(almanac_loop_ui_input "Thinking effort (blank = default)")" || return 0
-      [ -n "$effort" ] && opts+=("effort=$effort")
-      if [ "$mode" = "afk" ]; then
-        iters="$(almanac_loop_ui_input "Iterations" "10")" || return 0
-        [ -n "$iters" ] && opts+=("iterations=$iters")
-        almanac_loop_ui_confirm "Run the overseer?" || opts+=("oversee=off")
-      fi
-      ;;
-    harden)
-      target="$(almanac_loop_ui_input "Target (file / dir / PR)")" || return 0
-      [ -n "$target" ] || { _warn "No target given"; return 0; }
-      opts+=("target=$target")
-      lenses="$(almanac_loop_ui_input "Lenses (blank = default set)")" || return 0
-      [ -n "$lenses" ] && opts+=("lenses=$lenses")
-      provider="$(almanac_loop_ui_choose "Reviewer provider" claude codex)" || return 0
-      opts+=("provider=$provider")
-      rounds="$(almanac_loop_ui_input "Round budget (blank = default)")" || return 0
-      [ -n "$rounds" ] && opts+=("rounds=$rounds")
-      ;;
-    *) return 0 ;;
-  esac
-
-  argv_raw="$(almanac_loop_new_run_argv "$type" "${opts[@]}")" || { _warn "Could not compose the run"; return 0; }
-  env_raw="$(almanac_loop_new_run_env "$type" "${opts[@]}")" || env_raw=""
-
-  printf '%s\n' "Will launch:"
-  almanac_hub_launch_new 1 "$env_raw" "$argv_raw"
-  if almanac_loop_ui_confirm "Launch this run?"; then
-    almanac_hub_launch_new 0 "$env_raw" "$argv_raw"
-  fi
+  almanac_loop_launch "$type"
 }
 
 almanac_hub_menu() {

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# ralph.sh — Launch the interactive Ralph loop CLI
+# ralph.sh — `almanac ralph`: configure and launch a Ralph loop through the
+# shared almanac launcher (lib/loop-launcher.sh). Flags pre-fill; any missing
+# field is prompted. One launcher backs `almanac ralph`, the ralph skill
+# launcher, and the hub's New-run flow — so the config UX is identical.
 
 set -euo pipefail
 
-RALPH_SCRIPT="$ALMANAC_HOME/skills/loop/ralph-loop/scripts/ralph.sh"
+source "$ALMANAC_HOME/lib/loop-core.sh"
+source "$ALMANAC_HOME/lib/loop-launcher.sh"
 
-[[ -f "$RALPH_SCRIPT" ]] || _die "Ralph launcher not found at $RALPH_SCRIPT"
-
-exec bash "$RALPH_SCRIPT" "$@"
+almanac_loop_launch ralph "$@"
