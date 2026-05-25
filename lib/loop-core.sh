@@ -382,10 +382,18 @@ almanac_loop_agent_provider_key() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
 }
 
+# Map a sandbox value to claude's --permission-mode. read-only review runs in
+# `plan` (no writes); the `default` sentinel returns an empty mode so the seam
+# OMITS --permission-mode entirely, letting claude fall back to its own default
+# mode — ralph afk.sh's iteration agent has never set a permission mode, so
+# routing it through the seam must preserve that; everything else
+# (workspace-write, danger-full-access) maps to `acceptEdits`. The `default`
+# sentinel only governs claude's permission flag; codex callers do not use it.
 almanac_loop_agent_claude_permission() {
   case "$1" in
     read-only) printf '%s\n' "plan" ;;
-    *) printf '%s\n' "acceptEdits" ;;
+    default)   printf '%s\n' "" ;;
+    *)         printf '%s\n' "acceptEdits" ;;
   esac
 }
 
@@ -575,8 +583,16 @@ almanac_loop_agent_run() {
         --print
         --output-format stream-json
         --verbose
-        --permission-mode "$(almanac_loop_agent_claude_permission "$sandbox")"
       )
+
+      # Permission mode is derived from the sandbox; the `default` sentinel maps
+      # to an empty mode so the flag is omitted (claude's own default) —
+      # preserving afk.sh's iteration agent, which has never set --permission-mode.
+      local claude_perm
+      claude_perm="$(almanac_loop_agent_claude_permission "$sandbox")"
+      if [ -n "$claude_perm" ]; then
+        claude_args+=(--permission-mode "$claude_perm")
+      fi
 
       if [ -n "$model" ]; then
         claude_args+=(--model "$model")

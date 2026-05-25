@@ -510,6 +510,35 @@ test_agent_runner_invokes_claude_with_common_config() {
   echo "  PASS: agent runner invokes claude with common config"
 }
 
+# The `default` sandbox sentinel is the seam's permission-mode opt-out: the claude
+# branch omits --permission-mode entirely so claude falls back to its own default
+# mode. ralph afk.sh's iteration agent has never set a permission mode, so this is
+# the prerequisite that lets afk's claude path route through the seam without
+# changing behavior (issue #66 criterion 1). Every other sandbox still sets a
+# mode (plan / acceptEdits), covered by the test above.
+test_agent_runner_claude_default_sandbox_omits_permission_mode() {
+  local tmp fakebin prompt result events args
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  prompt="$tmp/prompt.md"
+  result="$tmp/result.txt"
+  events="$tmp/events.jsonl"
+
+  printf '%s\n' "iterate" > "$prompt"
+  write_fake_claude_agent "$fakebin" "$tmp/claude-args.txt"
+
+  PATH="$fakebin:$PATH" almanac_loop_agent_run "claude" "" "" "default" "$prompt" "$result" "$events" >/dev/null
+
+  args="$(cat "$tmp/claude-args.txt")"
+  assert_contains "$args" "--output-format stream-json" "default-sandbox claude should still stream json"
+  case "$args" in
+    *"--permission-mode"*) fail "the default sandbox must omit --permission-mode so claude uses its own default mode" ;;
+  esac
+  assert_file_contains "$result" "claude final" "default-sandbox claude should still extract the final result"
+  echo "  PASS: agent runner claude default sandbox omits permission mode"
+}
+
 test_agent_runner_propagates_codex_failure() {
   local tmp fakebin prompt result events rc
   new_tmpdir
@@ -804,6 +833,7 @@ test_resolves_role_config_with_lens_overrides
 test_resolves_role_config_with_ralph_style_fallbacks
 test_agent_runner_invokes_codex_with_common_config
 test_agent_runner_invokes_claude_with_common_config
+test_agent_runner_claude_default_sandbox_omits_permission_mode
 test_agent_runner_propagates_codex_failure
 test_agent_runner_propagates_claude_failure
 test_agent_runner_streams_claude_live_text

@@ -478,6 +478,86 @@ test_afk_codex_routes_provider_invocation_through_seam() {
   echo "  PASS: afk routes codex provider invocation through the shared seam"
 }
 
+# afk.sh routes its claude iteration path through the shared agent_run seam (#66
+# — ralph migration). Unlike once.sh, afk's iteration agent has NEVER set a
+# permission mode, so the seam must build afk's claude invocation WITHOUT
+# --permission-mode (via the `default` sandbox sentinel), still honoring
+# RALPH_MODEL/RALPH_EFFORT, stream the live assistant text to stdout, and afk
+# reads the seam's result back for <promise> extraction.
+test_afk_claude_routes_provider_invocation_through_seam() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  SKIP: afk claude seam routing (jq not available)"
+    return 0
+  fi
+
+  local tmp fakebin argv_file out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  argv_file="$tmp/claude-argv.txt"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_claude "$fakebin"
+
+  out=$(cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=claude RALPH_NO_OVERSEE=1 \
+    RALPH_MODEL=fake-model RALPH_EFFORT=high FAKE_CLAUDE_ARGV="$argv_file" \
+    bash "$AFK_SCRIPT" demo 1)
+
+  # Live assistant stream reaches stdout via the seam's claude jq filter.
+  printf '%s' "$out" | grep -Fq "Claude model: fake-claude-model" \
+    || fail "afk claude should stream the init model line through the seam"
+  printf '%s' "$out" | grep -Fq "FAKE_CLAUDE_ASSISTANT_TEXT" \
+    || fail "afk claude should stream the assistant text through the seam"
+
+  # The seam built afk's claude invocation, honoring model + effort.
+  [ -f "$argv_file" ] || fail "fake claude should have been invoked"
+  assert_file_contains "$argv_file" "--output-format" "claude invocation should request a structured output format"
+  assert_file_contains "$argv_file" "stream-json" "claude invocation should request stream-json"
+  assert_file_contains "$argv_file" "fake-model" "claude invocation should honor RALPH_MODEL"
+  assert_file_contains "$argv_file" "high" "claude invocation should honor RALPH_EFFORT"
+
+  # Crucially, afk's claude path must NOT set --permission-mode — its iteration
+  # agent has never set one (the `default` sandbox sentinel preserves that).
+  if grep -Fq -- "--permission-mode" "$argv_file"; then
+    fail "afk claude must NOT set --permission-mode (default sandbox sentinel preserves afk's behavior)"
+  fi
+  echo "  PASS: afk routes claude provider invocation through the shared seam"
+}
+
+# A failing claude provider must propagate through the seam's pipe (PIPESTATUS)
+# so afk exits nonzero and the run is marked failed. This is the genuine behavior
+# change of routing afk's claude through the seam: the old inline pipe had no
+# `pipefail`, so a claude failure was swallowed (jq exited 0) and the run was
+# falsely marked done — red against the old pipe, green via the seam.
+test_afk_claude_propagates_provider_failure() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  SKIP: afk claude failure propagation (jq not available)"
+    return 0
+  fi
+
+  local tmp fakebin index_file
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+
+  mkdir -p "$tmp/docs/plans/demo"
+  printf '%s\n' "# Demo PRD" > "$tmp/docs/plans/demo/prd.md"
+  printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
+  write_fake_claude "$fakebin"
+
+  if (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=claude RALPH_NO_OVERSEE=1 \
+    FAKE_CLAUDE_EXIT=5 bash "$AFK_SCRIPT" demo 1 >/dev/null 2>&1); then
+    fail "afk should fail when the claude provider exits nonzero (seam PIPESTATUS)"
+  fi
+
+  index_file="$tmp/.almanac/runs/index.tsv"
+  [ -f "$index_file" ] || fail "failed afk claude should still write run index"
+  assert_file_contains "$index_file" $'failed' "failed afk claude should mark run failed"
+  echo "  PASS: afk claude propagates provider failure through the seam"
+}
+
 echo "=== Ralph Run Registry Tests ==="
 test_once_registers_and_marks_run_done
 test_once_marks_run_failed_on_provider_error
@@ -490,3 +570,5 @@ test_afk_registers_and_marks_run_done
 test_afk_marks_run_failed_on_provider_error
 test_afk_emits_live_run_progress_contract
 test_afk_codex_routes_provider_invocation_through_seam
+test_afk_claude_routes_provider_invocation_through_seam
+test_afk_claude_propagates_provider_failure

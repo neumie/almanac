@@ -79,17 +79,6 @@ case "$PROVIDER" in
     ;;
 esac
 
-stream_text='
-  if .type == "system" and .subtype == "init" and (.model // "") != "" then
-    "Claude model: \(.model)\r\n\n"
-  elif .type == "assistant" then
-    .message.content[]? | select(.type == "text").text // empty | gsub("\n"; "\r\n") | . + "\r\n\n"
-  else
-    empty
-  end
-'
-final_result='select(.type == "result").result // empty'
-
 push_ralph_commits() {
   if git remote get-url origin >/dev/null 2>&1; then
     echo ""
@@ -509,19 +498,34 @@ for ((i=1; i<=$ITERATIONS; i++)); do
 
   case "$PROVIDER" in
     claude)
+      # Default claude path routes through the shared agent_run seam in stream
+      # mode rather than an inline claude exec (#66 — ralph migration onto the
+      # engine). The seam builds the same invocation afk used (--print
+      # --output-format stream-json --verbose, plus --model/--effort) and pipes
+      # the live assistant text to stdout through the same jq filter — console
+      # output is unchanged. afk's iteration agent has NEVER set --permission-mode,
+      # so we pass the `default` sandbox sentinel: the seam omits --permission-mode
+      # (claude's own default mode), unlike once.sh which uses acceptEdits.
+      # RALPH_MODEL/RALPH_EFFORT pass straight through as the seam's model/effort.
+      # The seam writes the extracted result to $tmpfile (its result_file), so the
+      # <promise> extraction below reads it back via cat, like the codex branch.
+      # Unlike the old inline pipe (no pipefail), the seam preserves claude's exit
+      # via PIPESTATUS, so a provider failure now propagates instead of being
+      # swallowed — matching the codex branch and once.sh's claude routing.
       prompt="${prompt_prefix}@$PROMPT Previous RALPH commits: $ralph_commits"
-      claude \
-        --print \
-        --output-format stream-json \
-        --verbose \
-        "${MODEL_ARG[@]}" \
-        "${EFFORT_ARG[@]}" \
-        "$prompt" \
-      | grep --line-buffered '^{' \
-      | tee "$tmpfile" \
-      | jq -Rj --unbuffered "fromjson? // empty | objects | ( $stream_text )"
+      claude_prompt_file=$(mktemp)
+      claude_events_file=$(mktemp)
+      printf '%s' "$prompt" > "$claude_prompt_file"
+      if ! almanac_loop_agent_run \
+        claude "${RALPH_MODEL:-}" "${RALPH_EFFORT:-}" default \
+        "$claude_prompt_file" "$tmpfile" "$claude_events_file" stream; then
+        rm -f "$claude_prompt_file" "$claude_events_file"
+        echo "Claude failed."
+        exit 1
+      fi
+      rm -f "$claude_prompt_file" "$claude_events_file"
 
-      result=$(jq -r "$final_result" "$tmpfile")
+      result=$(cat "$tmpfile")
       ;;
     codex)
       prompt="${prompt_prefix}# OUTPUT STYLE
