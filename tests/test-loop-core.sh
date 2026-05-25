@@ -86,6 +86,7 @@ done
 
 [ -n "\$result_file" ] && printf '%s\n' "codex final: \$prompt" > "\$result_file"
 printf '%s\n' '{"type":"event_msg","payload":{"type":"agent_message","message":"codex event"}}'
+printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"codex streamed: hardened"}}'
 EOF
   chmod +x "$fakebin/codex"
 }
@@ -518,6 +519,87 @@ test_agent_runner_propagates_claude_failure() {
   echo "  PASS: agent runner propagates claude failure"
 }
 
+# Opt-in live-stream mode (the 8th arg). In stream mode the seam tees the
+# provider's live assistant text to stdout through the same jq filter ralph's
+# once.sh/afk.sh use, while STILL capturing the raw event stream and final
+# result to their files. Default (no 8th arg) is unchanged and covered by the
+# tests above. This pins the live-stream half the ralph migration needs before
+# its provider invocation can route through this seam (issue #66 criterion 1).
+test_agent_runner_streams_claude_live_text() {
+  local tmp fakebin prompt result events out
+  command -v jq >/dev/null 2>&1 || { echo "  SKIP: agent runner streams claude live text (no jq)"; return 0; }
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  prompt="$tmp/prompt.md"
+  result="$tmp/result.txt"
+  events="$tmp/events.jsonl"
+
+  printf '%s\n' "review target" > "$prompt"
+  write_fake_claude_agent "$fakebin" "$tmp/claude-args.txt"
+
+  out="$(PATH="$fakebin:$PATH" almanac_loop_agent_run "claude" "" "" "workspace-write" "$prompt" "$result" "$events" stream)"
+
+  assert_contains "$out" "claude event" "stream mode should emit the assistant text live to stdout"
+  case "$out" in
+    *'"type":"assistant"'*) fail "stream mode must filter raw JSON envelopes out of the live stdout" ;;
+  esac
+  case "$out" in
+    *"$events"*) fail "stream mode must not print the events-file path into the live stream" ;;
+  esac
+  assert_file_contains "$events" "claude event" "stream mode should still capture the raw event stream to the log file"
+  assert_file_contains "$result" "claude final" "stream mode should still extract the final result"
+  echo "  PASS: agent runner streams claude live text"
+}
+
+test_agent_runner_streams_codex_live_text() {
+  local tmp fakebin prompt result events out
+  command -v jq >/dev/null 2>&1 || { echo "  SKIP: agent runner streams codex live text (no jq)"; return 0; }
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  prompt="$tmp/prompt.md"
+  result="$tmp/result.txt"
+  events="$tmp/events.jsonl"
+
+  printf '%s\n' "review target" > "$prompt"
+  write_fake_codex_agent "$fakebin" "$tmp/codex-args.txt"
+
+  out="$(PATH="$fakebin:$PATH" almanac_loop_agent_run "codex" "" "" "danger-full-access" "$prompt" "$result" "$events" stream)"
+
+  assert_contains "$out" "codex streamed: hardened" "stream mode should emit codex agent-message text live to stdout"
+  case "$out" in
+    *'"type":"item.completed"'*) fail "stream mode must filter raw codex JSON out of the live stdout" ;;
+  esac
+  assert_file_contains "$events" "codex streamed: hardened" "stream mode should still capture the raw codex event stream"
+  assert_file_contains "$result" "codex final: review target" "stream mode should still write the codex final result"
+  echo "  PASS: agent runner streams codex live text"
+}
+
+# The streaming pipe must not swallow a provider failure behind the jq filter:
+# PIPESTATUS of the producer (not the filter) drives the exit code, so a broken
+# run still propagates non-zero — the contract harden's worker orchestration
+# and ralph's overseer both rely on.
+test_agent_runner_stream_mode_propagates_failure() {
+  local tmp fakebin prompt result events rc
+  command -v jq >/dev/null 2>&1 || { echo "  SKIP: agent runner stream-mode failure (no jq)"; return 0; }
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  prompt="$tmp/prompt.md"
+  result="$tmp/result.txt"
+  events="$tmp/events.jsonl"
+
+  printf '%s\n' "review target" > "$prompt"
+  write_fake_failing_agent "$fakebin" "claude"
+
+  rc=0
+  PATH="$fakebin:$PATH" almanac_loop_agent_run "claude" "" "" "workspace-write" "$prompt" "$result" "$events" stream >/dev/null 2>&1 || rc=$?
+
+  assert_eq "7" "$rc" "stream mode must propagate the provider's exit code (PIPESTATUS), not the jq filter's"
+  echo "  PASS: agent runner stream mode propagates provider failure"
+}
+
 test_worker_start_tracks_background_agent() {
   local tmp fakebin prompt pid status_file events_file result_file args
   new_tmpdir
@@ -659,6 +741,9 @@ test_agent_runner_invokes_codex_with_common_config
 test_agent_runner_invokes_claude_with_common_config
 test_agent_runner_propagates_codex_failure
 test_agent_runner_propagates_claude_failure
+test_agent_runner_streams_claude_live_text
+test_agent_runner_streams_codex_live_text
+test_agent_runner_stream_mode_propagates_failure
 test_worker_start_tracks_background_agent
 test_worker_health_classifies_states
 test_worker_health_of_reads_state

@@ -411,6 +411,72 @@ almanac_loop_agent_extract_claude_result() {
   ' "$stream_file" > "$result_file"
 }
 
+# jq filter turning claude --output-format stream-json events into the live
+# assistant text the console shows: the init model line, then each assistant
+# text block, CRLF-normalised so it renders cleanly in a terminal. Identical to
+# ralph once.sh/afk.sh's stream_text so routing ralph through this seam keeps
+# its console output byte-for-byte.
+almanac_loop_agent_claude_stream_filter() {
+  cat <<'JQ'
+  if .type == "system" and .subtype == "init" and (.model // "") != "" then
+    "Claude model: \(.model)\r\n\n"
+  elif .type == "assistant" then
+    .message.content[]? | select(.type == "text").text // empty | gsub("\n"; "\r\n") | . + "\r\n\n"
+  else
+    empty
+  end
+JQ
+}
+
+# jq filter turning codex --json events into the live agent-message text the
+# console shows. Identical to ralph's codex_stream_text.
+almanac_loop_agent_codex_stream_filter() {
+  cat <<'JQ'
+  if .type == "item.completed" and .item.type == "agent_message" then
+    .item.text | . + "\n\n"
+  else
+    empty
+  end
+JQ
+}
+
+# Run a provider command live: tee its raw event stream to $events_file AND pipe
+# it through the provider's jq filter to stdout, so the caller sees progress as
+# it happens. Crucially, the PRODUCER's exit code wins (via PIPESTATUS), not the
+# jq filter's — a provider failure must propagate even though it is piped. errexit
+# is suspended around the pipeline (a no-match grep / empty filter must not abort
+# a set -e caller) and restored afterwards. Degrades to a raw tee when jq is
+# absent so output is never silently dropped.
+# Usage: almanac_loop_agent_stream <provider> <events_file> <cmd> [args...]
+almanac_loop_agent_stream() {
+  local provider="$1"; shift
+  local events_file="$1"; shift
+
+  local filter prefilter=0 rc had_e=0
+  case "$(almanac_loop_agent_provider_key "$provider")" in
+    claude|claude-code) filter="$(almanac_loop_agent_claude_stream_filter)"; prefilter=1 ;;
+    codex)              filter="$(almanac_loop_agent_codex_stream_filter)" ;;
+    *)                  filter="" ;;
+  esac
+
+  case $- in *e*) had_e=1 ;; esac
+  set +e
+  if command -v jq >/dev/null 2>&1 && [ -n "$filter" ]; then
+    if [ "$prefilter" -eq 1 ]; then
+      "$@" | tee "$events_file" | grep --line-buffered '^{' \
+        | jq -Rj --unbuffered "fromjson? // empty | objects | ( $filter )"
+    else
+      "$@" | tee "$events_file" \
+        | jq -Rj --unbuffered "fromjson? // empty | objects | ( $filter )"
+    fi
+  else
+    "$@" | tee "$events_file"
+  fi
+  rc=${PIPESTATUS[0]}
+  [ "$had_e" -eq 1 ] && set -e
+  return "$rc"
+}
+
 almanac_loop_agent_run() {
   [ "$#" -ge 6 ] || return 2
 
@@ -421,10 +487,15 @@ almanac_loop_agent_run() {
   local prompt_file="$5"
   local result_file="$6"
   local events_file="${7:-}"
-  local provider_key prompt
+  local stream_mode="${8:-}"
+  local provider_key prompt stream=0 rc
 
   [ -n "$provider" ] || return 2
   [ -f "$prompt_file" ] || return 2
+
+  case "$stream_mode" in
+    stream|live|on|1) stream=1 ;;
+  esac
 
   provider_key="$(almanac_loop_agent_provider_key "$provider")"
   prompt="$(cat "$prompt_file")"
@@ -462,7 +533,14 @@ almanac_loop_agent_run() {
         codex_args+=(-c "model_reasoning_effort=\"$effort\"")
       fi
 
-      codex "${codex_args[@]}" "$prompt" > "$events_file" || return "$?"
+      if [ "$stream" -eq 1 ]; then
+        rc=0
+        almanac_loop_agent_stream "codex" "$events_file" \
+          codex "${codex_args[@]}" "$prompt" || rc=$?
+        [ "$rc" -eq 0 ] || return "$rc"
+      else
+        codex "${codex_args[@]}" "$prompt" > "$events_file" || return "$?"
+      fi
       ;;
     claude|claude-code)
       if ! command -v claude >/dev/null 2>&1; then
@@ -485,9 +563,18 @@ almanac_loop_agent_run() {
         claude_args+=(--effort "$effort")
       fi
 
-      # No pipe: a direct redirect keeps $? as claude's exit so a provider
-      # failure propagates instead of being masked by a downstream tee.
-      claude "${claude_args[@]}" "$prompt" > "$events_file" || return "$?"
+      if [ "$stream" -eq 1 ]; then
+        # Stream mode tees live assistant text to stdout; the helper preserves
+        # claude's exit via PIPESTATUS so a failure still propagates past the pipe.
+        rc=0
+        almanac_loop_agent_stream "claude" "$events_file" \
+          claude "${claude_args[@]}" "$prompt" || rc=$?
+        [ "$rc" -eq 0 ] || return "$rc"
+      else
+        # No pipe: a direct redirect keeps $? as claude's exit so a provider
+        # failure propagates instead of being masked by a downstream tee.
+        claude "${claude_args[@]}" "$prompt" > "$events_file" || return "$?"
+      fi
       almanac_loop_agent_extract_claude_result "$events_file" "$result_file"
       ;;
     *)
@@ -495,6 +582,11 @@ almanac_loop_agent_run() {
       return 3
       ;;
   esac
+
+  # In stream mode stdout already carries the live assistant text, so do not
+  # append the events-file path (it would corrupt the stream). The caller passes
+  # its own events_file in stream mode and already knows the path.
+  [ "$stream" -eq 1 ] && return 0
 
   printf '%s\n' "$events_file"
 }
