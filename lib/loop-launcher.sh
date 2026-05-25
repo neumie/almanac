@@ -40,6 +40,18 @@ if ! declare -F almanac_provider_default >/dev/null 2>&1; then
   unset __loop_launcher_dir
 fi
 
+# The loop-adapter seam (almanac_loop_adapter_*) lives in lib/loops.sh. The
+# launcher execs each loop's runner via its adapter's exec_argv (so no central
+# code hard-codes a loop's runner path). Source it directly and idempotently so
+# the dependency is the launcher's own, not borrowed from whatever sourced this
+# file.
+if ! declare -F almanac_loop_adapter_call >/dev/null 2>&1; then
+  __loop_launcher_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/loops.sh
+  source "$__loop_launcher_dir/loops.sh"
+  unset __loop_launcher_dir
+fi
+
 # --- field collectors ---------------------------------------------------------
 
 # Pick a provider into the named-by-$1 variable if it is empty. Lists only
@@ -155,11 +167,11 @@ _almanac_launch_ralph() {
   [ -n "$effort" ] && export RALPH_EFFORT="$effort" || unset RALPH_EFFORT
   [ -n "$no_oversee" ] && export RALPH_NO_OVERSEE=1
 
-  local scripts="$ALMANAC_HOME/skills/loop/ralph-loop/scripts"
-  case "$mode" in
-    once) exec bash "$scripts/once.sh" "$prd" ;;
-    afk)  exec bash "$scripts/afk.sh" "$prd" "$iterations" ;;
-  esac
+  # Exec the runner via the ralph adapter (no hard-coded …/ralph-loop/scripts/…
+  # path lives here any more — the adapter owns it).
+  almanac_loop_adapter_call ralph exec_argv "$mode" "$prd" "$iterations" \
+    || _die "ralph adapter could not build a runner for mode: $mode"
+  exec "${_ALMANAC_LOOP_ARGV[@]}"
 }
 
 # --- harden --------------------------------------------------------------------
@@ -203,9 +215,11 @@ _almanac_launch_harden() {
   [ -n "$model" ]    && export HARDEN_MODEL="$model"   || unset HARDEN_MODEL
   [ -n "$effort" ]   && export HARDEN_EFFORT="$effort" || unset HARDEN_EFFORT
 
-  local argv=(harden "$target" --loop)
-  [ -n "$rounds" ] && argv+=(--rounds "$rounds")
-  exec bash "$ALMANAC_HOME/bin/almanac" "${argv[@]}"
+  # Exec the runner via the harden adapter (its convergence loop runs through
+  # `almanac harden <target> --loop` — the adapter owns that invocation).
+  almanac_loop_adapter_call harden exec_argv "$target" "$rounds" \
+    || _die "harden adapter could not build a runner for target: $target"
+  exec "${_ALMANAC_LOOP_ARGV[@]}"
 }
 
 # --- summary + dispatch --------------------------------------------------------

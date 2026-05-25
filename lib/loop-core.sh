@@ -47,6 +47,17 @@ if ! declare -F almanac_loop_record_set >/dev/null 2>&1; then
   unset __loop_core_dir
 fi
 
+# The loop-adapter seam (almanac_loop_adapter_*) lives in lib/loops.sh. The hub's
+# per-run stop/steer below resolve each loop's signal files through its adapter's
+# control contract, so loop-core depends on it directly — source it idempotently.
+# pwd -P resolves the install symlink so the sibling loops.sh is found either way.
+if ! declare -F almanac_loop_adapter_call >/dev/null 2>&1; then
+  __loop_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/loops.sh
+  source "$__loop_core_dir/loops.sh"
+  unset __loop_core_dir
+fi
+
 almanac_loop_slug() {
   local raw="$1"
   local slug
@@ -766,25 +777,17 @@ almanac_loop_hub_overview() {
 # gum selection menu in cmd/hub.sh is a thin TTY layer over them.
 
 # Map a run type + signal kind to the dot-file basename the loop's runner watches
-# for between rounds. ralph already consumes `.ralph-stop` (afk stop signal) and
-# `.ralph-steer` (one-shot operator/overseer directive the next iteration reads);
-# harden's files follow its prefix. Prints the basename; returns 1 for an unknown
-# type or kind.
+# for between rounds. The mapping is the loop adapter's control contract — each
+# loop owns its own signal files (ralph consumes `.ralph-stop`/`.ralph-steer`,
+# harden `.harden-stop`/`.harden-steer`) — so this dispatches to the adapter
+# rather than branching on type centrally. Prints the basename; returns 1 for an
+# unknown type or kind.
 almanac_loop_run_signal_file() {
   local type="$1"
   local kind="$2"
-  local base
 
-  case "$type" in
-    ralph)  base=".ralph" ;;
-    harden) base=".harden" ;;
-    *) return 1 ;;
-  esac
-  case "$kind" in
-    stop)  printf '%s\n' "${base}-stop" ;;
-    steer) printf '%s\n' "${base}-steer" ;;
-    *) return 1 ;;
-  esac
+  almanac_loop_adapter_known "$type" || return 1
+  almanac_loop_adapter_call "$type" signal_file "$kind" || return 1
 }
 
 # Stop a registered run: write the run type's stop file under root (runs register

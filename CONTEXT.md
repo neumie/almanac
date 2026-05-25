@@ -23,9 +23,9 @@ Adapters are **auto-discovered** at `lib/providers/<name>.sh`; the provider list
 
 ## Loop adapters
 
-Mirroring provider adapters: a **loop adapter** is the concrete satisfier of the loop seam, **auto-discovered** at `lib/loops/<name>.sh`. Each declares two contracts:
-- **launch** — its config fields + how to exec its runner (consumed by the **launcher**)
-- **control** — its stop/steer signal files, e.g. `.ralph-stop` / `.harden-steer` (consumed by the **hub**)
+Mirroring provider adapters: a **loop adapter** is the concrete satisfier of the loop seam, **auto-discovered** at `lib/loops/<name>.sh` (the loop list IS the files present). The discovery + name-normalising dispatch live in `lib/loops.sh` (`almanac_loop_adapter_call <name> <verb>` — the one place a loop type becomes a function call). Each adapter declares two contracts:
+- **launch** — `exec_argv`: how to exec its runner (config in, the runner exec tokens out in `_ALMANAC_LOOP_ARGV`), consumed by the **launcher**. The runner path lives in the adapter, not the launcher.
+- **control** — `signal_file <stop|steer>`: its between-round signal files, e.g. `.ralph-stop` / `.harden-steer` (consumed by the **hub**)
 
 The **launcher** (create one run; standalone `almanac ralph …` *and* embedded in the hub's New-run) uses the launch contract; the **hub** (manage the fleet — list/watch/stop/steer) uses the control contract. **launcher ⊂ hub**: the launcher exists below the hub so the scripted/non-TTY path (`almanac ralph --prd x`) never opens a dashboard. Dispatch lives once in the adapter; each caller uses only the facet it needs.
 
@@ -53,6 +53,7 @@ The engine is split into cohesive modules — each file's interface is its test 
 | `lib/role.sh` | role → (provider, model, effort) resolution |
 | `lib/agent.sh` | `agent_capture`/`agent_stream`/`agent_raw` + provider dispatch |
 | `lib/providers/<name>.sh` | provider adapters (auto-discovered) |
+| `lib/loops.sh` | loop-adapter discovery + dispatch |
 | `lib/loops/<name>.sh` | loop adapters (auto-discovered) |
 | `lib/feedback.sh` | feedback detection + runner |
 | `lib/run.sh` | run registry + run-status record + control (stop/steer/watch) + worker health + hub read-views |
