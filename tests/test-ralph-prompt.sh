@@ -72,7 +72,7 @@ test_generates_prompt_with_shared_feedback_commands() {
 
 # Ralph's feedback-loop DETECTION uses the shared runner (#66 crit 2): prompt.sh
 # injects the FEEDBACK LOOPS list via almanac_loop_feedback_markdown ->
-# almanac_loop_feedback_commands (lib/loop-core.sh), and once.sh/afk.sh carry NO
+# almanac_loop_feedback_commands (lib/feedback.sh), and once.sh/afk.sh carry NO
 # private detection. This pins that the list is marker-DRIVEN by the shared
 # detector, not a hardcoded ralph list: a project whose only marker is Cargo.toml
 # must yield the shared detector's Rust commands and none of the npm commands a

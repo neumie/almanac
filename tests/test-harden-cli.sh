@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ALMANAC="$ROOT/bin/almanac"
 
 # Source the libs for pure-function unit tests (parser/formatter). harden-core
-# pulls in loop-core + core itself.
+# pulls in its focused deps (core/agent/run/worker/ui/role/feedback) itself.
 source "$ROOT/lib/harden-core.sh"
 
 TMPDIRS=()
@@ -103,14 +103,14 @@ test_creates_draft_rubric_for_target_and_goal() {
   tmp="$NEW_TMPDIR"
 
   mkdir -p "$tmp/lib"
-  touch "$tmp/lib/loop-core.sh"
+  touch "$tmp/lib/run.sh"
 
-  (cd "$tmp" && "$ALMANAC" harden lib/loop-core.sh --goal "prove feedback detection cannot regress" >/dev/null)
+  (cd "$tmp" && "$ALMANAC" harden lib/run.sh --goal "prove feedback detection cannot regress" >/dev/null)
 
-  rubric="$tmp/docs/plans/harden/lib-loop-core-sh/rubric.md"
+  rubric="$tmp/docs/plans/harden/lib-run-sh/rubric.md"
   [ -f "$rubric" ] || fail "harden should create default rubric path"
   assert_file_contains "$rubric" "# Harden Rubric" "rubric should have title"
-  assert_file_contains "$rubric" "Target: lib/loop-core.sh" "rubric should record target"
+  assert_file_contains "$rubric" "Target: lib/run.sh" "rubric should record target"
   assert_file_contains "$rubric" "Status: draft" "rubric should start as draft"
   assert_file_contains "$rubric" "prove feedback detection cannot regress" "rubric should record goal"
   assert_file_contains "$rubric" "## Acceptance" "rubric should include acceptance section"
@@ -1541,7 +1541,7 @@ test_dashboard_rows_render_all_fields() {
 
 # Criterion (64.2, surface half): stalled/idle/looping worker states are surfaced
 # on the dashboard (detection half is test_worker_health_classifies_states in
-# test-loop-core.sh).
+# test-run.sh).
 test_dashboard_surfaces_unhealthy_workers() {
   local rows out
   rows=$'reviewer-a\tclaude\tstalled\nreviewer-b\tcodex\tidle\nreviewer-c\tclaude\tlooping'

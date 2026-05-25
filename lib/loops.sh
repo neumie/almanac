@@ -11,7 +11,7 @@
 #   launch  — exec_argv: how to exec its runner (config in, _ALMANAC_LOOP_ARGV out)
 #             — consumed by the launcher (lib/loop-launcher.sh)
 #   control — signal_file <stop|steer>: its between-round dot-file basename
-#             — consumed by the hub's stop/steer (lib/loop-core.sh control)
+#             — consumed by the hub's stop/steer (lib/run.sh control)
 #
 # Self-contained: uses only printf / tr / basename / source — no lib/core.sh
 # dependency — so the seam (and the adapters) are their own test surface and

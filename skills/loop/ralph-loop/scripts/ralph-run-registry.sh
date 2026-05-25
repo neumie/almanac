@@ -8,12 +8,14 @@
 # whether launched from the repo or the install path.
 ALMANAC_HOME="${ALMANAC_HOME:-$(cd -P "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd -P)}"
 
-if [ ! -f "$ALMANAC_HOME/lib/loop-core.sh" ]; then
-  echo "Error: lib/loop-core.sh not found at $ALMANAC_HOME/lib/loop-core.sh" >&2
+if [ ! -f "$ALMANAC_HOME/lib/run.sh" ]; then
+  echo "Error: lib/run.sh not found at $ALMANAC_HOME/lib/run.sh" >&2
   return 1 2>/dev/null || exit 1
 fi
 
-source "$ALMANAC_HOME/lib/loop-core.sh"
+# The run registry (register/update/mark) lives in lib/run.sh — source it
+# directly rather than the deleted loop-core barrel.
+source "$ALMANAC_HOME/lib/run.sh"
 
 RALPH_RUN_ID="${RALPH_RUN_ID:-}"
 

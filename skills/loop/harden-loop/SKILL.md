@@ -11,7 +11,7 @@ metadata:
 
 A **convergence loop** that hardens one target until it meets an explicit, per-task contract. You give it a target and a one-line goal; the conductor drafts a `rubric.md`; you edit and lock it; then it runs **rounds** of parallel review → ratify-by-execution → fix → feedback until the target is bulletproof or a round budget is hit.
 
-Unlike `ralph-loop` (a slice-queue loop that builds a PRD task-by-task), harden-loop is **review-driven**: it discovers and fixes defects in code that already exists. Both sit on the same shared bash engine (`lib/loop-core.sh`), exposed as `almanac harden <target>`.
+Unlike `ralph-loop` (a slice-queue loop that builds a PRD task-by-task), harden-loop is **review-driven**: it discovers and fixes defects in code that already exists. Both sit on the same shared bash engine (the focused `lib/` modules — `lib/run.sh`, `lib/agent.sh`, `lib/worker.sh`, etc.), exposed as `almanac harden <target>`.
 
 ## The contract: convergence, not infinite review
 

@@ -23,7 +23,7 @@
 set -euo pipefail
 
 source "$ALMANAC_HOME/lib/ui.sh"
-source "$ALMANAC_HOME/lib/loop-core.sh"
+source "$ALMANAC_HOME/lib/run.sh"
 source "$ALMANAC_HOME/lib/loop-launcher.sh"
 
 ROOT="$PWD"

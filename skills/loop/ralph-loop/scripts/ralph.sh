@@ -14,7 +14,7 @@ set -euo pipefail
 # in lib/core.sh; keep the two in sync.
 ALMANAC_HOME="${ALMANAC_HOME:-$(cd -P "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd -P)}"
 
-for _lib in core loop-core loop-launcher; do
+for _lib in core loop-launcher; do
   if [ ! -f "$ALMANAC_HOME/lib/${_lib}.sh" ]; then
     echo "Error: lib/${_lib}.sh not found at $ALMANAC_HOME/lib/${_lib}.sh" >&2
     exit 1
