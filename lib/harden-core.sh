@@ -1326,3 +1326,162 @@ almanac_harden_run() {
     esac
   done
 }
+
+# --- Supervision dashboard -----------------------------------------------------
+#
+# A gum-styled redraw dashboard for supervising a harden run: reviewer status (per
+# lens, with health), the round, findings tallies, rubric progress, and the
+# feedback verdict. The render LOGIC is pure (almanac_harden_dashboard_rows: state
+# -> printable rows) so it is unit-testable without a terminal; the gather helpers
+# read live run state into that pure composer, and almanac_harden_render_dashboard
+# wraps the result in gum styling that degrades to plain output when gum is absent
+# (via the shared UI primitives in loop-core).
+
+# Findings tally for the dashboard: counts the ledger's findings by status as
+# `open=N fixed=N notes=N`, where notes = rejected-subjective + wontfix-per-context
+# (the non-blocking outcomes). Prints all-zero when the ledger is absent.
+almanac_harden_findings_tally() {
+  local path="$1"
+
+  [ -f "$path" ] || { printf '%s\n' "open=0 fixed=0 notes=0"; return 0; }
+
+  awk '
+    /^- status:/ {
+      s = $0; sub(/^- status:[ \t]*/, "", s)
+      if (s == "open") o++
+      else if (s == "fixed") f++
+      else if (s == "rejected-subjective" || s == "wontfix-per-context") n++
+    }
+    END { printf "open=%d fixed=%d notes=%d\n", o, f, n }
+  ' "$path"
+}
+
+# Rubric acceptance progress for the dashboard: `checked/total` over the
+# `## Acceptance` checklist. Prints 0/0 when the rubric or section is absent.
+almanac_harden_rubric_progress() {
+  local path="$1"
+  local acc total checked
+
+  acc="$(almanac_harden_rubric_acceptance "$path")"
+  total="$(printf '%s\n' "$acc" | grep -c '^- \[' || true)"
+  checked="$(printf '%s\n' "$acc" | grep -c '^- \[[xX]\]' || true)"
+  printf '%s/%s\n' "$checked" "$total"
+}
+
+# Pure render: compose the dashboard's printable rows from already-gathered state.
+# Reads worker rows from stdin as TSV (id<TAB>provider<TAB>health), one per
+# reviewer, and takes round/budget, findings tally, rubric progress, and feedback
+# verdict as args. No file I/O, no clock, no gum — fully deterministic and
+# unit-testable. Surfaces each reviewer's health (running, stalled, idle, looping,
+# done, failed) with a status glyph, and reports an empty reviewer set explicitly.
+almanac_harden_dashboard_rows() {
+  local round="${1:-?}"
+  local budget="${2:-?}"
+  local tally="${3:-}"
+  local progress="${4:-}"
+  local verdict="${5:-n/a}"
+  local id provider health glyph
+  local any=0
+
+  printf 'Harden dashboard — round %s/%s\n' "$round" "$budget"
+  printf 'Reviewers:\n'
+  while IFS=$'\t' read -r id provider health; do
+    [ -n "$id" ] || continue
+    glyph="$(almanac_loop_ui_status_glyph "$health")"
+    printf '  %s %s  %s  %s\n' "$glyph" "$id" "${provider:-?}" "${health:-?}"
+    any=1
+  done
+  [ "$any" -eq 1 ] || printf '  (no reviewers)\n'
+  printf 'Findings: %s\n' "${tally:-open=0 fixed=0 notes=0}"
+  printf 'Rubric: %s acceptance criteria\n' "${progress:-0/0}"
+  printf 'Feedback: %s\n' "$verdict"
+}
+
+# Gather the run's reviewer rows for the composer: one TSV line per worker
+# (id<TAB>provider<TAB>health), reading each worker's status.tsv and classifying
+# its health via the shared detector. Empty when the run has no workers yet.
+# now/stall/loop pass through to the classifier (overridable for tests).
+almanac_harden_dashboard_worker_rows() {
+  local root="$1"
+  local run_id="$2"
+  local now="${3:-}"
+  local stall="${4:-120}"
+  local loop="${5:-5}"
+  local workers_dir wdir status_file base id provider health
+
+  workers_dir="$(almanac_loop_registry_dir "$root")/$run_id/workers"
+  [ -d "$workers_dir" ] || return 0
+  [ -n "$now" ] || now="$(date +%s)"
+
+  for wdir in "$workers_dir"/*/; do
+    [ -d "$wdir" ] || continue
+    status_file="$wdir/status.tsv"
+    [ -f "$status_file" ] || continue
+    base="$(basename "$wdir")"
+    id="$(almanac_loop_status_field "$status_file" "id" || true)"
+    provider="$(almanac_loop_status_field "$status_file" "provider" || true)"
+    health="$(almanac_loop_worker_health_of "$root" "$run_id" "$base" "$now" "$stall" "$loop")"
+    printf '%s\t%s\t%s\n' "${id:-$base}" "${provider:-?}" "$health"
+  done
+}
+
+# Find the most recent harden run id for a target under the run registry (newest
+# by directory mtime). Returns non-zero when no matching run exists. Used by the
+# dashboard to render the live run's state.
+almanac_harden_latest_run_id() {
+  local root="$1"
+  local target="$2"
+  local registry slug prefix d t base=""
+  local newest_t=0
+
+  registry="$(almanac_loop_registry_dir "$root")"
+  [ -d "$registry" ] || return 1
+  slug="$(almanac_loop_slug "$target")"
+  prefix="harden-$slug-"
+
+  # Glob + mtime rather than `ls -t | head`: the early pipe close in a head-
+  # truncated ls trips SIGPIPE under `set -o pipefail` and aborts the call.
+  shopt -s nullglob
+  for d in "$registry/$prefix"*/; do
+    [ -d "$d" ] || continue
+    t="$(stat -f %m "$d" 2>/dev/null || stat -c %Y "$d" 2>/dev/null || printf '%s' "0")"
+    if [ "$t" -ge "$newest_t" ]; then
+      newest_t="$t"
+      base="$(basename "$d")"
+    fi
+  done
+  shopt -u nullglob
+
+  [ -n "$base" ] || return 1
+  printf '%s\n' "$base"
+}
+
+# Render the supervision dashboard for a target's most recent run: gather the
+# run's reviewer health, findings tally, and rubric progress, compose the pure
+# rows, and style them (gum panel when available, plain text otherwise). Safe to
+# call when no run/worker/rubric state exists yet — it degrades to an empty
+# reviewer list and zeroed tallies rather than failing.
+almanac_harden_render_dashboard() {
+  local root="$1"
+  local target="$2"
+  local round="${3:-?}"
+  local budget="${4:-?}"
+  local verdict="${5:-n/a}"
+  local run_id ledger_path rubric_path tally progress rows
+
+  run_id="$(almanac_harden_latest_run_id "$root" "$target" || true)"
+  ledger_path="$(almanac_harden_ledger_path "$root" "$target")"
+  rubric_path="$(almanac_harden_rubric_path "$root" "$target")"
+
+  tally="$(almanac_harden_findings_tally "$ledger_path")"
+  progress="$(almanac_harden_rubric_progress "$rubric_path")"
+
+  rows=""
+  if [ -n "$run_id" ]; then
+    rows="$(almanac_harden_dashboard_worker_rows "$root" "$run_id" || true)"
+  fi
+
+  printf '%s\n' "$rows" \
+    | almanac_harden_dashboard_rows "$round" "$budget" "$tally" "$progress" "$verdict" \
+    | almanac_loop_ui_render
+}

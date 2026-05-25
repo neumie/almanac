@@ -462,6 +462,52 @@ test_worker_start_tracks_background_agent() {
   echo "  PASS: worker start tracks background agent"
 }
 
+test_worker_health_classifies_states() {
+  # Pure predicate over (status, log-age, event-count, trailing-repeat, stall,
+  # loop) — no files, clock, or terminal, so the whole input space is table-able.
+  assert_eq "running" "$(almanac_loop_worker_health running 0 5 1 120 5)" "a fresh, progressing worker is running"
+  assert_eq "stalled" "$(almanac_loop_worker_health running 300 5 1 120 5)" "log silence past the stall threshold is stalled"
+  assert_eq "idle"    "$(almanac_loop_worker_health running 300 0 0 120 5)" "running with zero events past the threshold is idle"
+  assert_eq "looping" "$(almanac_loop_worker_health running 5 50 6 120 5)" "a long run of identical trailing events is looping"
+  assert_eq "done"    "$(almanac_loop_worker_health done 0 0 0 120 5)" "a completed worker is done"
+  assert_eq "failed"  "$(almanac_loop_worker_health failed 0 0 0 120 5)" "a failed worker is failed"
+  echo "  PASS: worker health classifies states"
+}
+
+test_worker_health_of_reads_state() {
+  local tmp run_id wdir events now health
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  run_id="harden-demo-001"
+  wdir="$tmp/.almanac/runs/$run_id/workers/reviewer-security"
+  mkdir -p "$wdir"
+  events="$wdir/events.jsonl"
+  printf '%s\n' '{"e":1}' '{"e":2}' > "$events"
+
+  almanac_loop_write_worker_status "$wdir/status.tsv" "reviewer-security" "$run_id" \
+    "111" "codex" "" "" "read-only" "p" "$events" "r" "s" "2026-05-25T12:00:00Z" "running" "" ""
+
+  # Pin the clock far ahead of the just-written log so the age crosses the stall
+  # threshold deterministically (no sleeps), proving the gather feeds real state
+  # into the pure classifier.
+  now="$(( $(date +%s) + 100000 ))"
+  health="$(almanac_loop_worker_health_of "$tmp" "$run_id" "reviewer-security" "$now" 120 5)"
+
+  assert_eq "stalled" "$health" "a running worker whose log stopped advancing reads as stalled"
+  echo "  PASS: worker health of reads worker state"
+}
+
+test_ui_render_degrades_without_gum() {
+  local out rc
+  out="$(printf '%s\n' "reviewer-security stalled" | ALMANAC_NO_GUM=1 almanac_loop_ui_render)"
+  assert_contains "$out" "reviewer-security stalled" "ui render must pass content through plainly when gum is suppressed"
+
+  rc=0
+  ALMANAC_NO_GUM=1 almanac_loop_ui_has_gum || rc=$?
+  [ "$rc" -ne 0 ] || fail "has_gum must report absent when ALMANAC_NO_GUM is set"
+  echo "  PASS: ui render degrades without gum"
+}
+
 echo "=== Loop Core Tests ==="
 test_detects_project_marker_commands
 test_dedupes_python_markers
@@ -478,3 +524,6 @@ test_agent_runner_invokes_claude_with_common_config
 test_agent_runner_propagates_codex_failure
 test_agent_runner_propagates_claude_failure
 test_worker_start_tracks_background_agent
+test_worker_health_classifies_states
+test_worker_health_of_reads_state
+test_ui_render_degrades_without_gum

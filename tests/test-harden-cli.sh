@@ -48,6 +48,16 @@ assert_contains() {
   esac
 }
 
+assert_eq() {
+  local expected="$1"
+  local actual="$2"
+  local message="$3"
+
+  if [ "$expected" != "$actual" ]; then
+    fail "$message (expected '$expected', got '$actual')"
+  fi
+}
+
 new_tmpdir() {
   NEW_TMPDIR=$(mktemp -d)
   TMPDIRS+=("$NEW_TMPDIR")
@@ -1136,7 +1146,148 @@ test_ratify_open_threads_conductor_config_to_seam() {
   echo "  PASS: ratify_open threads the conductor provider to the execution seam"
 }
 
+# Criterion (64.6): the dashboard's render logic is a pure function — given
+# already-gathered state it returns the printable rows, with no file I/O, clock,
+# or terminal. Pins that all five required fields render (PRD: reviewer status,
+# round, findings tallies, rubric progress, feedback verdict).
+test_dashboard_rows_render_all_fields() {
+  local rows out
+  rows=$'reviewer-correctness\tclaude\trunning\nreviewer-security\tcodex\tstalled'
+  out="$(printf '%s\n' "$rows" | almanac_harden_dashboard_rows 2 5 "open=3 fixed=1 notes=2" "4/6" "2/3 loops passing")"
+
+  assert_contains "$out" "round 2/5" "dashboard renders the round and budget"
+  assert_contains "$out" "reviewer-correctness" "dashboard renders each reviewer"
+  assert_contains "$out" "claude" "dashboard renders the reviewer provider"
+  assert_contains "$out" "running" "dashboard renders reviewer status"
+  assert_contains "$out" "open=3 fixed=1 notes=2" "dashboard renders the findings tallies"
+  assert_contains "$out" "4/6" "dashboard renders rubric progress"
+  assert_contains "$out" "2/3 loops passing" "dashboard renders the feedback verdict"
+  echo "  PASS: dashboard rows render all fields"
+}
+
+# Criterion (64.2, surface half): stalled/idle/looping worker states are surfaced
+# on the dashboard (detection half is test_worker_health_classifies_states in
+# test-loop-core.sh).
+test_dashboard_surfaces_unhealthy_workers() {
+  local rows out
+  rows=$'reviewer-a\tclaude\tstalled\nreviewer-b\tcodex\tidle\nreviewer-c\tclaude\tlooping'
+  out="$(printf '%s\n' "$rows" | almanac_harden_dashboard_rows 1 5 "open=0 fixed=0 notes=0" "0/0" "n/a")"
+
+  assert_contains "$out" "stalled" "dashboard surfaces a stalled worker"
+  assert_contains "$out" "idle" "dashboard surfaces an idle worker"
+  assert_contains "$out" "looping" "dashboard surfaces a looping worker"
+  echo "  PASS: dashboard surfaces unhealthy workers"
+}
+
+test_dashboard_rows_report_empty_reviewer_set() {
+  local out
+  out="$(printf '%s\n' "" | almanac_harden_dashboard_rows 1 5 "open=0 fixed=0 notes=0" "0/0" "n/a")"
+  assert_contains "$out" "(no reviewers)" "dashboard reports an empty reviewer set explicitly"
+  echo "  PASS: dashboard rows report empty reviewer set"
+}
+
+test_findings_tally_counts_by_status() {
+  local tmp ledger tally
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  ledger="$tmp/findings.md"
+  almanac_harden_ledger_init "$ledger"
+  almanac_harden_ledger_append_entry "$ledger" "f-1" "correctness" "high" "a:1" "bug1" "demo" "open" 1 "" >/dev/null
+  almanac_harden_ledger_append_entry "$ledger" "f-2" "security" "high" "a:2" "bug2" "demo" "open" 1 "" >/dev/null
+  almanac_harden_ledger_append_entry "$ledger" "f-3" "perf" "low" "a:3" "bug3" "demo" "fixed" 1 "" >/dev/null
+  almanac_harden_ledger_append_entry "$ledger" "f-4" "contracts" "low" "a:4" "op1" "demo" "rejected-subjective" 1 "" >/dev/null
+  almanac_harden_ledger_append_entry "$ledger" "f-5" "edge-cases" "low" "a:5" "op2" "demo" "wontfix-per-context" 1 "" >/dev/null
+
+  tally="$(almanac_harden_findings_tally "$ledger")"
+  assert_eq "open=2 fixed=1 notes=2" "$tally" "tally counts open, fixed, and notes (subjective + wontfix)"
+  echo "  PASS: findings tally counts by status"
+}
+
+test_findings_tally_zero_without_ledger() {
+  local tmp tally
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  tally="$(almanac_harden_findings_tally "$tmp/missing.md")"
+  assert_eq "open=0 fixed=0 notes=0" "$tally" "an absent ledger tallies to all zeros"
+  echo "  PASS: findings tally zero without ledger"
+}
+
+test_rubric_progress_counts_acceptance_checkboxes() {
+  local tmp rubric prog
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  rubric="$tmp/rubric.md"
+  cat > "$rubric" <<'RUBRIC'
+# Harden Rubric
+
+## Acceptance
+
+- [x] criterion one
+- [ ] criterion two
+- [x] criterion three
+
+## Context
+RUBRIC
+
+  prog="$(almanac_harden_rubric_progress "$rubric")"
+  assert_eq "2/3" "$prog" "rubric progress counts checked over total acceptance criteria"
+
+  prog="$(almanac_harden_rubric_progress "$tmp/missing.md")"
+  assert_eq "0/0" "$prog" "an absent rubric reports zero progress"
+  echo "  PASS: rubric progress counts acceptance checkboxes"
+}
+
+# Criterion (64.5): rendering the dashboard from live run state degrades to plain
+# output when gum is suppressed, rendering all five fields without failing.
+test_render_dashboard_reads_run_state_and_degrades() {
+  local tmp run_id wdir out ledger rubric
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  mkdir -p "$tmp/src"
+  printf '%s\n' "code" > "$tmp/src/app.js"
+
+  # A real run dir the dashboard reads live worker state from.
+  run_id="harden-src-app-js-20260525T120000Z-4242"
+  wdir="$tmp/.almanac/runs/$run_id/workers/reviewer-correctness"
+  mkdir -p "$wdir"
+  printf '%s\n' '{"e":1}' > "$wdir/events.jsonl"
+  almanac_loop_write_worker_status "$wdir/status.tsv" "reviewer-correctness" "$run_id" \
+    "111" "codex" "" "" "read-only" "p" "$wdir/events.jsonl" "r" "s" "2026-05-25T12:00:00Z" "running" "" ""
+
+  ledger="$(almanac_harden_ledger_path "$tmp" "src/app.js")"
+  almanac_harden_ledger_init "$ledger"
+  almanac_harden_ledger_append_entry "$ledger" "f-1" "correctness" "high" "src/app.js:1" "bug" "demo" "open" 1 "" >/dev/null
+
+  rubric="$(almanac_harden_rubric_path "$tmp" "src/app.js")"
+  mkdir -p "$(dirname "$rubric")"
+  cat > "$rubric" <<'RUBRIC'
+# Harden Rubric
+
+## Acceptance
+
+- [ ] no crash on empty input
+
+## Context
+RUBRIC
+
+  out="$(ALMANAC_NO_GUM=1 almanac_harden_render_dashboard "$tmp" "src/app.js" 1 5 "1/1 loops passing")"
+
+  assert_contains "$out" "round 1/5" "render shows round/budget from the live run"
+  assert_contains "$out" "reviewer-correctness" "render lists the run's reviewer from its worker state"
+  assert_contains "$out" "open=1" "render shows the ledger findings tally"
+  assert_contains "$out" "0/1" "render shows rubric acceptance progress"
+  assert_contains "$out" "1/1 loops passing" "render shows the feedback verdict"
+  echo "  PASS: render dashboard reads run state and degrades without gum"
+}
+
 echo "=== Harden CLI Tests ==="
+test_dashboard_rows_render_all_fields
+test_dashboard_surfaces_unhealthy_workers
+test_dashboard_rows_report_empty_reviewer_set
+test_findings_tally_counts_by_status
+test_findings_tally_zero_without_ledger
+test_rubric_progress_counts_acceptance_checkboxes
+test_render_dashboard_reads_run_state_and_degrades
 test_creates_draft_rubric_for_target_and_goal
 test_draft_rubric_includes_all_required_sections
 test_draft_rubric_created_on_the_fly_for_adhoc_target

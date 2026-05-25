@@ -705,3 +705,154 @@ almanac_loop_feedback_run() {
 
   return "$any_fail"
 }
+
+# --- UI primitives (shared) ----------------------------------------------------
+#
+# The supervision dashboard is a gum-styled redraw loop (PRD: bash + gum, no true
+# TUI). Render LOGIC is kept pure (state -> printable rows) so it is unit-testable
+# without a terminal; gum is only a styling layer wrapped around that text, and the
+# CLI degrades to plain output when gum is absent — keeping almanac's near-zero-dep
+# promise. Set ALMANAC_NO_GUM=1 to force plain output (tests, CI, scripts).
+
+# True (0) only when gum styling should be used: gum is installed, stdout is a
+# terminal, and the operator has not opted out via ALMANAC_NO_GUM. Piped/captured
+# output is never styled, so callers and tests can assert on plain content.
+almanac_loop_ui_has_gum() {
+  [ -z "${ALMANAC_NO_GUM:-}" ] || return 1
+  command -v gum >/dev/null 2>&1 || return 1
+  [ -t 1 ] || return 1
+  return 0
+}
+
+# Style a block of text read from stdin: a rounded gum panel when gum styling is
+# available, otherwise the text passed straight through. Presentation only; the
+# content is identical either way, so the dashboard degrades gracefully and stays
+# assertable.
+almanac_loop_ui_render() {
+  if almanac_loop_ui_has_gum; then
+    gum style --border rounded --padding "0 1" "$(cat)"
+  else
+    cat
+  fi
+}
+
+# Pure state -> glyph mapping for a worker health state. Plain unicode, no color,
+# no gum, so the dashboard composer that calls it stays deterministic.
+almanac_loop_ui_status_glyph() {
+  case "$1" in
+    running) printf '%s\n' "●" ;;
+    stalled) printf '%s\n' "◐" ;;
+    idle)    printf '%s\n' "○" ;;
+    looping) printf '%s\n' "↻" ;;
+    done)    printf '%s\n' "✔" ;;
+    failed)  printf '%s\n' "✘" ;;
+    *)       printf '%s\n' "•" ;;
+  esac
+}
+
+# --- Worker health detection ---------------------------------------------------
+#
+# Classify a worker's health from progress signals so the dashboard can surface a
+# reviewer that is stalled (log stopped advancing), idle (running but never
+# produced an event), or looping (emitting the same event over and over) rather
+# than the operator discovering it by hand. The classifier is a PURE predicate
+# over already-gathered numbers, so it is table-testable with no files, clock, or
+# terminal; the gather wrapper (almanac_loop_worker_health_of) feeds it real run
+# state.
+
+# Pure predicate: (status, log-age-secs, event-count, trailing-repeat-count,
+# stall-threshold-secs, loop-repeat-threshold) -> one of
+# running|stalled|idle|looping|done|failed. A terminal status passes straight
+# through. For a live worker: a trailing run of identical events at/over the loop
+# threshold is a loop; otherwise zero events past the stall threshold is idle, any
+# log silence past the stall threshold is stalled, and anything else is running.
+almanac_loop_worker_health() {
+  local status="${1:-running}"
+  local age="${2:-0}"
+  local count="${3:-0}"
+  local repeat="${4:-0}"
+  local stall="${5:-120}"
+  local loop="${6:-5}"
+
+  case "$status" in
+    done)   printf '%s\n' "done";   return 0 ;;
+    failed) printf '%s\n' "failed"; return 0 ;;
+  esac
+
+  if [ "$loop" -gt 0 ] && [ "$repeat" -ge "$loop" ]; then
+    printf '%s\n' "looping"; return 0
+  fi
+  if [ "$count" -eq 0 ] && [ "$age" -ge "$stall" ]; then
+    printf '%s\n' "idle"; return 0
+  fi
+  if [ "$age" -ge "$stall" ]; then
+    printf '%s\n' "stalled"; return 0
+  fi
+  printf '%s\n' "running"
+}
+
+# Seconds since a file was last modified (now - mtime). Prints -1 when the file is
+# absent. now-epoch is overridable (tests) so age is deterministic. Handles both
+# BSD/macOS (stat -f %m) and GNU/Linux (stat -c %Y).
+almanac_loop_file_age_secs() {
+  local file="$1"
+  local now="${2:-}"
+  local mtime
+
+  [ -f "$file" ] || { printf '%s\n' "-1"; return 0; }
+  [ -n "$now" ] || now="$(date +%s)"
+  mtime="$(stat -f %m "$file" 2>/dev/null || stat -c %Y "$file" 2>/dev/null || printf '%s' "")"
+  [ -n "$mtime" ] || { printf '%s\n' "-1"; return 0; }
+  printf '%s\n' "$((now - mtime))"
+}
+
+# Count lines in a file (0 when absent). awk NR counts a final unterminated line.
+almanac_loop_count_lines() {
+  [ -f "$1" ] || { printf '%s\n' "0"; return 0; }
+  awk 'END { print NR }' "$1"
+}
+
+# Count the trailing run of identical lines at the end of a file (0 when absent or
+# empty, 1 when the last line is unique). A long run is the loop signal.
+almanac_loop_trailing_repeat() {
+  [ -f "$1" ] || { printf '%s\n' "0"; return 0; }
+  awk '
+    { lines[NR] = $0 }
+    END {
+      if (NR == 0) { print 0; exit }
+      last = lines[NR]; c = 1
+      for (i = NR - 1; i >= 1; i--) {
+        if (lines[i] == last) c++; else break
+      }
+      print c
+    }
+  ' "$1"
+}
+
+# Gather one worker's real run state and classify its health. Reads the worker's
+# status.tsv (status + events-log path), measures the log's age/size/trailing
+# repeat, and returns the pure predicate's verdict. Prints "unknown" when the
+# worker has no status file yet. now/stall/loop are overridable.
+almanac_loop_worker_health_of() {
+  local root="$1"
+  local run_id="$2"
+  local worker_id="$3"
+  local now="${4:-}"
+  local stall="${5:-120}"
+  local loop="${6:-5}"
+  local status_file status events_file age count repeat
+
+  status_file="$(almanac_loop_worker_status_file "$root" "$run_id" "$worker_id")"
+  [ -f "$status_file" ] || { printf '%s\n' "unknown"; return 0; }
+
+  status="$(almanac_loop_status_field "$status_file" "status" || true)"
+  events_file="$(almanac_loop_status_field "$status_file" "events_file" || true)"
+
+  [ -n "$now" ] || now="$(date +%s)"
+  age="$(almanac_loop_file_age_secs "$events_file" "$now")"
+  count="$(almanac_loop_count_lines "$events_file")"
+  repeat="$(almanac_loop_trailing_repeat "$events_file")"
+  [ "$age" -ge 0 ] 2>/dev/null || age=0
+
+  almanac_loop_worker_health "${status:-running}" "$age" "$count" "$repeat" "$stall" "$loop"
+}
