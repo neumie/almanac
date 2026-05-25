@@ -4,11 +4,13 @@
 # Bare `almanac` routes here on a TTY (and `almanac hub` always does). The hub
 # reads the run registry under the caller's repo ($PWD/.almanac/runs) and shows
 # the loops it finds: a Running section (live status) and a Recent section (last
-# finished). On a TTY with gum and at least one run it opens an interactive menu
-# to act on a running loop — watch its live status, stop it, or queue a steer
-# directive for its next round. Off a TTY / without gum it renders that overview
-# as plain text and exits — it never blocks on a menu, so `almanac hub | cat`,
-# scripts and tests get a clean read view.
+# finished). On a TTY it opens an interactive menu — start a new run, or act on a
+# running loop (watch its live status, stop it, or queue a steer directive for its
+# next round). The menu is gum-styled when gum is present and degrades to a plain
+# numbered menu (built on the shared almanac_loop_ui_choose/input/confirm seam)
+# when gum is absent, so it works on any TTY. Off a TTY it renders the overview as
+# plain text and exits — it never blocks on a menu, so `almanac hub | cat`, scripts
+# and tests get a clean read view.
 #
 # The per-run actions are also drivable non-interactively, the seam the menu and
 # scripts/tests share:
@@ -71,59 +73,55 @@ almanac_hub_launch_new() {
   exec bash "$ALMANAC_HOME/bin/almanac" "${argv[@]}"
 }
 
-# Interactive gum menu: pick a running loop, then watch / stop / steer it. Only
-# entered on a TTY with gum (the caller guards), so the gum calls always resolve.
-# Loops until the operator quits or no running loops remain. Each running row ends
-# with "[id]"; the chosen line is mapped back to the run id to act on.
 # List the repo's PRDs (docs/plans/<name>/prd.md) and let the operator pick one
-# via gum. Prints the chosen PRD name; returns 1 when there are none to choose.
+# via the shared selector (gum choose, or a plain numbered menu without gum).
+# Prints the chosen PRD name; returns 1 when there are none to choose.
 almanac_hub_pick_prd() {
-  local dir name prds=""
+  local dir prds=()
   for dir in docs/plans/*/; do
     [ -f "${dir}prd.md" ] || continue
-    name="$(basename "$dir")"
-    prds="${prds}${name}"$'\n'
+    prds+=("$(basename "$dir")")
   done
-  [ -n "$prds" ] || { _warn "No PRDs found in docs/plans/"; return 1; }
-  printf '%s' "$prds" | gum choose --header "Select PRD"
+  [ "${#prds[@]}" -gt 0 ] || { _warn "No PRDs found in docs/plans/"; return 1; }
+  almanac_loop_ui_choose "Select PRD" "${prds[@]}"
 }
 
-# Interactive New-run flow (gum): pick ralph or harden, gather config via gum
-# prompts, preview, then launch. Composes the same argv/env the `--new` seam does,
-# so the launch path is identical interactive vs. scripted. TTY+gum only (the
-# caller guards); returns to the hub menu if the operator cancels.
+# Interactive New-run flow: pick ralph or harden, gather config via the shared
+# gum-or-plain selectors, preview, then launch. Composes the same argv/env the
+# `--new` seam does, so the launch path is identical interactive vs. scripted.
+# TTY only (the caller guards); returns to the hub menu if the operator cancels.
 almanac_hub_new_run() {
   local type opts=() prd mode iters provider model effort lenses rounds target env_raw argv_raw
 
-  type="$(printf 'ralph\nharden\n' | gum choose --header "New run — pick a loop")" || return 0
+  type="$(almanac_loop_ui_choose "New run — pick a loop" ralph harden)" || return 0
   case "$type" in
     ralph)
       prd="$(almanac_hub_pick_prd)" || return 0
       [ -n "$prd" ] || return 0
       opts+=("prd=$prd")
-      mode="$(printf 'afk\nonce\n' | gum choose --header "Mode")" || return 0
+      mode="$(almanac_loop_ui_choose "Mode" afk once)" || return 0
       opts+=("mode=$mode")
-      provider="$(printf 'codex\nclaude\n' | gum choose --header "Provider")" || return 0
+      provider="$(almanac_loop_ui_choose "Provider" codex claude)" || return 0
       opts+=("provider=$provider")
-      model="$(gum input --header "Model (blank = provider default)" --placeholder "default")" || return 0
+      model="$(almanac_loop_ui_input "Model (blank = provider default)")" || return 0
       [ -n "$model" ] && opts+=("model=$model")
-      effort="$(gum input --header "Thinking effort (blank = default)" --placeholder "default")" || return 0
+      effort="$(almanac_loop_ui_input "Thinking effort (blank = default)")" || return 0
       [ -n "$effort" ] && opts+=("effort=$effort")
       if [ "$mode" = "afk" ]; then
-        iters="$(gum input --header "Iterations" --value "10")" || return 0
+        iters="$(almanac_loop_ui_input "Iterations" "10")" || return 0
         [ -n "$iters" ] && opts+=("iterations=$iters")
-        gum confirm "Run the overseer?" || opts+=("oversee=off")
+        almanac_loop_ui_confirm "Run the overseer?" || opts+=("oversee=off")
       fi
       ;;
     harden)
-      target="$(gum input --header "Target (file / dir / PR)" --placeholder "src/app.js")" || return 0
+      target="$(almanac_loop_ui_input "Target (file / dir / PR)")" || return 0
       [ -n "$target" ] || { _warn "No target given"; return 0; }
       opts+=("target=$target")
-      lenses="$(gum input --header "Lenses (blank = default set)" --placeholder "correctness security perf")" || return 0
+      lenses="$(almanac_loop_ui_input "Lenses (blank = default set)")" || return 0
       [ -n "$lenses" ] && opts+=("lenses=$lenses")
-      provider="$(printf 'claude\ncodex\n' | gum choose --header "Reviewer provider")" || return 0
+      provider="$(almanac_loop_ui_choose "Reviewer provider" claude codex)" || return 0
       opts+=("provider=$provider")
-      rounds="$(gum input --header "Round budget (blank = default)" --placeholder "5")" || return 0
+      rounds="$(almanac_loop_ui_input "Round budget (blank = default)")" || return 0
       [ -n "$rounds" ] && opts+=("rounds=$rounds")
       ;;
     *) return 0 ;;
@@ -134,14 +132,15 @@ almanac_hub_new_run() {
 
   printf '%s\n' "Will launch:"
   almanac_hub_launch_new 1 "$env_raw" "$argv_raw"
-  if gum confirm "Launch this run?"; then
+  if almanac_loop_ui_confirm "Launch this run?"; then
     almanac_hub_launch_new 0 "$env_raw" "$argv_raw"
   fi
 }
 
 almanac_hub_menu() {
   local root="$1"
-  local running menu choice run_id action directive
+  local running line choice run_id action directive
+  local options
 
   while :; do
     almanac_loop_ui_clear
@@ -151,11 +150,16 @@ almanac_hub_menu() {
 
     # Top-level menu: New run is always available (even with an empty registry);
     # each running loop is an actionable row carrying its "[id]"; quit exits.
-    menu="+ New run"
-    [ -n "$running" ] && menu="$menu"$'\n'"$running"
-    menu="$menu"$'\n'"quit"
+    options=("+ New run")
+    if [ -n "$running" ]; then
+      while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        options+=("$line")
+      done <<< "$running"
+    fi
+    options+=("quit")
 
-    choice="$(printf '%s\n' "$menu" | gum choose --header "Almanac hub")" || return 0
+    choice="$(almanac_loop_ui_choose "Almanac hub" "${options[@]}")" || return 0
     case "$choice" in
       "+ New run") almanac_hub_new_run "$root"; continue ;;
       quit) return 0 ;;
@@ -163,13 +167,13 @@ almanac_hub_menu() {
     run_id="$(printf '%s\n' "$choice" | sed -n 's/.*\[\([^]]*\)\].*/\1/p')"
     [ -n "$run_id" ] || continue
 
-    action="$(gum choose --header "Run $run_id" watch stop steer back)" || continue
+    action="$(almanac_loop_ui_choose "Run $run_id" watch stop steer back)" || continue
     case "$action" in
       watch)
         almanac_loop_run_watch "$root" "$run_id" follow || _warn "No status for run: $run_id"
         ;;
       stop)
-        if gum confirm "Stop $run_id?"; then
+        if almanac_loop_ui_confirm "Stop $run_id?"; then
           if almanac_loop_run_stop "$root" "$run_id"; then
             _success "Stop requested for $run_id"
           else
@@ -178,7 +182,7 @@ almanac_hub_menu() {
         fi
         ;;
       steer)
-        directive="$(gum input --header "Steer $run_id" --placeholder "redirect the next round…")" || continue
+        directive="$(almanac_loop_ui_input "Steer $run_id")" || continue
         if almanac_loop_run_steer "$root" "$run_id" "$directive"; then
           _success "Steer queued for $run_id"
         else
@@ -311,11 +315,12 @@ case "$ACTION" in
     ;;
 esac
 
-# No explicit action: bare hub. On a TTY with gum, open the interactive menu —
-# always, even with an empty registry, so New run is reachable with no prior runs.
-# Otherwise render the read-only overview (the scripts-safe path tests and pipes
-# get, and the gum-absent fallback).
-if [ -t 0 ] && [ -t 1 ] && almanac_loop_ui_has_gum; then
+# No explicit action: bare hub. On a TTY, open the interactive menu — always, even
+# with an empty registry, so New run is reachable with no prior runs. The menu
+# degrades internally: gum-styled when gum is present, plain numbered menus (via
+# the shared almanac_loop_ui_* seam) when it is absent. Off a TTY (piped/captured)
+# render the read-only overview once — the scripts-safe path tests and pipes get.
+if [ -t 0 ] && [ -t 1 ]; then
   almanac_hub_menu "$ROOT"
 else
   almanac_loop_hub_overview "$ROOT"

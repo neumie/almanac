@@ -1054,6 +1054,106 @@ almanac_loop_ui_status_glyph() {
   esac
 }
 
+# --- Interactive selection primitives (gum-or-plain) ---------------------------
+#
+# The interactive hub (and any other menu-driven flow) picks from a list, reads a
+# free-text value, and asks yes/no. With gum those are gum choose/input/confirm;
+# without gum they degrade to a plain numbered menu + `read`, so the menus work on
+# any TTY — keeping almanac's near-zero-dep promise (PRD: "degrade gracefully when
+# gum is absent"). The selection LOGIC is split into pure functions (menu_render,
+# menu_pick) that are unit-testable off a terminal; the choose/input/confirm
+# wrappers add only the gum-or-`read` I/O around them. Set ALMANAC_NO_GUM=1 to
+# force the plain path (tests, CI, scripts).
+
+# Pure: render OPTIONS as a 1-based numbered menu, one per line, to stdout. The
+# plain-mode selector prints this; tests assert on it directly. No gum, no read.
+almanac_loop_ui_menu_render() {
+  local i=1 opt
+  for opt in "$@"; do
+    printf '  %d) %s\n' "$i" "$opt"
+    i=$((i + 1))
+  done
+}
+
+# Pure: map a 1-based selection number to the chosen OPTION, echoed on stdout.
+# Returns 1 for a blank, non-numeric, or out-of-range selection so the caller can
+# treat it like a cancel. No gum, no read — the testable core of the plain chooser.
+almanac_loop_ui_menu_pick() {
+  local sel="$1"
+  shift
+  case "$sel" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$sel" -ge 1 ] && [ "$sel" -le "$#" ] || return 1
+  shift "$((sel - 1))"
+  printf '%s\n' "$1"
+}
+
+# Choose one of OPTIONS under HEADER. With gum styling available: `gum choose`.
+# Without it: print the header + numbered menu to stderr, read a number from
+# stdin, and map it to the option via the pure pick. Either way the chosen option
+# is the ONLY thing on stdout (the prompt goes to stderr), so callers capture just
+# the choice. Returns nonzero on cancel / EOF / bad input, mirroring gum choose's
+# cancel exit so callers can `|| return` to go back.
+almanac_loop_ui_choose() {
+  local header="$1"
+  shift
+  local reply
+  if almanac_loop_ui_has_gum; then
+    printf '%s\n' "$@" | gum choose --header "$header"
+    return
+  fi
+  printf '%s\n' "$header" >&2
+  almanac_loop_ui_menu_render "$@" >&2
+  printf 'Select [1-%d]: ' "$#" >&2
+  read -r reply || return 1
+  almanac_loop_ui_menu_pick "$reply" "$@"
+}
+
+# Prompt for a free-text value under HEADER, with an optional DEFAULT ($2). With
+# gum: `gum input`. Without it: a plain `read` (empty input falls back to the
+# default). The value is echoed on stdout; the prompt goes to stderr.
+almanac_loop_ui_input() {
+  local header="$1"
+  local default="${2:-}"
+  local reply
+  if almanac_loop_ui_has_gum; then
+    if [ -n "$default" ]; then
+      gum input --header "$header" --value "$default"
+    else
+      gum input --header "$header"
+    fi
+    return
+  fi
+  if [ -n "$default" ]; then
+    printf '%s [%s]: ' "$header" "$default" >&2
+  else
+    printf '%s: ' "$header" >&2
+  fi
+  read -r reply || reply=""
+  [ -n "$reply" ] || reply="$default"
+  printf '%s\n' "$reply"
+}
+
+# Yes/no confirm of PROMPT. With gum: `gum confirm`. Without it: a plain `read`,
+# defaulting to yes on empty input to match gum confirm's affirmative-default
+# button. Returns 0 for yes, 1 for no (gum confirm's exit semantics), so callers
+# keep `gum confirm … || fallback` shape unchanged. Prompt goes to stderr.
+almanac_loop_ui_confirm() {
+  local prompt="$1"
+  local reply
+  if almanac_loop_ui_has_gum; then
+    gum confirm "$prompt"
+    return
+  fi
+  printf '%s [Y/n]: ' "$prompt" >&2
+  read -r reply || reply=""
+  case "$reply" in
+    n|N|no|NO|No) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
 # --- Worker health detection ---------------------------------------------------
 #
 # Classify a worker's health from progress signals so the dashboard can surface a
