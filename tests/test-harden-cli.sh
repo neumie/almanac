@@ -1043,6 +1043,99 @@ test_run_hitl_ship_stops_early() {
   echo "  PASS: HITL ship stops the loop early"
 }
 
+# --- Role config (per-role provider/model/effort) -----------------------------
+
+test_role_config_resolves_all_three_roles() {
+  local role out
+  # Every harden role resolves to a (provider, model, effort) triple, with
+  # Claude as the sensible default provider and the provider's own default
+  # model/effort (empty) unless tuned.
+  for role in conductor reviewer fixer; do
+    out="$(almanac_harden_role "$role")"
+    assert_contains "$out" $'provider\tclaude' "$role should default to the claude provider"
+    assert_contains "$out" $'model\t' "$role config should include a model field"
+    assert_contains "$out" $'effort\t' "$role config should include an effort field"
+  done
+  # An unknown role is rejected rather than silently resolved.
+  if almanac_harden_role bogus >/dev/null 2>&1; then
+    fail "almanac_harden_role should reject an unknown role"
+  fi
+  echo "  PASS: conductor, reviewer, and fixer each resolve to (provider, model, effort)"
+}
+
+test_role_config_mixes_providers_across_lenses() {
+  local sec corr
+  # A lens->provider map: two lenses resolve to two different providers in the
+  # same round, so model families can be mixed across reviewers.
+  sec="$(HARDEN_REVIEWER_SECURITY_PROVIDER=codex HARDEN_REVIEWER_CORRECTNESS_PROVIDER=claude \
+    almanac_harden_role reviewer security)"
+  corr="$(HARDEN_REVIEWER_SECURITY_PROVIDER=codex HARDEN_REVIEWER_CORRECTNESS_PROVIDER=claude \
+    almanac_harden_role reviewer correctness)"
+
+  assert_contains "$sec" $'provider\tcodex' "security lens should resolve to its codex provider"
+  assert_contains "$corr" $'provider\tclaude' "correctness lens should resolve to its claude provider"
+  echo "  PASS: reviewers mix providers across lenses within one round"
+}
+
+test_role_config_overrides_each_role_via_env() {
+  local cond fix rev
+  # Each role's config is overridable independently; one role's override must not
+  # bleed into another.
+  cond="$(HARDEN_CONDUCTOR_PROVIDER=codex HARDEN_FIXER_PROVIDER=claude almanac_harden_role conductor)"
+  fix="$(HARDEN_CONDUCTOR_PROVIDER=codex HARDEN_FIXER_PROVIDER=claude \
+    HARDEN_FIXER_MODEL=opus HARDEN_FIXER_EFFORT=high almanac_harden_role fixer)"
+  rev="$(HARDEN_REVIEWER_PROVIDER=codex almanac_harden_role reviewer)"
+
+  assert_contains "$cond" $'provider\tcodex' "conductor provider should honor its per-role override"
+  assert_contains "$fix" $'provider\tclaude' "fixer provider should honor its per-role override"
+  assert_contains "$fix" $'model\topus' "fixer model should honor its per-role override"
+  assert_contains "$fix" $'effort\thigh' "fixer effort should honor its per-role override"
+  assert_contains "$rev" $'provider\tcodex' "reviewer provider should honor its per-role override"
+  echo "  PASS: each role's (provider, model, effort) is overridable independently via env"
+}
+
+test_role_config_independent_of_host() {
+  local from_claude_host from_codex_host
+  # Resolution reads only HARDEN_* config, never a host marker, so launching from
+  # Claude Code vs Codex yields an identical tuple.
+  from_claude_host="$(CLAUDECODE=1 CLAUDE_CODE_ENTRYPOINT=cli almanac_harden_role conductor)"
+  from_codex_host="$(CODEX_SANDBOX=seatbelt CODEX_HOME=/tmp/codex almanac_harden_role conductor)"
+
+  [ "$from_claude_host" = "$from_codex_host" ] || \
+    fail "conductor resolution must be identical regardless of which host launched the run"
+  assert_contains "$from_claude_host" $'provider\tclaude' "host-independent resolution should still apply harden defaults"
+  echo "  PASS: role resolution is independent of the launching host"
+}
+
+test_ratify_open_threads_conductor_config_to_seam() {
+  local tmp ledger id
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  mkdir -p "$tmp/src"
+  printf '%s\n' "code" > "$tmp/src/app.js"
+
+  ledger="$(almanac_harden_ledger_path "$tmp" "src/app.js")"
+  mkdir -p "$(dirname "$ledger")"
+  SEAM_LOG="$tmp/seam.log"
+  : > "$SEAM_LOG"
+  # The execution seam IS the conductor running the demonstration; record the
+  # provider it is handed (arg 3) so the test proves the conductor config flows
+  # all the way to the execution point, not just into a log line.
+  almanac_harden_demo_reproduces() { printf '%s\n' "${3:-none}" >> "$SEAM_LOG"; return 1; }
+
+  id="$(almanac_harden_finding_id "correctness" "src/app.js:1" "real bug")"
+  almanac_harden_ledger_init "$ledger"
+  almanac_harden_ledger_append_entry "$ledger" "$id" "correctness" "high" \
+    "src/app.js:1" "real bug" "input X" "open" 1 "seed" >/dev/null
+
+  HARDEN_CONDUCTOR_PROVIDER=codex almanac_harden_ratify_open "$tmp" "src/app.js" 1
+
+  assert_file_contains "$SEAM_LOG" "codex" "ratify_open should hand the configured conductor provider to the execution seam"
+  # Restore the real seam so later tests are unaffected.
+  source "$ROOT/lib/harden-core.sh"
+  echo "  PASS: ratify_open threads the conductor provider to the execution seam"
+}
+
 echo "=== Harden CLI Tests ==="
 test_creates_draft_rubric_for_target_and_goal
 test_draft_rubric_includes_all_required_sections
@@ -1079,3 +1172,8 @@ test_round_runs_steps_in_sequence
 test_run_converges_and_advances_rounds
 test_run_caps_at_round_budget
 test_run_hitl_ship_stops_early
+test_role_config_resolves_all_three_roles
+test_role_config_mixes_providers_across_lenses
+test_role_config_overrides_each_role_via_env
+test_role_config_independent_of_host
+test_ratify_open_threads_conductor_config_to_seam

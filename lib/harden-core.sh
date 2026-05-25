@@ -12,6 +12,52 @@ if ! declare -F almanac_loop_agent_run >/dev/null 2>&1; then
   unset __harden_core_dir
 fi
 
+# --- Role config (per-role provider / model / effort) --------------------------
+#
+# Each harden role selects its own agent config:
+#   conductor - judges/ratifies findings and declares convergence
+#   reviewer  - one read-only reviewer per lens (lens -> provider map)
+#   fixer     - the single sequential write-capable fixer
+#
+# Resolution layers, most specific first, via the shared loop resolver:
+#   provider: HARDEN_<ROLE>[_<LENS>]_PROVIDER -> HARDEN_<ROLE>_PROVIDER
+#             -> HARDEN_PROVIDER -> claude (sensible default: Claude plays every role)
+#   model:    HARDEN_<ROLE>[_<LENS>]_MODEL    -> HARDEN_<ROLE>_MODEL
+#             -> HARDEN_MODEL -> "" (the provider's own default)
+#   effort:   HARDEN_<ROLE>[_<LENS>]_EFFORT   -> HARDEN_<ROLE>_EFFORT
+#             -> HARDEN_EFFORT -> "" (the provider's own default)
+#
+# Only reviewers consult the lens, so providers can be mixed across lenses in one
+# round; conductor and fixer are single-instance and ignore it. Resolution reads
+# ONLY HARDEN_* (and the shared loop env) — never any host marker — so the tuple
+# is identical whether the run was launched from Claude Code or Codex. Emits three
+# TSV rows (provider/model/effort); returns 2 on an unknown role.
+almanac_harden_role() {
+  local role="$1"
+  local lens="${2:-}"
+
+  case "$role" in
+    reviewer) ;;                 # reviewers map lens -> provider
+    conductor | fixer) lens="" ;; # single-instance roles ignore the lens
+    *) return 2 ;;
+  esac
+
+  almanac_loop_role_config "harden" "$role" "$lens" "claude" "" ""
+}
+
+# One field (provider | model | effort) of a harden role's resolved config, for
+# call sites that need a single value. Thin reader over almanac_harden_role so
+# harden's per-role defaults stay defined in exactly one place.
+almanac_harden_role_field() {
+  local role="$1"
+  local field="$2"
+  local lens="${3:-}"
+
+  # Consume all of almanac_harden_role's output (no early awk exit) so the
+  # producer never takes a SIGPIPE under `set -o pipefail`.
+  almanac_harden_role "$role" "$lens" | awk -F'\t' -v k="$field" '$1 == k { v = $2 } END { print v }'
+}
+
 almanac_harden_slug() {
   local raw="$1"
   local slug
@@ -603,13 +649,19 @@ almanac_harden_ledger_set_status() {
 
 # Execution seam: decide whether a finding's demonstration reproduces against the
 # target. Return 0 = reproduces (real defect, blocking), non-zero = does not
-# reproduce (opinion / stale). The default is conservative — without a real
-# executor wired it treats every demonstration as non-reproducing, so opinions
-# never silently gate the loop. The convergence-loop slice overrides this with a
-# conductor agent-runner call; tests override it to drive the decision paths.
+# reproduce (opinion / stale). This seam IS the conductor executing the
+# demonstration, so it receives the resolved conductor identity (provider, model,
+# effort) — the real executor (a conductor agent-runner call, deferred) runs the
+# demonstration through that provider. The default is conservative — without a
+# real executor wired it ignores the conductor args and treats every
+# demonstration as non-reproducing, so opinions never silently gate the loop.
+# Tests override this to drive the decision paths.
 almanac_harden_demo_reproduces() {
   local demonstration="$1"
   local target_path="${2:-}"
+  local conductor_provider="${3:-}"
+  local conductor_model="${4:-}"
+  local conductor_effort="${5:-}"
 
   return 1
 }
@@ -627,6 +679,10 @@ almanac_harden_demo_reproduces() {
 # also appends a falsifiable criterion to the rubric's `## Acceptance` — the bar
 # grows monotonically and visibly with every ratified defect. Notes and drops
 # never touch the rubric, so opinions cannot raise the bar.
+#
+# The trailing conductor (provider, model, effort) args (11th-13th) identify the
+# provider that executes the demonstration; they are passed straight to the
+# execution seam. Optional/backward-compatible — omit them to use the default.
 almanac_harden_ratify() {
   local path="$1"
   local id="$2"
@@ -638,12 +694,16 @@ almanac_harden_ratify() {
   local round="${8:-1}"
   local target_path="${9:-}"
   local rubric_path="${10:-}"
+  local conductor_provider="${11:-}"
+  local conductor_model="${12:-}"
+  local conductor_effort="${13:-}"
   local current_status reproduces status note
 
   almanac_harden_ledger_init "$path"
   current_status="$(almanac_harden_ledger_status "$path" "$id")"
 
-  if almanac_harden_demo_reproduces "$demonstration" "$target_path"; then
+  if almanac_harden_demo_reproduces "$demonstration" "$target_path" \
+      "$conductor_provider" "$conductor_model" "$conductor_effort"; then
     reproduces=1
   else
     reproduces=0
@@ -751,9 +811,9 @@ almanac_harden_fanout() {
   _info "Hardening $target — fanning out ${#lenses[@]} read-only reviewer(s)"
 
   for lens in "${lenses[@]}"; do
-    provider="$(almanac_loop_role_field "harden" "reviewer" "$lens" "provider" "claude")"
-    model="$(almanac_loop_role_field "harden" "reviewer" "$lens" "model" "")"
-    effort="$(almanac_loop_role_field "harden" "reviewer" "$lens" "effort" "")"
+    provider="$(almanac_harden_role_field "reviewer" "provider" "$lens")"
+    model="$(almanac_harden_role_field "reviewer" "model" "$lens")"
+    effort="$(almanac_harden_role_field "reviewer" "effort" "$lens")"
 
     worker_id="reviewer-$lens"
     prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-prompt.XXXXXX")"
@@ -932,9 +992,9 @@ $open
 INNER
   )"
 
-  provider="$(almanac_loop_role_field "harden" "fixer" "" "provider" "claude")"
-  model="$(almanac_loop_role_field "harden" "fixer" "" "model" "")"
-  effort="$(almanac_loop_role_field "harden" "fixer" "" "effort" "")"
+  provider="$(almanac_harden_role_field "fixer" "provider")"
+  model="$(almanac_harden_role_field "fixer" "model")"
+  effort="$(almanac_harden_role_field "fixer" "effort")"
 
   prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-fixer-prompt.XXXXXX")"
   result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-fixer-result.XXXXXX")"
@@ -1085,6 +1145,7 @@ almanac_harden_ratify_open() {
   local target="$2"
   local round="${3:-1}"
   local ledger_path rubric_path target_path open
+  local cond_provider cond_model cond_effort
   local id lens severity location claim demonstration
 
   case "$target" in
@@ -1098,10 +1159,18 @@ almanac_harden_ratify_open() {
   open="$(almanac_harden_ledger_open_blocking "$ledger_path")"
   [ -n "$open" ] || return 0
 
+  # The conductor is the role that ratifies findings by executing their
+  # demonstrations; resolve its (provider, model, effort) once and hand it to the
+  # execution seam for every finding this round.
+  cond_provider="$(almanac_harden_role_field "conductor" "provider")"
+  cond_model="$(almanac_harden_role_field "conductor" "model")"
+  cond_effort="$(almanac_harden_role_field "conductor" "effort")"
+
   while IFS=$'\t' read -r id lens severity location claim demonstration; do
     [ -n "$id" ] || continue
     almanac_harden_ratify "$ledger_path" "$id" "$lens" "$severity" \
-      "$location" "$claim" "$demonstration" "$round" "$target_path" "$rubric_path" >/dev/null
+      "$location" "$claim" "$demonstration" "$round" "$target_path" "$rubric_path" \
+      "$cond_provider" "$cond_model" "$cond_effort" >/dev/null
   done <<INNER
 $open
 INNER
@@ -1192,6 +1261,7 @@ almanac_harden_run() {
   local target="$2"
   local budget="${3:-${HARDEN_ROUND_BUDGET:-5}}"
   local ledger_path rubric_path round round_rc open_rows open_count acc verdict rc acc_label
+  local cond_provider cond_model cond_effort
 
   case "$budget" in
     ''|*[!0-9]*) _die "Round budget must be a positive integer: $budget" ;;
@@ -1200,6 +1270,13 @@ almanac_harden_run() {
 
   ledger_path="$(almanac_harden_ledger_path "$root" "$target")"
   rubric_path="$(almanac_harden_rubric_path "$root" "$target")"
+
+  # Announce the configured conductor — the provider judging findings this run —
+  # so the role config is visible to whoever is supervising.
+  cond_provider="$(almanac_harden_role_field "conductor" "provider")"
+  cond_model="$(almanac_harden_role_field "conductor" "model")"
+  cond_effort="$(almanac_harden_role_field "conductor" "effort")"
+  _info "Conductor: provider=$cond_provider${cond_model:+ model=$cond_model}${cond_effort:+ effort=$cond_effort}"
 
   round=0
   while :; do
