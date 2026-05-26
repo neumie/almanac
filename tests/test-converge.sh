@@ -783,6 +783,73 @@ GOAL_UPDATE: mutate"
   echo "  PASS: overseer parser handles verdicts and malformed input conservatively"
 }
 
+# Regression: the LLM frequently emits multi-line REASON / STEER paragraphs.
+# The original parser only captured the value text on the SAME line as KEY:,
+# dropping continuation lines and producing empty REASON / STEER. Observed in
+# the first --prompt converge run (overseer.log tick=1 showed empty REASON +
+# 'none' STEER even though the LLM was asked for both). The state-machine
+# parser must now capture multi-line values until the next KEY: marker.
+test_overseer_parse_captures_multi_line_values() {
+  # Multi-line REASON (two continuation lines, then STEER switches state)
+  almanac_converge_overseer_parse "VERDICT: CONTINUE
+REASON: Round 1 surveyed the codebase and found 8 friction points.
+The agent stalled at AskUserQuestion and applied none.
+Round 2 should pick the top finding and implement it.
+STEER: Implement finding #1 first: split cmd/converge.sh into a launcher
+front-end and a runner script, matching harden's shape.
+GOAL_UPDATE: unchanged"
+  assert_eq "CONTINUE" "$ALMANAC_CONVERGE_VERDICT" "multi-line parse keeps verdict"
+  case "$ALMANAC_CONVERGE_REASON" in
+    *"surveyed the codebase"*"applied none"*"pick the top finding"*) : ;;
+    *) fail "multi-line REASON should capture all continuation lines (got: '$ALMANAC_CONVERGE_REASON')" ;;
+  esac
+  case "$ALMANAC_CONVERGE_STEER" in
+    *"Implement finding #1"*"matching harden's shape"*) : ;;
+    *) fail "multi-line STEER should capture all continuation lines (got: '$ALMANAC_CONVERGE_STEER')" ;;
+  esac
+  assert_eq "unchanged" "$ALMANAC_CONVERGE_GOAL_UPDATE" "GOAL_UPDATE unchanged on multi-line REASON"
+
+  # Value-on-next-line shape: LLM puts the actual reason on the line AFTER
+  # the KEY: marker. Parser must still capture it.
+  almanac_converge_overseer_parse "VERDICT: CONTINUE
+REASON:
+Round 1 found 8 architectural friction points.
+STEER:
+focus on finding #1
+GOAL_UPDATE:
+unchanged"
+  case "$ALMANAC_CONVERGE_REASON" in
+    *"Round 1 found 8 architectural"*) : ;;
+    *) fail "REASON value on line after KEY: must parse (got: '$ALMANAC_CONVERGE_REASON')" ;;
+  esac
+  case "$ALMANAC_CONVERGE_STEER" in
+    *"focus on finding #1"*) : ;;
+    *) fail "STEER value on line after KEY: must parse (got: '$ALMANAC_CONVERGE_STEER')" ;;
+  esac
+  assert_eq "unchanged" "$ALMANAC_CONVERGE_GOAL_UPDATE" "GOAL_UPDATE value on next line still recognised as unchanged"
+
+  # Chatty VERDICT: token on its own line followed by extra preamble before
+  # REASON. The first non-empty line of the VERDICT field is the token.
+  almanac_converge_overseer_parse "VERDICT:
+CONVERGED
+Yes, this run has met its goal.
+REASON: nothing major remains
+STEER: none
+GOAL_UPDATE: unchanged"
+  assert_eq "CONVERGED" "$ALMANAC_CONVERGE_VERDICT" "VERDICT token on next line, with trailing chatter, still parses"
+
+  # Empty REASON (KEY: with truly nothing after, no continuation) → empty
+  # string is fine; conservative defaults still apply to the other fields.
+  almanac_converge_overseer_parse "VERDICT: CONTINUE
+REASON:
+STEER: none
+GOAL_UPDATE: unchanged"
+  assert_eq "CONTINUE" "$ALMANAC_CONVERGE_VERDICT" "empty REASON does not malform the verdict"
+  assert_eq "" "$ALMANAC_CONVERGE_REASON" "empty REASON remains empty (not a parse failure)"
+
+  echo "  PASS: overseer parser captures multi-line REASON/STEER + value-on-next-line"
+}
+
 test_overseer_agent_invoked_read_only_with_role_config() {
   local tmp args
   new_tmpdir
@@ -1197,6 +1264,7 @@ test_worker_agent_invoked_with_role_config
 test_structured_report_parser_accepts_worker_block
 test_overseer_prompt_embeds_goal_reports_commits_and_contract
 test_overseer_parse_verdicts_and_malformed_input
+test_overseer_parse_captures_multi_line_values
 test_overseer_agent_invoked_read_only_with_role_config
 test_overseer_converged_stops_loop_and_writes_convergence
 test_overseer_stop_marks_aborted

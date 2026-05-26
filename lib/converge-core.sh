@@ -266,7 +266,8 @@ EOF
 
 almanac_converge_overseer_parse() {
   local input="${1:-}"
-  local content line key_line raw_verdict="" raw_reason="" raw_steer="" raw_goal=""
+  local content line key_line current_key=""
+  local raw_verdict="" raw_reason="" raw_steer="" raw_goal=""
   local found_verdict=0 found_reason=0 found_steer=0 found_goal=0
 
   if [ -f "$input" ]; then
@@ -280,22 +281,50 @@ almanac_converge_overseer_parse() {
   ALMANAC_CONVERGE_STEER="none"
   ALMANAC_CONVERGE_GOAL_UPDATE="unchanged"
 
+  # State-machine line walker. Each KEY: prefix switches the current field;
+  # subsequent non-key lines append to whatever field is currently open. This
+  # lets the LLM emit either inline values (`REASON: blah`) or values on the
+  # next line (`REASON:\nblah`) or multi-line paragraphs that span until the
+  # next KEY: marker — all parse correctly. Before this fix the parser only
+  # captured the value text on the SAME line as KEY:, dropping continuation
+  # lines and producing empty REASON / STEER for any LLM that emitted
+  # paragraph-shaped values — the bug observed in the first --prompt converge
+  # run (REASON empty, STEER none in the overseer.log entry despite the LLM
+  # clearly being asked to produce both).
   while IFS= read -r line || [ -n "$line" ]; do
-    if [ "$found_goal" -eq 1 ]; then
-      raw_goal="${raw_goal}"$'\n'"${line}"
-      continue
-    fi
-
     key_line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//')"
     case "$key_line" in
-      VERDICT:*) found_verdict=1; raw_verdict="${key_line#VERDICT:}" ;;
-      REASON:*) found_reason=1; raw_reason="${key_line#REASON:}" ;;
-      STEER:*) found_steer=1; raw_steer="${key_line#STEER:}" ;;
+      VERDICT:*)
+        current_key="VERDICT"; found_verdict=1
+        raw_verdict="${key_line#VERDICT:}"
+        case "$raw_verdict" in " "*) raw_verdict="${raw_verdict# }" ;; esac
+        ;;
+      REASON:*)
+        current_key="REASON"; found_reason=1
+        raw_reason="${key_line#REASON:}"
+        case "$raw_reason" in " "*) raw_reason="${raw_reason# }" ;; esac
+        ;;
+      STEER:*)
+        current_key="STEER"; found_steer=1
+        raw_steer="${key_line#STEER:}"
+        case "$raw_steer" in " "*) raw_steer="${raw_steer# }" ;; esac
+        ;;
       GOAL_UPDATE:*)
-        found_goal=1
+        current_key="GOAL_UPDATE"; found_goal=1
         raw_goal="${key_line#GOAL_UPDATE:}"
-        case "$raw_goal" in
-          " "*) raw_goal="${raw_goal# }" ;;
+        case "$raw_goal" in " "*) raw_goal="${raw_goal# }" ;; esac
+        ;;
+      *)
+        # Continuation line — append to whichever field is currently open.
+        # Lines before the first KEY: marker (preamble noise) have current_key
+        # empty and are dropped, matching the prompt's "no preamble" contract.
+        # The original line (not the leading-whitespace-stripped key_line) is
+        # preserved so multi-line paragraphs keep their indentation if any.
+        case "$current_key" in
+          VERDICT)     raw_verdict="${raw_verdict}"$'\n'"${line}" ;;
+          REASON)      raw_reason="${raw_reason}"$'\n'"${line}" ;;
+          STEER)       raw_steer="${raw_steer}"$'\n'"${line}" ;;
+          GOAL_UPDATE) raw_goal="${raw_goal}"$'\n'"${line}" ;;
         esac
         ;;
     esac
@@ -306,6 +335,11 @@ almanac_converge_overseer_parse() {
     return 0
   fi
 
+  # VERDICT is always a single token. A chatty LLM may put the token on its own
+  # line and then ramble before REASON; the state-machine above will have
+  # accumulated those ramble lines into raw_verdict. Reduce to the first
+  # non-empty line so the case-match below still recognises the token.
+  raw_verdict="$(printf '%s\n' "$raw_verdict" | awk 'NF{print; exit}')"
   raw_verdict="$(almanac_converge_trim "$raw_verdict")"
   case "$raw_verdict" in
     CONVERGED|CONTINUE|STEER|STOP) ALMANAC_CONVERGE_VERDICT="$raw_verdict" ;;
