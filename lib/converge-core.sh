@@ -595,23 +595,31 @@ almanac_converge_run_worker() {
   local goal="$2"
   local exec_cmd="$3"
   local round="$4"
-  local provider model effort prompt_file result_file events_file rc
+  local provider model effort prompt_file result_file events_file plan_dir slug rc
 
   provider="$(almanac_converge_role_field "agent" "provider")"
   model="$(almanac_converge_role_field "agent" "model")"
   effort="$(almanac_converge_role_field "agent" "effort")"
+  slug="$(almanac_converge_slug "$goal")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
 
   prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-worker-prompt.XXXXXX")"
   result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-worker-result.XXXXXX")"
-  events_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-worker-events.XXXXXX")"
+  # Persistent per-round session log under the plan dir (mirrors ralph's
+  # docs/plans/<name>/ralph-codex-iteration-N.log). The full raw event stream
+  # tees here while the filtered agent-message text streams live to the
+  # terminal — operator sees progress, durable log is kept for forensics.
+  events_file="$plan_dir/converge-${provider}-iteration-${round}.log"
 
   almanac_converge_worker_prompt "$root" "$goal" "$exec_cmd" "$round" > "$prompt_file"
 
-  rc=0
-  almanac_loop_agent_capture "$provider" "$model" "$effort" "workspace-write" \
-    "$prompt_file" "$result_file" "$events_file" >/dev/null || rc=$?
+  _info "Converge round $round — exec-mode worker (provider=$provider, log: ${events_file#"$root"/})"
 
-  rm -f "$prompt_file" "$result_file" "$events_file"
+  rc=0
+  almanac_loop_agent_stream "$provider" "$model" "$effort" "workspace-write" \
+    "$prompt_file" "$result_file" "$events_file" merge-stderr || rc=$?
+
+  rm -f "$prompt_file" "$result_file"
   return "$rc"
 }
 
@@ -642,7 +650,10 @@ almanac_converge_run_worker_prompt() {
 
   prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-prompt.XXXXXX")"
   result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-result.XXXXXX")"
-  events_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-events.XXXXXX")"
+  # Persistent per-round session log under the plan dir (same shape as
+  # exec-mode + ralph's per-iteration logs). Streams live to terminal so the
+  # operator sees the agent working; tees the raw stream here for forensics.
+  events_file="$plan_dir/converge-${provider}-iteration-${round}.log"
 
   # Steer (one-shot): emitted by the overseer in the prior round, consumed and
   # removed here so the next overseer tick can re-emit if the issue persists.
@@ -658,9 +669,11 @@ almanac_converge_run_worker_prompt() {
     printf '%s\n' "$prompt"
   } > "$prompt_file"
 
+  _info "Converge round $round — prompt-mode worker (provider=$provider, log: ${events_file#"$root"/})"
+
   rc=0
-  (cd "$root" && almanac_loop_agent_capture "$provider" "$model" "$effort" "workspace-write" \
-    "$prompt_file" "$result_file" "$events_file") >/dev/null || rc=$?
+  (cd "$root" && almanac_loop_agent_stream "$provider" "$model" "$effort" "workspace-write" \
+    "$prompt_file" "$result_file" "$events_file" merge-stderr) || rc=$?
 
   # Auto-commit any worktree changes the agent left behind. A smart prompt may
   # have committed itself (worktree clean, nothing to do); a slash command like
@@ -694,7 +707,9 @@ almanac_converge_run_worker_prompt() {
     printf 'next:\n(driven by overseer / next-round prompt)\n'
   } >> "$log_file"
 
-  rm -f "$prompt_file" "$result_file" "$events_file"
+  # events_file is the persistent per-round session log under the plan dir —
+  # NOT removed here. prompt/result are still scratch.
+  rm -f "$prompt_file" "$result_file"
   return "$rc"
 }
 
