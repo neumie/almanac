@@ -41,10 +41,23 @@ ralph_register_run() {
 ralph_update_run_progress() {
   local round="$1"
   local summary="$2"
+  local qp status_file
 
   [ -n "$RALPH_RUN_ID" ] || return 0
 
   almanac_loop_update_run_progress "$PWD" "$RALPH_RUN_ID" "$round" "$summary" >/dev/null 2>&1 || true
+
+  # Best-effort queue progress (closed/total) so the hub also shows task-level
+  # progress alongside the iteration count. Skips silently when no queue is
+  # detectable, when gh isn't authed, or when the registry write fails.
+  if [ -n "${PRD_NAME:-}" ]; then
+    qp="$(ralph_queue_progress "$PRD_NAME" 2>/dev/null || true)"
+    if [ -n "$qp" ]; then
+      status_file="$(almanac_loop_run_status_file "$PWD" "$RALPH_RUN_ID" 2>/dev/null || true)"
+      [ -n "$status_file" ] && [ -f "$status_file" ] && \
+        almanac_loop_record_set "$status_file" "queue_progress=$qp" >/dev/null 2>&1 || true
+    fi
+  fi
 }
 
 # Stamp the run's launch config onto its registry blob (after register_run) so
@@ -89,4 +102,41 @@ ralph_finish_run() {
   trap - EXIT
   ralph_mark_run_finished "$exit_code"
   exit "$exit_code"
+}
+
+# Report "<closed>/<total>" for the ralph queue of PRD_NAME, or print nothing if
+# no queue is detectable. Detect order matches the prompt:
+#   1) local slice files at docs/plans/<prd>/issues/*.md — total = files,
+#      done = files whose frontmatter has "status: done"
+#   2) GitHub issues labelled ralph(<prd>) — closed + open via `gh issue list
+#      --search` (only when gh is on PATH; network failures fall through silent)
+# Best-effort throughout — every helper is guarded so a slow or broken gh / a
+# missing issues dir never sinks the calling iteration. Prints nothing on no
+# queue, so callers can `[ -n "$qp" ]` cheaply.
+ralph_queue_progress() {
+  local prd_name="$1"
+  local issues_dir="docs/plans/${prd_name}/issues"
+  local total done_count closed open
+
+  if [ -d "$issues_dir" ]; then
+    total=$(find "$issues_dir" -maxdepth 1 -name '*.md' -type f 2>/dev/null | wc -l | tr -d ' ')
+    if [ "${total:-0}" -gt 0 ]; then
+      done_count=$(grep -l '^status: done' "$issues_dir"/*.md 2>/dev/null | wc -l | tr -d ' ')
+      printf '%s/%s\n' "${done_count:-0}" "$total"
+      return 0
+    fi
+  fi
+
+  if command -v gh >/dev/null 2>&1; then
+    closed=$(gh issue list --search "label:\"ralph(${prd_name})\" state:closed" --limit 200 --json number -q 'length' 2>/dev/null || echo "")
+    open=$(gh issue list   --search "label:\"ralph(${prd_name})\" state:open"   --limit 200 --json number -q 'length' 2>/dev/null || echo "")
+    if [ -n "$closed" ] && [ -n "$open" ]; then
+      total=$((closed + open))
+      if [ "$total" -gt 0 ]; then
+        printf '%s/%s\n' "$closed" "$total"
+        return 0
+      fi
+    fi
+  fi
+  return 0
 }

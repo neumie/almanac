@@ -41,7 +41,7 @@ fi
 almanac_loop_record_fields() {
   printf '%s\n' \
     id type target pid status_file started_at status finished_at round summary failure_reason \
-    provider model effort iterations oversee lenses rounds
+    provider model effort iterations oversee lenses rounds queue_progress
 }
 
 # True when NAME is a canonical run-status field. Lets record_set reject a typo
@@ -594,7 +594,7 @@ almanac_loop_hub_render() {
   local which="$2"
   local limit="${3:-10}"
   local rows id type target pid status_rel started status
-  local blob round summary finished detail glyph live count reason_field display
+  local blob round summary finished detail glyph live count reason_field display queue
 
   rows="$(almanac_loop_list_runs "$root")" || return 1
   count=0
@@ -639,6 +639,7 @@ almanac_loop_hub_render() {
     blob="$(almanac_loop_run_status_file "$root" "$id")"
     round="$(almanac_loop_status_field "$blob" "round" 2>/dev/null || true)"
     summary="$(almanac_loop_status_field "$blob" "summary" 2>/dev/null || true)"
+    queue="$(almanac_loop_status_field "$blob" "queue_progress" 2>/dev/null || true)"
     live="running"
     if almanac_loop_run_is_stale "$root" "$id"; then
       live="stale"
@@ -647,6 +648,7 @@ almanac_loop_hub_render() {
     detail=""
     if [ -n "$round" ]; then detail="round $round"; fi
     if [ -n "$summary" ]; then detail="${detail:+$detail  }$summary"; fi
+    if [ -n "$queue" ]; then detail="${detail:+$detail  }queue $queue"; fi
     if [ -z "$detail" ]; then detail="—"; fi
     printf '%s  %s  %s  %s  %s  [%s]\n' "$glyph" "$live" "$type" "$target" "$detail" "$id"
     count=$((count + 1))
@@ -766,7 +768,7 @@ almanac_loop_run_detail() {
   local root="$1"
   local run_id="$2"
   local status_file id type target status round summary started finished live glyph failure_reason
-  local provider model effort iterations oversee lenses rounds
+  local provider model effort iterations oversee lenses rounds queue_progress
 
   status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
   [ -f "$status_file" ] || return 1
@@ -787,6 +789,7 @@ almanac_loop_run_detail() {
   oversee="$(almanac_loop_status_field "$status_file" "oversee" || true)"
   lenses="$(almanac_loop_status_field "$status_file" "lenses" || true)"
   rounds="$(almanac_loop_status_field "$status_file" "rounds" || true)"
+  queue_progress="$(almanac_loop_status_field "$status_file" "queue_progress" || true)"
 
   live="$status"
   if [ "$status" = "running" ] && almanac_loop_run_is_stale "$root" "$run_id"; then
@@ -811,6 +814,7 @@ almanac_loop_run_detail() {
   [ -n "$oversee" ]    && printf 'oversee: %s\n' "$oversee"
   [ -n "$lenses" ]     && printf 'lenses: %s\n' "$lenses"
   [ -n "$rounds" ]     && printf 'rounds: %s\n' "$rounds"
+  [ -n "$queue_progress" ] && printf 'queue: %s\n' "$queue_progress"
   return 0
 }
 

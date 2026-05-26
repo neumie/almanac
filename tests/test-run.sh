@@ -63,7 +63,7 @@ test_record_fields_is_canonical_schema() {
   local expected actual
   expected=$(printf '%s\n' \
     id type target pid status_file started_at status finished_at round summary failure_reason \
-    provider model effort iterations oversee lenses rounds)
+    provider model effort iterations oversee lenses rounds queue_progress)
   actual="$(almanac_loop_record_fields)"
   assert_eq "$expected" "$actual" "record_fields must be the canonical run-status schema, in order"
   echo "  PASS: record_fields is the canonical schema"
