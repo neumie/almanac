@@ -1,6 +1,6 @@
 ---
 title: Overseer goal mutation with audit log
-status: open
+status: done
 type: AFK
 blocked-by: [04-overseer-verdict-steer-stop]
 user-stories: [9]
@@ -14,27 +14,27 @@ This is the slice that delivers user story 9: a steerable goal that evolves visi
 
 ## Acceptance criteria
 
-- [ ] On overseer verdict, if `GOAL_UPDATE` is not `unchanged`:
-  - [ ] The new content is written to `goal.md` (full replace; not a diff/patch — the overseer is responsible for outputting the complete new goal)
-  - [ ] An entry is appended to `goal.history.log` with the exact format:
+- [x] On overseer verdict, if `GOAL_UPDATE` is not `unchanged`:
+  - [x] The new content is written to `goal.md` (full replace; not a diff/patch — the overseer is responsible for outputting the complete new goal)
+  - [x] An entry is appended to `goal.history.log` with the exact format:
     ```
     ===== tick=<N> ts=<ISO> overseer=<provider> =====
     REASON: <verdict.reason copied verbatim>
     --- DIFF ---
     <unified diff of old goal.md → new goal.md>
     ```
-- [ ] If `GOAL_UPDATE` equals `unchanged` (or is missing — conservative parse from slice 04), `goal.md` is **untouched** and `goal.history.log` is **not** appended.
-- [ ] The diff is generated via `diff -u <old> <new>` (POSIX standard); if `diff` is absent, the entry omits `--- DIFF ---` and includes the full new content as `--- AFTER ---` (graceful degrade — almanac's zero-dependency promise).
-- [ ] `overseer.log` records the goal mutation tick with a one-line summary: `[tick=<N>] goal updated: <first 80 chars of new goal.md>`.
-- [ ] Worker iteration prompt (slice 03) re-reads `goal.md` at the start of every round, so the mutated goal takes effect on the next round with zero plumbing — verify in tests by asserting the prompt of round N+1 contains the new goal text.
-- [ ] `tests/test-converge.sh` adds:
-  - [ ] `GOAL_UPDATE: <new text>` overwrites `goal.md`
-  - [ ] `GOAL_UPDATE: unchanged` leaves `goal.md` byte-identical
-  - [ ] `goal.history.log` entry format matches the schema above (header + REASON + DIFF)
-  - [ ] Successive goal updates accumulate in `goal.history.log` in chronological order
-  - [ ] Round N+1's worker prompt contains the new goal text (end-to-end propagation)
-  - [ ] `diff` command absence falls back gracefully (mock $PATH; assert `--- AFTER ---` block instead of `--- DIFF ---`)
-- [ ] `tests/test-structure.sh` and `tests/test-skills.sh` stay green.
+- [x] If `GOAL_UPDATE` equals `unchanged` (or is missing — conservative parse from slice 04), `goal.md` is **untouched** and `goal.history.log` is **not** appended.
+- [x] The diff is generated via `diff -u <old> <new>` (POSIX standard); if `diff` is absent, the entry omits `--- DIFF ---` and includes the full new content as `--- AFTER ---` (graceful degrade — almanac's zero-dependency promise).
+- [x] `overseer.log` records the goal mutation tick with a one-line summary: `[tick=<N>] goal updated: <first 80 chars of new goal.md>`.
+- [x] Worker iteration prompt (slice 03) re-reads `goal.md` at the start of every round, so the mutated goal takes effect on the next round with zero plumbing — verify in tests by asserting the prompt of round N+1 contains the new goal text.
+- [x] `tests/test-converge.sh` adds:
+  - [x] `GOAL_UPDATE: <new text>` overwrites `goal.md`
+  - [x] `GOAL_UPDATE: unchanged` leaves `goal.md` byte-identical
+  - [x] `goal.history.log` entry format matches the schema above (header + REASON + DIFF)
+  - [x] Successive goal updates accumulate in `goal.history.log` in chronological order
+  - [x] Round N+1's worker prompt contains the new goal text (end-to-end propagation)
+  - [x] `diff` command absence falls back gracefully (mock $PATH; assert `--- AFTER ---` block instead of `--- DIFF ---`)
+- [x] `tests/test-structure.sh` and `tests/test-skills.sh` stay green.
 
 ## Notes
 
@@ -43,3 +43,7 @@ This is the slice that delivers user story 9: a steerable goal that evolves visi
 - The first goal (from `--goal` at launch) is **not** logged to `goal.history.log` — that file records *mutations*, and the initial value is the baseline. The initial `goal.md` content IS the baseline.
 - Be careful with very long `GOAL_UPDATE` values from the overseer — bound the parser at slice 04 to handle multi-line content (the verdict format already allows it since `GOAL_UPDATE` is the last field; everything after the `GOAL_UPDATE:` marker through EOF is the content).
 - An overseer that mutates goal AND emits STEER in the same tick: apply both. The next round sees the new goal AND the `.converge-steer` directive. This is fine — they're orthogonal handles on the next round.
+
+## Progress
+
+- 2026-05-26: Wired GOAL_UPDATE application, goal.history audit diffs/fallbacks, overseer summaries, and propagation tests - fulfills criteria 1, 2, 3, 4, 5, 6, 7.

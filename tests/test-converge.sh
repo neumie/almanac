@@ -625,7 +625,7 @@ REASON: bogus
 STEER: do bad thing
 GOAL_UPDATE: mutate"
   assert_eq "CONTINUE" "$ALMANAC_CONVERGE_VERDICT" "invalid verdict should continue"
-  assert_eq "unchanged" "$ALMANAC_CONVERGE_GOAL_UPDATE" "invalid verdict should not mutate goal in slice 04"
+  assert_eq "unchanged" "$ALMANAC_CONVERGE_GOAL_UPDATE" "invalid verdict should not mutate goal"
 
   echo "  PASS: overseer parser handles verdicts and malformed input conservatively"
 }
@@ -710,11 +710,11 @@ GOAL_UPDATE: new goal text for later slice" \
     "STEER verdict should write .converge-steer"
   assert_file_contains "$tmp/docs/plans/converge/steer-goal/overseer.log" \
     "GOAL_UPDATE: new goal text for later slice" \
-    "slice 04 should log GOAL_UPDATE without applying it"
-  assert_file_contains "$tmp/docs/plans/converge/steer-goal/goal.md" "Steer Goal" \
-    "slice 04 should not mutate goal.md"
+    "overseer log should record raw GOAL_UPDATE"
+  assert_file_contains "$tmp/docs/plans/converge/steer-goal/goal.md" "new goal text for later slice" \
+    "STEER verdict should still apply goal mutation"
 
-  echo "  PASS: STEER verdict writes directive and logs inert GOAL_UPDATE"
+  echo "  PASS: STEER verdict writes directive and applies GOAL_UPDATE"
 }
 
 test_overseer_continue_writes_no_signal() {
@@ -760,6 +760,133 @@ test_oversee_every_controls_cadence() {
   echo "  PASS: --oversee-every controls overseer cadence"
 }
 
+test_goal_update_overwrites_goal_and_records_history() {
+  local tmp plan history
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  FAKE_CONVERGE_OVERSEER_RESPONSE="VERDICT: CONTINUE
+REASON: narrow the scope
+STEER: none
+GOAL_UPDATE: New goal line 1
+New goal line 2" \
+    run_converge "$tmp" --goal "Mutable Goal" --exec "true" --rounds 1 >/dev/null
+
+  plan="$tmp/docs/plans/converge/mutable-goal"
+  history="$plan/goal.history.log"
+
+  assert_eq $'New goal line 1\nNew goal line 2' "$(cat "$plan/goal.md")" \
+    "GOAL_UPDATE should replace goal.md with complete new content"
+  assert_file_contains "$history" "===== tick=1 ts=" "goal history should include tick header"
+  assert_file_contains "$history" "overseer=codex" "goal history should include overseer provider"
+  assert_file_contains "$history" "REASON: narrow the scope" "goal history should copy overseer reason"
+  assert_file_contains "$history" "--- DIFF ---" "goal history should include diff marker"
+  assert_file_contains "$history" "-Mutable Goal" "diff should include old goal"
+  assert_file_contains "$history" "+New goal line 1" "diff should include new goal"
+  assert_file_contains "$plan/overseer.log" "[tick=1] goal updated: New goal line 1 New goal line 2" \
+    "overseer log should summarize goal mutation"
+
+  echo "  PASS: GOAL_UPDATE overwrites goal.md and appends history diff"
+}
+
+test_goal_update_unchanged_leaves_goal_and_history_untouched() {
+  local tmp plan
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  FAKE_CONVERGE_OVERSEER_RESPONSE="VERDICT: CONTINUE
+REASON: keep as is
+STEER: none
+GOAL_UPDATE: unchanged" \
+    run_converge "$tmp" --goal "Stable Goal" --exec "true" --rounds 1 >/dev/null
+
+  plan="$tmp/docs/plans/converge/stable-goal"
+  assert_eq "Stable Goal" "$(cat "$plan/goal.md")" \
+    "GOAL_UPDATE unchanged should leave goal.md untouched"
+  [ ! -s "$plan/goal.history.log" ] || fail "GOAL_UPDATE unchanged should not append history"
+
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  FAKE_CONVERGE_OVERSEER_RESPONSE="VERDICT: CONTINUE
+REASON: missing update stays conservative
+STEER: none" \
+    run_converge "$tmp" --goal "Missing Update Goal" --exec "true" --rounds 1 >/dev/null
+
+  plan="$tmp/docs/plans/converge/missing-update-goal"
+  assert_eq "Missing Update Goal" "$(cat "$plan/goal.md")" \
+    "missing GOAL_UPDATE should leave goal.md untouched"
+  [ ! -s "$plan/goal.history.log" ] || fail "missing GOAL_UPDATE should not append history"
+
+  echo "  PASS: unchanged or missing GOAL_UPDATE is a no-op"
+}
+
+test_goal_history_accumulates_successive_updates() {
+  local tmp plan history
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_converge_scaffold "$tmp" "Accumulating Goal"
+  almanac_converge_apply_goal_update "$tmp" "Accumulating Goal" 1 "codex" "first reason" "first evolved goal"
+  almanac_converge_apply_goal_update "$tmp" "Accumulating Goal" 2 "codex" "second reason" "second evolved goal"
+
+  plan="$tmp/docs/plans/converge/accumulating-goal"
+  history="$plan/goal.history.log"
+
+  assert_eq "2" "$(grep -c '^===== tick=' "$history")" \
+    "successive goal updates should append two history entries"
+  assert_contains "$(awk '/^===== tick=1/{print; exit}' "$history")" "tick=1" \
+    "first history entry should be first chronologically"
+  assert_file_contains "$history" "REASON: first reason" "history should include first reason"
+  assert_file_contains "$history" "REASON: second reason" "history should include second reason"
+  assert_file_contains "$plan/goal.md" "second evolved goal" "last goal update should win"
+
+  echo "  PASS: successive goal updates accumulate chronologically"
+}
+
+test_mutated_goal_reaches_next_worker_prompt() {
+  local tmp prompt
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  FAKE_CONVERGE_OVERSEER_RESPONSE="VERDICT: CONTINUE
+REASON: next worker needs narrower goal
+STEER: none
+GOAL_UPDATE: Mutated goal for round two" \
+    run_converge "$tmp" --goal "Prompt Propagation" --exec "true" --rounds 2 >/dev/null
+
+  prompt="$(cat "$tmp/.almanac/test-worker-prompts/worker-tick-2.md")"
+  assert_contains "$prompt" "Mutated goal for round two" \
+    "round N+1 worker prompt should read mutated goal.md"
+
+  echo "  PASS: mutated goal propagates to next worker prompt"
+}
+
+test_goal_history_falls_back_when_diff_fails() {
+  local tmp fakebin plan history
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  fakebin="$tmp/fakebin"
+  mkdir -p "$fakebin"
+  cat > "$fakebin/diff" <<'EOF'
+#!/usr/bin/env bash
+exit 127
+EOF
+  chmod +x "$fakebin/diff"
+
+  almanac_converge_scaffold "$tmp" "Fallback Goal"
+  PATH="$fakebin:$PATH" almanac_converge_apply_goal_update "$tmp" "Fallback Goal" 1 "codex" "diff unavailable" "fallback evolved goal"
+
+  plan="$tmp/docs/plans/converge/fallback-goal"
+  history="$plan/goal.history.log"
+
+  assert_not_contains "$(cat "$history")" "--- DIFF ---" "diff fallback should omit diff marker"
+  assert_file_contains "$history" "--- AFTER ---" "diff fallback should include after marker"
+  assert_file_contains "$history" "fallback evolved goal" "diff fallback should include full new goal"
+
+  echo "  PASS: goal history falls back when diff command fails"
+}
+
 test_cli_requires_goal_and_exec
 test_plan_dir_scaffold_and_exec_smoke
 test_registry_records_converge_run_done
@@ -778,6 +905,11 @@ test_overseer_steer_writes_directive
 test_overseer_continue_writes_no_signal
 test_no_oversee_skips_overseer_agent
 test_oversee_every_controls_cadence
+test_goal_update_overwrites_goal_and_records_history
+test_goal_update_unchanged_leaves_goal_and_history_untouched
+test_goal_history_accumulates_successive_updates
+test_mutated_goal_reaches_next_worker_prompt
+test_goal_history_falls_back_when_diff_fails
 test_round_count_exactness
 test_default_round_budget_and_env_override
 test_diff_rounds_commit_with_converge_prefix

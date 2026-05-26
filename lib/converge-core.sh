@@ -231,14 +231,14 @@ $reports
 $commits
 ===== END RECENT CONVERGE COMMITS =====
 
-Output exactly four lines with no preamble:
+Output these fields in order with no preamble:
 VERDICT: <CONVERGED|CONTINUE|STEER|STOP>
 REASON: <one paragraph>
 STEER: <one paragraph, or 'none'>
 GOAL_UPDATE: <new goal.md content, or 'unchanged'>
 
 Be conservative. Malformed output is treated as CONTINUE with no steering and no
-goal update. GOAL_UPDATE is logged in this slice but not applied to goal.md.
+goal update. GOAL_UPDATE may span multiple lines because it is the final field.
 EOF
 }
 
@@ -341,6 +341,61 @@ almanac_converge_write_convergence() {
   } > "$plan_dir/convergence.md"
 }
 
+almanac_converge_goal_summary() {
+  printf '%s' "$1" | tr '\n' ' ' | cut -c 1-80
+}
+
+almanac_converge_apply_goal_update() {
+  local root="$1"
+  local goal="$2"
+  local round="$3"
+  local provider="$4"
+  local reason="$5"
+  local new_goal="$6"
+  local plan_dir goal_file history_file log_file ts old_goal old_file new_file diff_output diff_status summary
+
+  plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
+  goal_file="$plan_dir/goal.md"
+  history_file="$plan_dir/goal.history.log"
+  log_file="$plan_dir/overseer.log"
+  ts="$(almanac_loop_now_utc)"
+  old_goal=""
+  [ -f "$goal_file" ] && old_goal="$(cat "$goal_file")"
+
+  old_file="$plan_dir/.goal.old.$$"
+  new_file="$plan_dir/.goal.new.$$"
+  printf '%s\n' "$old_goal" > "$old_file"
+  printf '%s\n' "$new_goal" > "$new_file"
+
+  diff_output=""
+  diff_status=127
+  if command -v diff >/dev/null 2>&1; then
+    if diff_output="$(diff -u "$old_file" "$new_file" 2>/dev/null)"; then
+      diff_status=0
+    else
+      diff_status=$?
+    fi
+  fi
+
+  {
+    printf '===== tick=%s ts=%s overseer=%s =====\n' "$round" "$ts" "$provider"
+    printf 'REASON: %s\n' "$reason"
+    if [ "$diff_status" -le 1 ]; then
+      printf -- '--- DIFF ---\n'
+      printf '%s\n' "$diff_output"
+    else
+      printf -- '--- AFTER ---\n'
+      printf '%s\n' "$new_goal"
+    fi
+  } >> "$history_file"
+
+  printf '%s\n' "$new_goal" > "$goal_file"
+  rm -f "$old_file" "$new_file"
+
+  summary="$(almanac_converge_goal_summary "$new_goal")"
+  printf '[tick=%s] goal updated: %s\n' "$round" "$summary" >> "$log_file"
+}
+
 almanac_converge_run_finalize() {
   local root="$1"
   local run_id="$2"
@@ -429,6 +484,11 @@ almanac_converge_run_overseer() {
     printf 'STEER: %s\n' "$ALMANAC_CONVERGE_STEER"
     printf 'GOAL_UPDATE: %s\n' "$ALMANAC_CONVERGE_GOAL_UPDATE"
   } >> "$log_file"
+
+  if [ "$ALMANAC_CONVERGE_GOAL_UPDATE" != "unchanged" ]; then
+    almanac_converge_apply_goal_update "$root" "$goal" "$round" "$provider" \
+      "$ALMANAC_CONVERGE_REASON" "$ALMANAC_CONVERGE_GOAL_UPDATE"
+  fi
 
   case "$ALMANAC_CONVERGE_VERDICT" in
     CONVERGED|STOP)
