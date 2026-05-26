@@ -29,7 +29,7 @@ Run before scoring. Build a mental model of what the directory actually does.
 
 ## Phase 2: Score Against Rubrics
 
-Use the context scan as ground truth. See `${CLAUDE_SKILL_DIR}/references/best-practices.md` for detailed writing guidance.
+Use the context scan as ground truth. See `~/.claude/skills/almanac/agents-md-audit/references/best-practices.md` for detailed writing guidance.
 
 ### Signal-to-Noise (25 pts)
 

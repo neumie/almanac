@@ -17,7 +17,7 @@ metadata:
 
 **Bad tests** are coupled to implementation. They mock internal collaborators, test private methods, or verify through external means (like querying a database directly instead of using the interface). The warning sign: your test breaks when you refactor, but behavior hasn't changed. If you rename an internal function and tests fail, those tests were testing implementation, not behavior.
 
-See `${CLAUDE_SKILL_DIR}/references/tests.md` for examples and `${CLAUDE_SKILL_DIR}/references/mocking.md` for mocking guidelines.
+See `~/.claude/skills/almanac/tdd/references/tests.md` for examples and `~/.claude/skills/almanac/tdd/references/mocking.md` for mocking guidelines.
 
 ## Anti-Pattern: Horizontal Slices
 
@@ -54,8 +54,8 @@ Before writing any code:
 
 - [ ] Confirm with user what interface changes are needed
 - [ ] Confirm with user which behaviors to test (prioritize)
-- [ ] Identify opportunities for deep modules — see `${CLAUDE_SKILL_DIR}/references/deep-modules.md`
-- [ ] Design interfaces for testability — see `${CLAUDE_SKILL_DIR}/references/interface-design.md`
+- [ ] Identify opportunities for deep modules — see `~/.claude/skills/almanac/tdd/references/deep-modules.md`
+- [ ] Design interfaces for testability — see `~/.claude/skills/almanac/tdd/references/interface-design.md`
 - [ ] List the behaviors to test (not implementation steps)
 - [ ] Get user approval on the plan
 
@@ -92,7 +92,7 @@ Rules:
 
 ### 4. Refactor
 
-After all tests pass, look for refactor candidates — see `${CLAUDE_SKILL_DIR}/references/refactoring.md`:
+After all tests pass, look for refactor candidates — see `~/.claude/skills/almanac/tdd/references/refactoring.md`:
 
 - [ ] Extract duplication
 - [ ] Deepen modules (move complexity behind simple interfaces)

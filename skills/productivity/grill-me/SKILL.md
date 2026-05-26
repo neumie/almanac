@@ -58,7 +58,7 @@ mkdir -p docs/plans/<name>
 
 After each decision is resolved, update `docs/plans/<name>/brief.md` immediately. Don't batch — capture as you go.
 
-Use the format in `${CLAUDE_SKILL_DIR}/references/brief-format.md`.
+Use the format in `~/.claude/skills/almanac/grill-me/references/brief-format.md`.
 
 ## Finishing
 

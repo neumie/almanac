@@ -35,7 +35,7 @@ Spend disproportionate effort here. **Be aggressive. Be creative. Refuse to give
 7. **Property / fuzz loop.** If bug is "sometimes wrong output", run 1000 random inputs and look for failure mode.
 8. **Bisection harness.** If bug appeared between two known states (commit, dataset, version), automate "boot at state X, check, repeat" so you can `git bisect run` it.
 9. **Differential loop.** Run same input through old-version vs new-version (or two configs) and diff outputs.
-10. **HITL bash script.** Last resort. If human must click, drive _them_ with `${CLAUDE_SKILL_DIR}/scripts/hitl-loop.template.sh` so loop is still structured. Captured output feeds back to you.
+10. **HITL bash script.** Last resort. If human must click, drive _them_ with `~/.claude/skills/almanac/diagnose/scripts/hitl-loop.template.sh` so loop is still structured. Captured output feeds back to you.
 
 Build the right feedback loop → bug is 90% fixed.
 

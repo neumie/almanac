@@ -52,9 +52,9 @@ If the current branch doesn't already match `<type>/<description>` pattern (e.g.
 
 Load and follow the reference file for the assessed tier:
 
-- **Trivial (4-5):** `${CLAUDE_SKILL_DIR}/references/trivial-execution.md`
-- **Moderate (6-8):** `${CLAUDE_SKILL_DIR}/references/moderate-execution.md`
-- **Complex (9-12):** `${CLAUDE_SKILL_DIR}/references/complex-execution.md`
+- **Trivial (4-5):** `~/.claude/skills/almanac/task-start/references/trivial-execution.md`
+- **Moderate (6-8):** `~/.claude/skills/almanac/task-start/references/moderate-execution.md`
+- **Complex (9-12):** `~/.claude/skills/almanac/task-start/references/complex-execution.md`
 
 ## Tier Upgrade
 
