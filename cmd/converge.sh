@@ -11,7 +11,7 @@ usage() {
 
 GOAL=""
 EXEC_CMD=""
-ROUNDS="1"
+ROUNDS="${CONVERGE_ROUND_BUDGET:-10}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
