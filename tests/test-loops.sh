@@ -44,16 +44,30 @@ test_dispatch_rejects_unknown_verb() {
 }
 
 test_signal_file_control_contract() {
-  assert_eq ".ralph-stop"   "$(almanac_loop_adapter_call ralph signal_file stop)"   "ralph stop file basename"
-  assert_eq ".ralph-steer"  "$(almanac_loop_adapter_call ralph signal_file steer)"  "ralph steer file basename"
-  assert_eq ".harden-stop"  "$(almanac_loop_adapter_call harden signal_file stop)"  "harden stop file basename"
-  assert_eq ".harden-steer" "$(almanac_loop_adapter_call harden signal_file steer)" "harden steer file basename"
-  assert_eq ".converge-stop" "$(almanac_loop_adapter_call converge signal_file stop)" "converge stop file basename"
-  assert_eq ".converge-steer" "$(almanac_loop_adapter_call converge signal_file steer)" "converge steer file basename"
+  # The control contract is the resolved signal-file (adapter override OR default
+  # convention from lib/loops.sh). Adapters that follow the standard
+  # `.${name}-${kind}` pattern need not define signal_file at all — the default
+  # provides it. Test at the public resolver, not the adapter, so deleting the
+  # three identical adapter functions doesn't break this surface.
+  assert_eq ".ralph-stop"   "$(almanac_loop_signal_file ralph stop)"   "ralph stop file basename"
+  assert_eq ".ralph-steer"  "$(almanac_loop_signal_file ralph steer)"  "ralph steer file basename"
+  assert_eq ".harden-stop"  "$(almanac_loop_signal_file harden stop)"  "harden stop file basename"
+  assert_eq ".harden-steer" "$(almanac_loop_signal_file harden steer)" "harden steer file basename"
+  assert_eq ".converge-stop" "$(almanac_loop_signal_file converge stop)" "converge stop file basename"
+  assert_eq ".converge-steer" "$(almanac_loop_signal_file converge steer)" "converge steer file basename"
 
   local rc=0
-  almanac_loop_adapter_call ralph signal_file bogus >/dev/null 2>&1 || rc=$?
+  almanac_loop_signal_file ralph bogus >/dev/null 2>&1 || rc=$?
   [ "$rc" -ne 0 ] || fail "an unknown signal kind should be rejected"
+
+  rc=0
+  almanac_loop_signal_file bogus stop >/dev/null 2>&1 || rc=$?
+  [ "$rc" -ne 0 ] || fail "an unknown loop name should be rejected"
+
+  # The default applies to a hypothetical new loop without writing a single
+  # signal_file function — this is the deepening claim under test.
+  assert_eq ".future-stop"  "$(almanac_loop_default_signal_file future stop)"  "default signal file applies to any loop name"
+  assert_eq ".future-steer" "$(almanac_loop_default_signal_file future steer)" "default signal file applies to any loop name"
   echo "  PASS: signal_file control contract"
 }
 

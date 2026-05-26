@@ -37,21 +37,6 @@ almanac_converge_plan_dir() {
   printf '%s/docs/plans/converge/%s\n' "$root" "$slug"
 }
 
-# Per-loop control-file path: returns the absolute path to converge's stop or
-# steer file under BASE (typically the repo root, sometimes the plan dir for the
-# user-facing stop helper). Routes the basename through the loop adapter
-# (lib/loops/converge.sh) via almanac_loop_run_signal_file, so the `.converge-…`
-# literal is owned in one place — converge-core never embeds it. Returns 1 when
-# the adapter doesn't recognise the kind, matching almanac_harden_control_file.
-almanac_converge_control_file() {
-  local base="$1"
-  local kind="$2"
-  local name
-
-  name="$(almanac_loop_run_signal_file converge "$kind")" || return 1
-  printf '%s/%s\n' "$base" "$name"
-}
-
 almanac_converge_scaffold() {
   local root="$1"
   local goal="$2"
@@ -123,7 +108,7 @@ almanac_converge_worker_prompt() {
   slug="$(almanac_loop_slug "$goal")"
   plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
   rel_plan="${plan_dir#"$root"/}"
-  steer_file="$(almanac_converge_control_file "$root" steer)"
+  steer_file="$(almanac_loop_run_control_file converge "$root" steer)"
 
   almanac_converge_ensure_prompt_template "$root" "$goal"
 
@@ -545,8 +530,8 @@ almanac_converge_stop() {
 
   plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
   [ -d "$plan_dir" ] || return 1
-  root_stop="$(almanac_converge_control_file "$root" stop)"
-  plan_stop="$(almanac_converge_control_file "$plan_dir" stop)"
+  root_stop="$(almanac_loop_run_control_file converge "$root" stop)"
+  plan_stop="$(almanac_loop_run_control_file converge "$plan_dir" stop)"
   printf 'stop requested via almanac converge: %s\n' "$slug" > "$root_stop"
   printf 'stop requested via almanac converge: %s\n' "$slug" > "$plan_stop"
 }
@@ -747,7 +732,7 @@ almanac_converge_run_worker_prompt() {
   slug="$(almanac_loop_slug "$goal")"
   plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
   log_file="$plan_dir/agent-reports.log"
-  steer_path="$(almanac_converge_control_file "$root" steer)"
+  steer_path="$(almanac_loop_run_control_file converge "$root" steer)"
 
   prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-prompt.XXXXXX")"
   result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-result.XXXXXX")"
@@ -860,11 +845,11 @@ almanac_converge_run_overseer() {
 
   case "$ALMANAC_CONVERGE_VERDICT" in
     CONVERGED|STOP)
-      : > "$(almanac_converge_control_file "$root" stop)"
+      : > "$(almanac_loop_run_control_file converge "$root" stop)"
       ;;
     STEER)
       if [ "$ALMANAC_CONVERGE_STEER" != "none" ]; then
-        printf '%s\n' "$ALMANAC_CONVERGE_STEER" > "$(almanac_converge_control_file "$root" steer)"
+        printf '%s\n' "$ALMANAC_CONVERGE_STEER" > "$(almanac_loop_run_control_file converge "$root" steer)"
       fi
       ;;
     CONTINUE) ;;
@@ -934,7 +919,7 @@ almanac_converge_run() {
   fi
 
   local _converge_stop_file
-  _converge_stop_file="$(almanac_converge_control_file "$root" stop)"
+  _converge_stop_file="$(almanac_loop_run_control_file converge "$root" stop)"
 
   round=0
   while [ "$round" -lt "$rounds" ]; do

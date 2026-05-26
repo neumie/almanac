@@ -10,8 +10,11 @@
 # Each adapter (called as almanac_loop_<name>_<verb>) declares two contracts:
 #   launch  — exec_argv: how to exec its runner (config in, _ALMANAC_LOOP_ARGV out)
 #             — consumed by the launcher (lib/loop-launcher.sh)
-#   control — signal_file <stop|steer>: its between-round dot-file basename
-#             — consumed by the hub's stop/steer (lib/run.sh control)
+#   control — signal_file <stop|steer>: its between-round dot-file basename.
+#             Optional override — almanac_loop_default_signal_file (below) handles
+#             the standard `.${name}-${kind}` convention every loop uses today, so
+#             adapters only define this if their convention diverges. Resolved
+#             through almanac_loop_signal_file (consumed by lib/run.sh control).
 #
 # Self-contained: uses only printf / tr / basename / source — no lib/core.sh
 # dependency — so the seam (and the adapters) are their own test surface and
@@ -71,6 +74,38 @@ almanac_loop_adapter_call() {
   fn="almanac_loop_${key}_${verb}"
   declare -F "$fn" >/dev/null 2>&1 || return 2
   "$fn" "$@"
+}
+
+# Default signal-file basename for a loop's between-round control. Every loop uses
+# the same `.${name}-${kind}` convention (`.ralph-stop`, `.harden-steer`, …) so the
+# pattern lives once here instead of being copy-pasted into each adapter. A loop
+# only needs to define its own `signal_file` if its convention diverges; this is
+# the deepening that turns three identical stop|steer case-statements into none.
+# Returns 1 for an unknown kind.
+almanac_loop_default_signal_file() {
+  local name="$1" kind="$2"
+  case "$kind" in
+    stop|steer) printf '.%s-%s\n' "$name" "$kind" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Resolve a loop's signal-file basename: the adapter's override if it defines
+# `signal_file`, else the standard `.${name}-${kind}` default. This is the
+# control-contract public surface — callers (lib/run.sh, harden-core, converge-core)
+# go through here instead of dispatching to the adapter directly, so adding a new
+# loop costs zero signal_file code unless the loop is non-standard. Returns 1 for
+# an unknown kind or an unknown loop name.
+almanac_loop_signal_file() {
+  local key fn
+  key="$(almanac_loop_adapter_key "$1")"
+  almanac_loop_adapter_known "$key" || return 1
+  fn="almanac_loop_${key}_signal_file"
+  if declare -F "$fn" >/dev/null 2>&1; then
+    "$fn" "$2"
+  else
+    almanac_loop_default_signal_file "$key" "$2"
+  fi
 }
 
 almanac_loop_adapter_load

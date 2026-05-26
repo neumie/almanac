@@ -8,7 +8,9 @@
 #   exec_argv   — launch: populate _ALMANAC_LOOP_ARGV with the runner exec tokens
 #                 for a given target/rounds. harden's runner is the convergence
 #                 loop reached via `almanac harden <target> --loop`.
-#   signal_file — control: the between-round dot-file basename for stop|steer.
+#
+# Control contract (signal_file) inherits the default `.harden-stop` /
+# `.harden-steer` convention from lib/loops.sh — no adapter override needed.
 
 # Build harden's runner exec command into _ALMANAC_LOOP_ARGV (the launcher execs
 # it). harden has no standalone runner script — its convergence loop runs through
@@ -21,15 +23,4 @@ almanac_loop_harden_exec_argv() {
   _ALMANAC_LOOP_ARGV=(bash "$ALMANAC_HOME/bin/almanac" harden "$target" --loop)
   [ -n "$rounds" ] && _ALMANAC_LOOP_ARGV+=(--rounds "$rounds")
   return 0
-}
-
-# harden's between-round signal files: the convergence loop watches `.harden-stop`
-# to halt and consumes `.harden-steer` as an operator directive for the next
-# round. Prints the basename; returns 1 for an unknown kind.
-almanac_loop_harden_signal_file() {
-  case "$1" in
-    stop)  printf '%s\n' ".harden-stop" ;;
-    steer) printf '%s\n' ".harden-steer" ;;
-    *) return 1 ;;
-  esac
 }

@@ -757,17 +757,25 @@ almanac_loop_hub_stats() {
 # gum selection menu in cmd/hub.sh is a thin TTY layer over them.
 
 # Map a run type + signal kind to the dot-file basename the loop's runner watches
-# for between rounds. The mapping is the loop adapter's control contract — each
-# loop owns its own signal files (ralph consumes `.ralph-stop`/`.ralph-steer`,
-# harden `.harden-stop`/`.harden-steer`) — so this dispatches to the adapter
-# rather than branching on type centrally. Prints the basename; returns 1 for an
-# unknown type or kind.
+# for between rounds. Thin pass-through to almanac_loop_signal_file (lib/loops.sh),
+# which resolves the adapter's override if any else the standard `.${type}-${kind}`
+# default — so this run-registry layer is independent of which loops opt to use
+# the default and which override. Prints the basename; returns 1 for an unknown
+# type or kind.
 almanac_loop_run_signal_file() {
-  local type="$1"
-  local kind="$2"
+  almanac_loop_signal_file "$1" "$2"
+}
 
-  almanac_loop_adapter_known "$type" || return 1
-  almanac_loop_adapter_call "$type" signal_file "$kind" || return 1
+# Absolute path to a loop's between-round control file under BASE: BASE joined with
+# the type's stop|steer dot-file basename (`<base>/.harden-stop`, …). Centralises
+# the harden/converge pattern of "look up the signal file, prepend the path" so
+# each loop's core stops re-implementing its own _control_file wrapper. Returns 1
+# when the loop type or kind is unknown.
+almanac_loop_run_control_file() {
+  local type="$1" base="$2" kind="$3"
+  local name
+  name="$(almanac_loop_run_signal_file "$type" "$kind")" || return 1
+  printf '%s/%s\n' "$base" "$name"
 }
 
 # Stop a registered running run: write the run type's stop file under root (runs

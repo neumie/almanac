@@ -102,7 +102,7 @@ almanac_harden_role() {
     *) return 2 ;;
   esac
 
-  almanac_loop_role_config "harden" "$role" "$lens" "claude" "" ""
+  almanac_loop_role_config "harden" "$role" "$lens" "$(almanac_provider_default)" "" ""
 }
 
 # One field (provider | model | effort) of a harden role's resolved config, for
@@ -1596,20 +1596,11 @@ almanac_harden_run_finalize() {
   almanac_loop_mark_run_status "$root" "$run_id" "$status" >/dev/null 2>&1 || true
 }
 
-almanac_harden_control_file() {
-  local root="$1"
-  local kind="$2"
-  local name
-
-  name="$(almanac_loop_run_signal_file harden "$kind")" || return 1
-  printf '%s/%s\n' "$root" "$name"
-}
-
 almanac_harden_consume_stop() {
   local root="$1"
   local file
 
-  file="$(almanac_harden_control_file "$root" stop)" || return 1
+  file="$(almanac_loop_run_control_file harden "$root" stop)" || return 1
   [ -f "$file" ] || return 1
   rm -f "$file"
   return 0
@@ -1619,7 +1610,7 @@ almanac_harden_consume_steer() {
   local root="$1"
   local file
 
-  file="$(almanac_harden_control_file "$root" steer)" || return 1
+  file="$(almanac_loop_run_control_file harden "$root" steer)" || return 1
   [ -f "$file" ] || return 1
   cat "$file"
   rm -f "$file"

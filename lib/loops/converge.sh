@@ -7,7 +7,9 @@
 #                 runner is the CLI itself (`almanac converge --goal … --exec …`),
 #                 so the adapter yields that bin/almanac invocation. Mirrors
 #                 harden's adapter shape (no standalone runner script).
-#   signal_file — control: the between-round dot-file basename for stop|steer.
+#
+# Control contract (signal_file) inherits the default `.converge-stop` /
+# `.converge-steer` convention from lib/loops.sh — no adapter override needed.
 
 # Build converge's runner exec command into _ALMANAC_LOOP_ARGV (the launcher
 # execs it). Positional args:
@@ -34,15 +36,4 @@ almanac_loop_converge_exec_argv() {
   [ -n "$no_oversee" ]     && [ "$no_oversee" != "0" ] && _ALMANAC_LOOP_ARGV+=(--no-oversee)
   [ -n "$oversee_every" ]  && _ALMANAC_LOOP_ARGV+=(--oversee-every "$oversee_every")
   return 0
-}
-
-# converge's between-round signal files: the loop watches `.converge-stop` to
-# halt and consumes `.converge-steer` as a one-shot operator/overseer directive.
-# Prints the basename; returns 1 for an unknown kind.
-almanac_loop_converge_signal_file() {
-  case "$1" in
-    stop)  printf '%s\n' ".converge-stop" ;;
-    steer) printf '%s\n' ".converge-steer" ;;
-    *) return 1 ;;
-  esac
 }

@@ -8,7 +8,9 @@
 #   exec_argv   — launch: populate _ALMANAC_LOOP_ARGV with the runner exec tokens
 #                 for a given mode/prd/iterations. The ralph runner path lives
 #                 HERE now (not hard-coded in the launcher).
-#   signal_file — control: the between-round dot-file basename for stop|steer.
+#
+# Control contract (signal_file) inherits the default `.ralph-stop` / `.ralph-steer`
+# convention from lib/loops.sh — no adapter override needed.
 
 # Build ralph's runner exec command into _ALMANAC_LOOP_ARGV (the launcher execs
 # it). MODE selects the runner: `once` runs a single iteration (once.sh PRD),
@@ -25,15 +27,4 @@ almanac_loop_ralph_exec_argv() {
     *) return 2 ;;
   esac
   return 0
-}
-
-# ralph's between-round signal files: the afk runner watches `.ralph-stop` to halt
-# and consumes `.ralph-steer` as a one-shot operator/overseer directive. Prints
-# the basename; returns 1 for an unknown kind.
-almanac_loop_ralph_signal_file() {
-  case "$1" in
-    stop)  printf '%s\n' ".ralph-stop" ;;
-    steer) printf '%s\n' ".ralph-steer" ;;
-    *) return 1 ;;
-  esac
 }
