@@ -699,11 +699,16 @@ test_worker_agent_invoked_with_role_config() {
     run_converge "$tmp" --goal "Role Config" --exec "true" --rounds 1 >/dev/null
 
   args="$(cat "$tmp/.almanac/test-worker-args.log")"
-  assert_contains "$args" "--sandbox workspace-write" "worker agent should run write-capable"
+  # danger-full-access: converge runs are autonomous; the worker must be able
+  # to run arbitrary shell (tests, git status, lint) the prompt asks for. For
+  # codex this drops the sandbox; for claude the provider adapter maps it to
+  # --permission-mode bypassPermissions. Pre-fix this was workspace-write, which
+  # left claude workers dying on every un-allowlisted Bash call in --print mode.
+  assert_contains "$args" "--sandbox danger-full-access" "worker agent should run with full access"
   assert_contains "$args" "--model gpt-test" "worker agent should receive CONVERGE_AGENT_MODEL"
   assert_contains "$args" "model_reasoning_effort=\"high\"" "worker agent should receive CONVERGE_AGENT_EFFORT"
 
-  echo "  PASS: worker agent uses converge role config and workspace-write sandbox"
+  echo "  PASS: worker agent uses converge role config and danger-full-access sandbox"
 }
 
 test_structured_report_parser_accepts_worker_block() {

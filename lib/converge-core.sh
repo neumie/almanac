@@ -638,8 +638,13 @@ almanac_converge_run_worker() {
 
   _info "Converge round $round — exec-mode worker (provider=$provider, log: ${events_file#"$root"/})"
 
+  # danger-full-access sandbox: converge runs are autonomous-by-design.
+  # `claude --print` has no human to answer a permission prompt, so anything
+  # less than full access dies on every un-allowlisted Bash call ("This
+  # command requires approval"). For codex this drops the sandbox; for claude
+  # it maps to --permission-mode bypassPermissions (per the provider adapter).
   rc=0
-  almanac_loop_agent_stream "$provider" "$model" "$effort" "workspace-write" \
+  almanac_loop_agent_stream "$provider" "$model" "$effort" "danger-full-access" \
     "$prompt_file" "$result_file" "$events_file" merge-stderr || rc=$?
 
   rm -f "$prompt_file" "$result_file"
@@ -765,8 +770,10 @@ almanac_converge_run_worker_prompt() {
   local pre_dirty
   pre_dirty="$(almanac_converge_dirty_paths "$root")"
 
+  # danger-full-access: same rationale as exec-mode worker — converge agents
+  # need to run arbitrary shell (tests, git status, lint) the prompt asks for.
   rc=0
-  (cd "$root" && almanac_loop_agent_stream "$provider" "$model" "$effort" "workspace-write" \
+  (cd "$root" && almanac_loop_agent_stream "$provider" "$model" "$effort" "danger-full-access" \
     "$prompt_file" "$result_file" "$events_file" merge-stderr) || rc=$?
 
   # Auto-commit only the agent-touched paths. A smart prompt may have committed

@@ -44,16 +44,26 @@ almanac_provider_claude_display() {
   printf '%s\n' "Claude Code"
 }
 
-# Map a sandbox value to claude's --permission-mode. read-only review runs in
-# `plan` (no writes); the `default` sentinel returns an empty mode so the argv
-# OMITS --permission-mode entirely, letting claude fall back to its own default
-# mode (ralph afk.sh's iteration agent has never set a permission mode);
-# everything else (workspace-write, danger-full-access) maps to `acceptEdits`.
+# Map a sandbox value to claude's --permission-mode.
+#   read-only          → `plan`              (no writes, no Bash)
+#   default            → ""                  (omit; claude uses operator's settings.json)
+#   workspace-write    → `acceptEdits`       (edits auto-approved; Bash still prompts)
+#   danger-full-access → `bypassPermissions` (skips ALL prompts — autonomous loops)
+#
+# `bypassPermissions` is the no-prompts mode an autonomous loop needs: codex's
+# `--sandbox danger-full-access` is real (the sandbox is dropped); claude's
+# equivalent is the bypass mode, which is what we want here. Converge workers
+# pass `danger-full-access` so they can run tests and shell commands the
+# prompt asks for without dying on every Bash call in `claude --print` (where
+# there's no human to answer the approval prompt). `acceptEdits` stays for
+# workspace-write — a milder posture that still requires explicit Bash
+# allowlist entries.
 almanac_provider_claude_permission() {
   case "$1" in
-    read-only) printf '%s\n' "plan" ;;
-    default)   printf '%s\n' "" ;;
-    *)         printf '%s\n' "acceptEdits" ;;
+    read-only)          printf '%s\n' "plan" ;;
+    default)            printf '%s\n' "" ;;
+    danger-full-access) printf '%s\n' "bypassPermissions" ;;
+    *)                  printf '%s\n' "acceptEdits" ;;
   esac
 }
 

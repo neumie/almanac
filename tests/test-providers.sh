@@ -153,6 +153,15 @@ test_claude_argv_permission_mapping() {
   almanac_provider_call claude argv "" "" "workspace-write" "/tmp/res" "structured"
   assert_contains "${_ALMANAC_AGENT_ARGV[*]}" "--permission-mode acceptEdits" "workspace-write maps to acceptEdits"
 
+  # danger-full-access maps to bypassPermissions — the no-prompts mode an
+  # autonomous loop needs (claude --print has no human to answer approval
+  # prompts, so anything less dies on every un-allowlisted Bash). converge
+  # workers pass this. Anything weaker leaves the agent unable to run tests
+  # or shell commands its prompt asks for.
+  almanac_provider_call claude argv "" "" "danger-full-access" "/tmp/res" "structured"
+  assert_contains "${_ALMANAC_AGENT_ARGV[*]}" "--permission-mode bypassPermissions" \
+    "danger-full-access maps to bypassPermissions (the no-prompts mode)"
+
   almanac_provider_call claude argv "" "" "default" "/tmp/res" "structured"
   assert_not_contains "${_ALMANAC_AGENT_ARGV[*]}" "--permission-mode" "the default sentinel omits --permission-mode"
   echo "  PASS: claude argv (sandbox -> permission mapping)"
