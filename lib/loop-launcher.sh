@@ -224,6 +224,79 @@ _almanac_launch_harden() {
   exec "${_ALMANAC_LOOP_ARGV[@]}"
 }
 
+# --- converge ------------------------------------------------------------------
+
+_almanac_launch_converge() {
+  local goal="" exec_cmd="" rounds="" provider="" model="" effort="" no_oversee="" oversee_every="" yes=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --goal)       shift; goal="${1:-}";       [ -n "$goal" ] || _die "--goal requires a value" ;;
+      --exec)       shift; exec_cmd="${1:-}";   [ -n "$exec_cmd" ] || _die "--exec requires a value" ;;
+      --rounds)     shift; rounds="${1:-}";     [ -n "$rounds" ] || _die "--rounds requires a value" ;;
+      --provider)   shift; provider="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"; [ -n "$provider" ] || _die "--provider requires a value" ;;
+      --model)      shift; model="${1:-}";      [ -n "$model" ] || _die "--model requires a value" ;;
+      --effort|--thinking) shift; effort="${1:-}"; [ -n "$effort" ] || _die "$1 requires a value" ;;
+      --no-oversee) no_oversee=1 ;;
+      --oversee-every) shift; oversee_every="${1:-}"; [ -n "$oversee_every" ] || _die "--oversee-every requires a value" ;;
+      --yes|-y) yes=1 ;;
+      --help|-h) almanac_loop_launch_usage converge; return 0 ;;
+      *) _die "Unknown converge launch option: $1" ;;
+    esac
+    shift
+  done
+
+  # Goal + exec are the two required inputs — prompt for whatever the operator
+  # didn't pass on the command line. Both are free-form strings (one paragraph
+  # goal, one shell-pipeline exec), so they go through ui_input not ui_choose.
+  [ -n "$goal" ]     || goal="$(almanac_loop_ui_input "Goal (one-line description of convergence target)")" || return 1
+  [ -n "$goal" ]     || _die "A converge goal is required."
+  [ -n "$exec_cmd" ] || exec_cmd="$(almanac_loop_ui_input "Exec (shell command to run each round)")" || return 1
+  [ -n "$exec_cmd" ] || _die "A converge exec command is required."
+
+  # Provider / model / effort — same resolution as ralph + harden. Single
+  # provider drives both the worker and overseer roles by default; the user can
+  # still override per-role via CONVERGE_{AGENT,OVERSEER}_* env outside the
+  # launcher.
+  provider="$(_almanac_launch_need_provider provider "$provider")" || return 1
+  almanac_provider_known "$provider"     || _die "--provider must be a supported provider (e.g. codex or claude)"
+  almanac_provider_available "$provider" || _die "Provider '$provider' selected but its CLI is not on PATH."
+  model="$(_almanac_launch_need_choice "Model" "$model" $(almanac_provider_models "$provider"))" || return 1
+  effort="$(_almanac_launch_need_choice "Thinking effort" "$effort" $(almanac_provider_efforts "$provider"))" || return 1
+
+  # Rounds: optional; blank accepts the cmd/converge.sh default
+  # (CONVERGE_ROUND_BUDGET or 10). Validated when present.
+  [ -n "$rounds" ] || rounds="$(almanac_loop_ui_input "Round budget (blank = default)")" || return 1
+  [ -z "$rounds" ] || rounds="$(_almanac_launch_need_positive_int "Round budget" "$rounds")" || return 1
+
+  # Overseer: on by default; ask the operator only if neither flag was passed.
+  if [ -z "$no_oversee" ]; then
+    almanac_loop_ui_confirm "Run the overseer?" || no_oversee=1
+  fi
+
+  almanac_loop_launch_summary "converge" \
+    "Goal:$goal" "Exec:$exec_cmd" "Provider:$provider" \
+    "Model:${model:-provider default}" "Thinking:${effort:-provider default}" \
+    "Rounds:${rounds:-default budget}" \
+    "Overseer:$([ -n "$no_oversee" ] && echo off || echo on)" \
+    $([ -n "$oversee_every" ] && printf 'Oversee-every:%s' "$oversee_every")
+  [ -n "$yes" ] || almanac_loop_ui_confirm "Launch this run?" || { _info "Cancelled."; return 0; }
+
+  # Export role config — same shape as ralph/harden. The consumer-wide
+  # CONVERGE_PROVIDER/MODEL/EFFORT becomes the fallback that role.sh's lookup
+  # uses for both the worker and overseer roles unless the user has set
+  # CONVERGE_{AGENT,OVERSEER}_* explicitly.
+  export CONVERGE_PROVIDER="$provider"
+  [ -n "$model" ]  && export CONVERGE_MODEL="$model"   || unset CONVERGE_MODEL
+  [ -n "$effort" ] && export CONVERGE_EFFORT="$effort" || unset CONVERGE_EFFORT
+
+  # Build the runner argv via the adapter (the path to bin/almanac and the flag
+  # composition both live in lib/loops/converge.sh — the launcher doesn't know
+  # them).
+  almanac_loop_adapter_call converge exec_argv "$goal" "$exec_cmd" "$rounds" "$no_oversee" "$oversee_every" \
+    || _die "converge adapter could not build a runner for goal: $goal"
+  exec "${_ALMANAC_LOOP_ARGV[@]}"
+}
+
 # --- summary + dispatch --------------------------------------------------------
 
 # Render a "LABEL:value" config summary as a gum-styled (or plain) panel. Each
@@ -266,17 +339,32 @@ Usage (loop launch): <target> [options]
 Any option not given is prompted interactively.
 EOF
       ;;
+    converge) cat >&2 <<'EOF'
+Usage (loop launch): converge [options]
+  --goal <text>       one-line convergence goal (overseer can mutate it)
+  --exec <cmd>        shell command to run each round
+  --provider <p>      codex | claude
+  --model <m>         worker / overseer model
+  --effort <l>        thinking level
+  --rounds <n>        round budget (blank = default 10)
+  --no-oversee        disable the overseer (rounds budget is the only stop)
+  --oversee-every <n> overseer cadence in rounds (default 1)
+Any option not given is prompted interactively.
+EOF
+      ;;
   esac
 }
 
-# Public entry: configure and launch a run of TYPE (ralph|harden). Remaining args
-# are that type's native flags; missing fields are prompted. Execs the runner.
+# Public entry: configure and launch a run of TYPE (ralph|harden|converge).
+# Remaining args are that type's native flags; missing fields are prompted.
+# Execs the runner.
 almanac_loop_launch() {
   local type="${1:-}"; shift || true
   case "$type" in
-    ralph)  _almanac_launch_ralph "$@" ;;
-    harden) _almanac_launch_harden "$@" ;;
-    "")     _die "Usage: almanac_loop_launch <ralph|harden> [options]" ;;
-    *)      _die "Unknown loop type: $type (use ralph or harden)" ;;
+    ralph)    _almanac_launch_ralph "$@" ;;
+    harden)   _almanac_launch_harden "$@" ;;
+    converge) _almanac_launch_converge "$@" ;;
+    "")       _die "Usage: almanac_loop_launch <ralph|harden|converge> [options]" ;;
+    *)        _die "Unknown loop type: $type (use ralph, harden, or converge)" ;;
   esac
 }

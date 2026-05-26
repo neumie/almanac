@@ -17,7 +17,7 @@
 #   almanac hub --watch <id>           tail a run's live status (one frame off a TTY)
 #   almanac hub --stop  <id>           signal a run to stop (loop stop file)
 #   almanac hub --steer <id> <text…>   queue a steer directive for the next round
-#   almanac hub --new <ralph|harden> [config…] [--dry-run]
+#   almanac hub --new <ralph|harden|converge> [config…] [--dry-run]
 #                                      launch a new run (dry-run previews the command)
 #   almanac hub --resume <id>          re-launch a finished run with the same config (auto-confirm)
 #   almanac hub --clone  <id>          start the launcher pre-filled from a finished run (no auto-confirm)
@@ -37,7 +37,7 @@ hub_usage() {
   printf '%s\n' "  almanac hub --watch <run-id>     tail a run's live status"
   printf '%s\n' "  almanac hub --stop  <run-id>     signal a run to stop"
   printf '%s\n' "  almanac hub --steer <run-id> …   queue a steer directive for the next round"
-  printf '%s\n' "  almanac hub --new <ralph|harden> [config…] [--dry-run]"
+  printf '%s\n' "  almanac hub --new <ralph|harden|converge> [config…] [--dry-run]"
   printf '%s\n' "                                  launch a new run (--dry-run previews it)"
   printf '%s\n' "  almanac hub --resume <run-id>    re-launch a finished run with the same config"
   printf '%s\n' "  almanac hub --clone  <run-id>    start the launcher pre-filled from a finished run"
@@ -89,7 +89,7 @@ almanac_hub_launch_new() {
 # if the operator cancels first it returns here and the menu loop continues.
 almanac_hub_new_run() {
   local type
-  type="$(almanac_loop_ui_choose "New run — pick a loop" ralph harden)" || return 0
+  type="$(almanac_loop_ui_choose "New run — pick a loop" ralph harden converge)" || return 0
   almanac_loop_launch "$type"
 }
 
@@ -160,6 +160,7 @@ almanac_hub_menu() {
 almanac_hub_resume_or_clone() {
   local mode="$1" run_id="$2"
   local status_file run_type target provider model effort iterations oversee lenses rounds
+  local goal exec_cmd oversee_every
   local -a opts
   local argv env_raw prd
 
@@ -174,6 +175,9 @@ almanac_hub_resume_or_clone() {
   oversee="$(almanac_loop_status_field "$status_file" oversee || true)"
   lenses="$(almanac_loop_status_field "$status_file" lenses || true)"
   rounds="$(almanac_loop_status_field "$status_file" rounds || true)"
+  goal="$(almanac_loop_status_field "$status_file" goal || true)"
+  exec_cmd="$(almanac_loop_status_field "$status_file" exec || true)"
+  oversee_every="$(almanac_loop_status_field "$status_file" oversee_every || true)"
 
   case "$run_type" in
     ralph)
@@ -193,6 +197,16 @@ almanac_hub_resume_or_clone() {
       [ -n "$effort" ]   && opts+=("effort=$effort")
       [ -n "$rounds" ]   && opts+=("rounds=$rounds")
       ;;
+    converge)
+      [ -n "$goal" ]          && opts+=("goal=$goal")
+      [ -n "$exec_cmd" ]      && opts+=("exec=$exec_cmd")
+      [ -n "$rounds" ]        && opts+=("rounds=$rounds")
+      [ -n "$provider" ]      && opts+=("provider=$provider")
+      [ -n "$model" ]         && opts+=("model=$model")
+      [ -n "$effort" ]        && opts+=("effort=$effort")
+      [ "$oversee" = "off" ]  && opts+=("oversee=off")
+      [ -n "$oversee_every" ] && opts+=("oversee_every=$oversee_every")
+      ;;
     *) _die "Cannot $mode run of unknown type: $run_type" ;;
   esac
 
@@ -200,10 +214,11 @@ almanac_hub_resume_or_clone() {
     || _die "Could not compose $mode for $run_id"
   env_raw="$(almanac_loop_new_run_env "$run_type" "${opts[@]}")" || env_raw=""
 
-  # resume auto-confirms launcher-backed runs via --yes; harden argv is already
-  # the direct runner (`almanac harden <target> --loop`) and rejects launcher-only
-  # flags. clone leaves confirm in place where a launcher is used.
-  if [ "$mode" = "resume" ] && [ "$run_type" != "harden" ]; then
+  # resume auto-confirms launcher-backed runs via --yes; harden + converge argv
+  # is already the direct runner (`almanac harden|converge …`) and rejects the
+  # launcher-only --yes flag. clone leaves confirm in place where a launcher is
+  # used.
+  if [ "$mode" = "resume" ] && [ "$run_type" != "harden" ] && [ "$run_type" != "converge" ]; then
     argv="${argv}"$'\n''--yes'
   fi
   almanac_hub_launch_new 0 "$env_raw" "$argv"
@@ -224,7 +239,7 @@ while [ "$#" -gt 0 ]; do
       ;;
     --new)
       shift
-      [ "$#" -gt 0 ] || _die "Missing run type for --new (ralph|harden)"
+      [ "$#" -gt 0 ] || _die "Missing run type for --new (ralph|harden|converge)"
       ACTION="new"
       ACTION_TYPE="$1"
       shift
@@ -243,6 +258,9 @@ while [ "$#" -gt 0 ]; do
           --target)     shift; [ "$#" -gt 0 ] || _die "Missing value for --target";     NEW_OPTS+=("target=$1") ;;
           --rounds)     shift; [ "$#" -gt 0 ] || _die "Missing value for --rounds";     NEW_OPTS+=("rounds=$1") ;;
           --lenses)     shift; [ "$#" -gt 0 ] || _die "Missing value for --lenses";     NEW_OPTS+=("lenses=$1") ;;
+          --goal)       shift; [ "$#" -gt 0 ] || _die "Missing value for --goal";       NEW_OPTS+=("goal=$1") ;;
+          --exec)       shift; [ "$#" -gt 0 ] || _die "Missing value for --exec";       NEW_OPTS+=("exec=$1") ;;
+          --oversee-every) shift; [ "$#" -gt 0 ] || _die "Missing value for --oversee-every"; NEW_OPTS+=("oversee_every=$1") ;;
           -*) _die "Unknown hub --new option: $1" ;;
           *)  _die "Unexpected hub --new argument: $1" ;;
         esac

@@ -692,7 +692,45 @@ test_new_run_argv_rejects_unknown_and_missing() {
   assert_eq "2" "$rc" "a ralph run without a prd must return 2"
   rc=0; almanac_loop_new_run_argv harden rounds=2 >/dev/null 2>&1 || rc=$?
   assert_eq "2" "$rc" "a harden run without a target must return 2"
+  rc=0; almanac_loop_new_run_argv converge exec="echo hi" >/dev/null 2>&1 || rc=$?
+  assert_eq "2" "$rc" "a converge run without a goal must return 2"
+  rc=0; almanac_loop_new_run_argv converge goal="ship it" >/dev/null 2>&1 || rc=$?
+  assert_eq "2" "$rc" "a converge run without an exec must return 2"
   echo "  PASS: new-run argv rejects unknown type and missing required config"
+}
+
+test_new_run_argv_converge_composes_flags() {
+  local flat
+  flat="$(almanac_loop_new_run_argv converge \
+    goal="ship it" exec="echo hi" rounds=5 oversee=off oversee_every=2 | tr '\n' ' ')"
+  assert_contains "$flat" "converge " "argv starts with converge subcommand"
+  assert_contains "$flat" "--goal ship it" "argv carries --goal"
+  assert_contains "$flat" "--exec echo hi" "argv carries --exec"
+  assert_contains "$flat" "--rounds 5" "argv carries --rounds"
+  assert_contains "$flat" "--no-oversee" "argv carries --no-oversee when oversee=off"
+  assert_contains "$flat" "--oversee-every 2" "argv carries --oversee-every"
+  # Provider/model/effort are env, NOT argv (same split as harden)
+  case "$flat" in
+    *"--provider"*) fail "provider must ride on env, not argv" ;;
+    *"--model"*)    fail "model must ride on env, not argv" ;;
+    *"--effort"*)   fail "effort must ride on env, not argv" ;;
+  esac
+
+  # oversee=on (or omitted) must NOT emit --no-oversee
+  flat="$(almanac_loop_new_run_argv converge goal="g" exec="x" | tr '\n' ' ')"
+  case "$flat" in
+    *"--no-oversee"*) fail "default (overseer on) must NOT emit --no-oversee" ;;
+  esac
+  echo "  PASS: new-run argv composes converge flags"
+}
+
+test_new_run_env_maps_converge_config() {
+  local out
+  out="$(almanac_loop_new_run_env converge provider=codex model=gpt-5.5 effort=high)"
+  assert_contains "$out" "CONVERGE_PROVIDER=codex" "converge env carries CONVERGE_PROVIDER"
+  assert_contains "$out" "CONVERGE_MODEL=gpt-5.5" "converge env carries CONVERGE_MODEL"
+  assert_contains "$out" "CONVERGE_EFFORT=high"   "converge env carries CONVERGE_EFFORT"
+  echo "  PASS: new-run env maps converge config"
 }
 
 test_new_run_env_maps_harden_config() {
@@ -788,7 +826,9 @@ test_run_watch_one_shot_renders_detail
 test_new_run_argv_ralph_composes_flags
 test_new_run_argv_harden_composes_loop
 test_new_run_argv_rejects_unknown_and_missing
+test_new_run_argv_converge_composes_flags
 test_new_run_env_maps_harden_config
+test_new_run_env_maps_converge_config
 test_hub_stats_groups_by_type_provider_model
 test_hub_stats_empty_registry_returns_nonzero
 

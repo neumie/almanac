@@ -166,7 +166,44 @@ test_hub_new_missing_required_errors() {
   local rc=0
   "$ALMANAC_BIN" hub --new harden --rounds 2 --dry-run </dev/null >/dev/null 2>&1 || rc=$?
   [ "$rc" -ne 0 ] || fail "hub --new harden without a target must exit non-zero"
+  rc=0
+  "$ALMANAC_BIN" hub --new converge --exec "echo hi" --dry-run </dev/null >/dev/null 2>&1 || rc=$?
+  [ "$rc" -ne 0 ] || fail "hub --new converge without --goal must exit non-zero"
+  rc=0
+  "$ALMANAC_BIN" hub --new converge --goal "ship" --dry-run </dev/null >/dev/null 2>&1 || rc=$?
+  [ "$rc" -ne 0 ] || fail "hub --new converge without --exec must exit non-zero"
   echo "  PASS: hub --new without required config errors"
+}
+
+# Criterion 3: `almanac hub --new converge … --dry-run` composes the converge
+# launch — goal + exec on argv, role config in env (CONVERGE_*), same shape
+# split as harden.
+test_hub_new_dry_run_composes_converge_launch() {
+  local out
+  out="$("$ALMANAC_BIN" hub --new converge \
+    --goal "no major improvements left" \
+    --exec "echo demo" \
+    --rounds 3 \
+    --provider codex --model gpt-5.5 --effort high \
+    --oversee-every 2 --no-oversee \
+    --dry-run </dev/null 2>&1)"
+  assert_contains "$out" "converge"                       "converge dry-run shows the subcommand"
+  assert_contains "$out" "--goal"                         "converge dry-run carries --goal"
+  assert_contains "$out" "no major improvements left"     "converge dry-run carries the goal text"
+  assert_contains "$out" "--exec"                         "converge dry-run carries --exec"
+  assert_contains "$out" "echo demo"                      "converge dry-run carries the exec text"
+  assert_contains "$out" "--rounds 3"                     "converge dry-run carries --rounds"
+  assert_contains "$out" "--no-oversee"                   "converge dry-run carries --no-oversee"
+  assert_contains "$out" "--oversee-every 2"              "converge dry-run carries --oversee-every"
+  assert_contains "$out" "CONVERGE_PROVIDER=codex"        "converge dry-run shows the provider env"
+  assert_contains "$out" "CONVERGE_MODEL=gpt-5.5"         "converge dry-run shows the model env"
+  assert_contains "$out" "CONVERGE_EFFORT=high"           "converge dry-run shows the effort env"
+  # Provider/model/effort must NOT appear as flags — they ride on env, same
+  # split as harden.
+  case "$out" in
+    *"--provider codex"*) fail "converge --provider must ride on env, not argv" ;;
+  esac
+  echo "  PASS: hub --new converge dry-run composes the launch"
 }
 
 test_hub_resume_harden_does_not_append_yes() {
@@ -197,6 +234,7 @@ test_hub_stop_signals_run
 test_hub_watch_renders_run_detail
 test_hub_new_dry_run_composes_ralph_launch
 test_hub_new_dry_run_composes_harden_launch
+test_hub_new_dry_run_composes_converge_launch
 test_hub_new_missing_required_errors
 test_hub_resume_harden_does_not_append_yes
 echo ""

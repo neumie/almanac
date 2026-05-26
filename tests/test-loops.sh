@@ -87,11 +87,45 @@ test_harden_exec_argv_launch_contract() {
   echo "  PASS: harden exec_argv launch contract"
 }
 
+test_converge_exec_argv_launch_contract() {
+  local ALMANAC_HOME="/fake/home"
+
+  # Minimum: goal + exec only — no rounds, no oversee flags
+  almanac_loop_adapter_call converge exec_argv "ship it" "echo hi"
+  assert_eq "bash /fake/home/bin/almanac converge --goal ship it --exec echo hi" \
+    "${_ALMANAC_LOOP_ARGV[*]}" "converge exec argv (goal + exec only)"
+
+  # With rounds
+  almanac_loop_adapter_call converge exec_argv "ship it" "echo hi" "5"
+  assert_eq "bash /fake/home/bin/almanac converge --goal ship it --exec echo hi --rounds 5" \
+    "${_ALMANAC_LOOP_ARGV[*]}" "converge exec argv (with rounds)"
+
+  # With --no-oversee (the no_oversee flag is the 4th positional, non-empty + non-"0" enables)
+  almanac_loop_adapter_call converge exec_argv "ship it" "echo hi" "5" "1"
+  assert_eq "bash /fake/home/bin/almanac converge --goal ship it --exec echo hi --rounds 5 --no-oversee" \
+    "${_ALMANAC_LOOP_ARGV[*]}" "converge exec argv (with --no-oversee)"
+
+  # An empty no_oversee or "0" must NOT emit the flag (defensive — the launcher
+  # passes the literal "" when overseer is on)
+  almanac_loop_adapter_call converge exec_argv "ship it" "echo hi" "5" ""
+  case " ${_ALMANAC_LOOP_ARGV[*]} " in
+    *" --no-oversee "*) fail "empty no_oversee must NOT emit --no-oversee" ;;
+  esac
+
+  # With --oversee-every (5th positional)
+  almanac_loop_adapter_call converge exec_argv "ship it" "echo hi" "" "" "3"
+  assert_eq "bash /fake/home/bin/almanac converge --goal ship it --exec echo hi --oversee-every 3" \
+    "${_ALMANAC_LOOP_ARGV[*]}" "converge exec argv (with --oversee-every)"
+
+  echo "  PASS: converge exec_argv launch contract"
+}
+
 echo "=== Loop Seam Tests ==="
 test_discovery_lists_present_adapters
 test_dispatch_rejects_unknown_verb
 test_signal_file_control_contract
 test_ralph_exec_argv_launch_contract
 test_harden_exec_argv_launch_contract
+test_converge_exec_argv_launch_contract
 
 echo "All loop seam tests passed."

@@ -908,11 +908,15 @@ almanac_loop_run_watch() {
 # `almanac` subcommand. ralph config maps to ralph.sh flags; harden launches the
 # convergence loop (`harden <target> --loop [--rounds N]`) — its provider/model/
 # effort/lenses are environment, emitted by almanac_loop_new_run_env, not argv.
+# converge takes goal + exec + rounds + oversee config on argv (the only required
+# pieces of state the runner can't infer); role config (provider/model/effort)
+# rides on environment, same shape as harden.
 # Returns 1 for an unknown type, 2 when a required field is missing (ralph: prd;
-# harden: target).
+# harden: target; converge: goal+exec).
 almanac_loop_new_run_argv() {
   local type="$1"; shift
-  local prd="" mode="" provider="" model="" effort="" iterations="" oversee="" target="" rounds="" kv key val
+  local prd="" mode="" provider="" model="" effort="" iterations="" oversee="" target="" rounds=""
+  local goal="" exec_cmd="" oversee_every="" kv key val
   for kv in "$@"; do
     key="${kv%%=*}"; val="${kv#*=}"
     case "$key" in
@@ -925,6 +929,9 @@ almanac_loop_new_run_argv() {
       oversee) oversee="$val" ;;
       target) target="$val" ;;
       rounds) rounds="$val" ;;
+      goal) goal="$val" ;;
+      exec) exec_cmd="$val" ;;
+      oversee_every) oversee_every="$val" ;;
     esac
   done
 
@@ -944,6 +951,21 @@ almanac_loop_new_run_argv() {
       [ -n "$target" ] || return 2
       printf '%s\n%s\n%s\n' harden "$target" --loop
       if [ -n "$rounds" ]; then printf '%s\n%s\n' --rounds "$rounds"; fi
+      ;;
+    converge)
+      [ -n "$goal" ] || return 2
+      [ -n "$exec_cmd" ] || return 2
+      # Same split as harden: state the runner needs goes on argv (goal, exec,
+      # rounds, oversee flags), role config (provider/model/effort) rides on
+      # environment via almanac_loop_new_run_env. The runner is `almanac converge`
+      # — cmd/converge.sh; no launcher hop in this code path. The interactive
+      # menu uses almanac_loop_launch converge (the launcher) instead.
+      printf '%s\n' converge
+      printf '%s\n%s\n' --goal "$goal"
+      printf '%s\n%s\n' --exec "$exec_cmd"
+      if [ -n "$rounds" ]; then printf '%s\n%s\n' --rounds "$rounds"; fi
+      if [ "$oversee" = "off" ]; then printf '%s\n' --no-oversee; fi
+      if [ -n "$oversee_every" ]; then printf '%s\n%s\n' --oversee-every "$oversee_every"; fi
       ;;
     *) return 1 ;;
   esac
@@ -974,6 +996,11 @@ almanac_loop_new_run_env() {
       if [ -n "$provider" ]; then printf 'HARDEN_PROVIDER=%s\n' "$provider"; fi
       if [ -n "$model" ]; then printf 'HARDEN_MODEL=%s\n' "$model"; fi
       if [ -n "$effort" ]; then printf 'HARDEN_EFFORT=%s\n' "$effort"; fi
+      ;;
+    converge)
+      if [ -n "$provider" ]; then printf 'CONVERGE_PROVIDER=%s\n' "$provider"; fi
+      if [ -n "$model" ]; then printf 'CONVERGE_MODEL=%s\n' "$model"; fi
+      if [ -n "$effort" ]; then printf 'CONVERGE_EFFORT=%s\n' "$effort"; fi
       ;;
     *) return 1 ;;
   esac
