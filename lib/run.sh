@@ -40,7 +40,7 @@ fi
 # three (finished_at/round/summary) are the per-run detail the index omits.
 almanac_loop_record_fields() {
   printf '%s\n' \
-    id type target pid status_file started_at status finished_at round summary
+    id type target pid status_file started_at status finished_at round summary failure_reason
 }
 
 # True when NAME is a canonical run-status field. Lets record_set reject a typo
@@ -250,6 +250,7 @@ almanac_loop_mark_run_status() {
   local run_id="$2"
   local status="$3"
   local finished_at="${4:-}"
+  local reason="${5:-}"
   local status_file index_file tmp
 
   case "$status" in
@@ -282,7 +283,12 @@ almanac_loop_mark_run_status() {
 
   # Set only the lifecycle fields; record_set round-trips id/type/target/pid/
   # status_file/started_at/round/summary, so the schema is never re-enumerated.
-  almanac_loop_record_set "$status_file" "status=$status" "finished_at=$finished_at"
+  # An optional 5th arg supplies a one-line failure reason (typically "exit=N"
+  # plus a log-tail hint) so the hub can show *why* a run failed, not just that
+  # it did. Blank reason → leave the field as-is (running runs start blank).
+  local _fields=("status=$status" "finished_at=$finished_at")
+  [ -n "$reason" ] && _fields+=("failure_reason=$reason")
+  almanac_loop_record_set "$status_file" "${_fields[@]}"
 }
 
 # Update a live run's progress mid-flight: rewrite its status.tsv with a new
@@ -526,7 +532,7 @@ almanac_loop_hub_render() {
   local which="$2"
   local limit="${3:-10}"
   local rows id type target pid status_rel started status
-  local blob round summary finished detail glyph live count
+  local blob round summary finished detail glyph live count reason_field display
 
   rows="$(almanac_loop_list_runs "$root")" || return 1
   count=0
@@ -542,13 +548,21 @@ almanac_loop_hub_render() {
       blob="$(almanac_loop_run_status_file "$root" "$id")"
       finished="$(almanac_loop_status_field "$blob" "finished_at" 2>/dev/null || true)"
       [ -n "$finished" ] || finished="$started"
-      sortable+="$finished"$'\t'"$id"$'\t'"$type"$'\t'"$target"$'\t'"$status"$'\n'
+      reason_field=""
+      if [ "$status" = "failed" ]; then
+        reason_field="$(almanac_loop_status_field "$blob" "failure_reason" 2>/dev/null || true)"
+      fi
+      sortable+="$finished"$'\t'"$id"$'\t'"$type"$'\t'"$target"$'\t'"$status"$'\t'"$reason_field"$'\n'
     done <<< "$rows"
     [ -n "$sortable" ] || return 1
-    while IFS=$'\t' read -r finished id type target status; do
+    while IFS=$'\t' read -r finished id type target status reason_field; do
       [ -n "$id" ] || continue
       glyph="$(almanac_loop_ui_status_glyph "$status")"
-      printf '%s  %s  %s  %s  %s  [%s]\n' "$glyph" "$status" "$type" "$target" "$finished" "$id"
+      display="$finished"
+      if [ "$status" = "failed" ] && [ -n "$reason_field" ]; then
+        display="$finished — $reason_field"
+      fi
+      printf '%s  %s  %s  %s  %s  [%s]\n' "$glyph" "$status" "$type" "$target" "$display" "$id"
       count=$((count + 1))
       if [ "$count" -ge "$limit" ]; then break; fi
     done < <(printf '%s' "$sortable" | sort -t$'\t' -k1,1r)
@@ -689,7 +703,7 @@ almanac_loop_run_steer() {
 almanac_loop_run_detail() {
   local root="$1"
   local run_id="$2"
-  local status_file id type target status round summary started finished live glyph
+  local status_file id type target status round summary started finished live glyph failure_reason
 
   status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
   [ -f "$status_file" ] || return 1
@@ -702,6 +716,7 @@ almanac_loop_run_detail() {
   summary="$(almanac_loop_status_field "$status_file" "summary" || true)"
   started="$(almanac_loop_status_field "$status_file" "started_at" || true)"
   finished="$(almanac_loop_status_field "$status_file" "finished_at" || true)"
+  failure_reason="$(almanac_loop_status_field "$status_file" "failure_reason" || true)"
 
   live="$status"
   if [ "$status" = "running" ] && almanac_loop_run_is_stale "$root" "$run_id"; then
@@ -715,6 +730,7 @@ almanac_loop_run_detail() {
   if [ -n "$summary" ]; then printf 'summary: %s\n' "$summary"; fi
   if [ -n "$started" ]; then printf 'started: %s\n' "$started"; fi
   if [ -n "$finished" ]; then printf 'finished: %s\n' "$finished"; fi
+  if [ -n "$failure_reason" ]; then printf 'failure: %s\n' "$failure_reason"; fi
   return 0
 }
 

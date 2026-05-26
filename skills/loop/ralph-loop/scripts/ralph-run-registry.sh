@@ -49,7 +49,7 @@ ralph_update_run_progress() {
 
 ralph_mark_run_finished() {
   local exit_code="$1"
-  local status
+  local status="" reason=""
 
   [ -n "$RALPH_RUN_ID" ] || return 0
 
@@ -57,9 +57,22 @@ ralph_mark_run_finished() {
     status="done"
   else
     status="failed"
+    # Reason makes a failure tell its own story in the hub. exit=N alone is
+    # already a win over an unexplained ✘; an opportunistic hint from the
+    # latest codex log adds the actual cause when one is grep-able (best
+    # effort — a missing/empty log just falls back to the bare exit code).
+    reason="exit=$exit_code"
+    if [ -n "${PRD_NAME:-}" ]; then
+      local last_log hint
+      last_log="$(ls -t "docs/plans/${PRD_NAME}/ralph-codex-"*.log 2>/dev/null | head -1)"
+      if [ -n "$last_log" ] && [ -f "$last_log" ]; then
+        hint="$(tail -n 30 "$last_log" 2>/dev/null | grep -m1 -E '^Codex failed|^Claude failed|^Error:|fatal error' || true)"
+        [ -n "$hint" ] && reason="$reason; ${hint:0:160}"
+      fi
+    fi
   fi
 
-  almanac_loop_mark_run_status "$PWD" "$RALPH_RUN_ID" "$status" >/dev/null 2>&1 || true
+  almanac_loop_mark_run_status "$PWD" "$RALPH_RUN_ID" "$status" "" "$reason" >/dev/null 2>&1 || true
 }
 
 ralph_finish_run() {

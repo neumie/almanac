@@ -62,7 +62,7 @@ new_tmpdir() {
 test_record_fields_is_canonical_schema() {
   local expected actual
   expected=$(printf '%s\n' \
-    id type target pid status_file started_at status finished_at round summary)
+    id type target pid status_file started_at status finished_at round summary failure_reason)
   actual="$(almanac_loop_record_fields)"
   assert_eq "$expected" "$actual" "record_fields must be the canonical run-status schema, in order"
   echo "  PASS: record_fields is the canonical schema"
@@ -247,6 +247,20 @@ test_mark_run_aborted_preserves_progress() {
   assert_file_contains "$status_file" $'summary\treviewers: security' "marking a run must preserve recorded summary"
   assert_file_contains "$index_file" $'harden-demo-003\tharden\tsrc/app.js\t4242\t.almanac/runs/harden-demo-003/status.tsv\t2026-05-25T12:00:00Z\taborted' "index should reflect aborted status"
   echo "  PASS: mark run aborted preserves progress"
+}
+
+test_mark_run_failed_records_failure_reason() {
+  local tmp status_file
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "9999" "ralph-fail-001" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_mark_run_status "$tmp" "ralph-fail-001" "failed" "2026-05-25T12:15:00Z" "exit=1; Codex failed mid-iteration"
+
+  status_file="$tmp/.almanac/runs/ralph-fail-001/status.tsv"
+  assert_file_contains "$status_file" $'status\tfailed' "failed is the recorded status"
+  assert_file_contains "$status_file" $'failure_reason\texit=1; Codex failed mid-iteration' "a failure reason passed to mark must be persisted on the record so the hub can show *why*"
+  echo "  PASS: mark run failed records failure_reason"
 }
 
 test_run_is_stale_detects_dead_pid() {
@@ -596,6 +610,7 @@ test_registers_run_in_registry
 test_marks_registered_run_done
 test_update_run_progress_records_round_and_summary
 test_mark_run_aborted_preserves_progress
+test_mark_run_failed_records_failure_reason
 test_run_is_stale_detects_dead_pid
 test_list_runs_returns_all_registered_runs
 test_read_run_returns_single_run_status
