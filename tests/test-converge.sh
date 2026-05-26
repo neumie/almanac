@@ -37,6 +37,16 @@ assert_contains() {
   esac
 }
 
+assert_not_contains() {
+  local haystack="$1"
+  local needle="$2"
+  local message="$3"
+
+  case "$haystack" in
+    *"$needle"*) fail "$message" ;;
+  esac
+}
+
 assert_file_contains() {
   local file="$1"
   local needle="$2"
@@ -72,10 +82,16 @@ run_converge() {
       CONVERGE_AGENT_PROVIDER="${CONVERGE_AGENT_PROVIDER:-codex}" \
       CONVERGE_AGENT_MODEL="${CONVERGE_AGENT_MODEL-}" \
       CONVERGE_AGENT_EFFORT="${CONVERGE_AGENT_EFFORT-}" \
+      CONVERGE_OVERSEER_PROVIDER="${CONVERGE_OVERSEER_PROVIDER:-codex}" \
+      CONVERGE_OVERSEER_MODEL="${CONVERGE_OVERSEER_MODEL-}" \
+      CONVERGE_OVERSEER_EFFORT="${CONVERGE_OVERSEER_EFFORT-}" \
       CONVERGE_ROUND_BUDGET="${CONVERGE_ROUND_BUDGET-}" \
       CONVERGE_FAIL_ON_EXEC_ERROR="${CONVERGE_FAIL_ON_EXEC_ERROR-}" \
       FAKE_CONVERGE_WORKER_MODE="${FAKE_CONVERGE_WORKER_MODE:-exec-commit}" \
+      FAKE_CONVERGE_OVERSEER_RESPONSE="${FAKE_CONVERGE_OVERSEER_RESPONSE-}" \
       FAKE_CONVERGE_ARGS_LOG="$tmp/.almanac/test-worker-args.log" \
+      FAKE_CONVERGE_OVERSEER_ARGS_LOG="$tmp/.almanac/test-overseer-args.log" \
+      FAKE_CONVERGE_OVERSEER_TICKS_LOG="$tmp/.almanac/test-overseer-ticks.log" \
       FAKE_CONVERGE_PROMPT_LOG_DIR="$tmp/.almanac/test-worker-prompts" \
       "$ALMANAC" converge "$@"
   )
@@ -97,14 +113,19 @@ prompt_log_dir="${FAKE_CONVERGE_PROMPT_LOG_DIR:?}"
 mode="${FAKE_CONVERGE_WORKER_MODE:-exec-commit}"
 result_file=""
 prompt=""
+sandbox=""
 
-printf '%s\n' "$*" > "$args_log"
+argv="$*"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --output-last-message)
       shift
       result_file="${1:-}"
+      ;;
+    --sandbox)
+      shift
+      sandbox="${1:-}"
       ;;
     *)
       prompt="$1"
@@ -122,7 +143,28 @@ tick="${tick:-0}"
 slug="${slug:-unknown}"
 plan_rel="${plan_rel:-docs/plans/converge/$slug}"
 report_rel="${report_rel:-$plan_rel/agent-reports.log}"
-printf '%s\n' "$prompt" > "$prompt_log_dir/tick-$tick.md"
+role="worker"
+if [ "$sandbox" = "read-only" ]; then
+  role="overseer"
+fi
+printf '%s\n' "$prompt" > "$prompt_log_dir/$role-tick-$tick.md"
+
+if [ "$role" = "overseer" ]; then
+  [ -n "${FAKE_CONVERGE_OVERSEER_ARGS_LOG:-}" ] && printf '%s\n' "$argv" > "$FAKE_CONVERGE_OVERSEER_ARGS_LOG"
+  [ -n "${FAKE_CONVERGE_OVERSEER_TICKS_LOG:-}" ] && printf '%s\n' "$tick" >> "$FAKE_CONVERGE_OVERSEER_TICKS_LOG"
+  response="${FAKE_CONVERGE_OVERSEER_RESPONSE:-}"
+  if [ -z "$response" ]; then
+    response="VERDICT: CONTINUE
+REASON: fake overseer says continue
+STEER: none
+GOAL_UPDATE: unchanged"
+  fi
+  [ -n "$result_file" ] && printf '%s\n' "$response" > "$result_file"
+  printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"fake converge overseer"}}'
+  exit 0
+fi
+
+printf '%s\n' "$argv" > "$args_log"
 
 exec_cmd="$(
   printf '%s\n' "$prompt" | awk '
@@ -525,6 +567,199 @@ test_structured_report_parser_accepts_worker_block() {
   echo "  PASS: structured worker report is parseable"
 }
 
+test_overseer_prompt_embeds_goal_reports_commits_and_contract() {
+  local tmp prompt reports plan
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  setup_git_repo "$tmp"
+
+  almanac_converge_scaffold "$tmp" "Overseer Goal"
+  plan="$(almanac_converge_plan_dir "$tmp" "Overseer Goal")"
+  reports="$plan/agent-reports.log"
+  printf '%s\n' "old-report-sentinel" > "$reports"
+  awk 'BEGIN { for (i = 0; i < 9000; i++) printf "x" }' >> "$reports"
+  printf '\n%s\n' "recent-report-sentinel" >> "$reports"
+  git -C "$tmp" commit --allow-empty -m "CONVERGE(overseer-goal): fake progress" --no-verify >/dev/null
+
+  prompt="$(almanac_converge_overseer_prompt "$tmp" "Overseer Goal" 2)"
+
+  assert_contains "$prompt" "CONVERGE_TICK=2" "overseer prompt should expose tick"
+  assert_contains "$prompt" "Overseer Goal" "overseer prompt should embed goal.md verbatim"
+  assert_contains "$prompt" "recent-report-sentinel" "overseer prompt should include recent reports tail"
+  assert_not_contains "$prompt" "old-report-sentinel" "overseer prompt should bound report history"
+  assert_contains "$prompt" "CONVERGE(overseer-goal): fake progress" "overseer prompt should include matching commit log"
+  assert_contains "$prompt" "VERDICT: <CONVERGED|CONTINUE|STEER|STOP>" \
+    "overseer prompt should specify verdict contract"
+  assert_contains "$prompt" "GOAL_UPDATE: <new goal.md content, or 'unchanged'>" \
+    "overseer prompt should specify goal update contract"
+
+  echo "  PASS: overseer prompt embeds goal, bounded reports, commits, and contract"
+}
+
+test_overseer_parse_verdicts_and_malformed_input() {
+  local v
+
+  for v in CONVERGED CONTINUE STEER STOP; do
+    almanac_converge_overseer_parse "VERDICT: $v
+REASON: because $v
+STEER: focus $v
+GOAL_UPDATE: unchanged"
+    assert_eq "$v" "$ALMANAC_CONVERGE_VERDICT" "parser should preserve $v verdict"
+    assert_eq "because $v" "$ALMANAC_CONVERGE_REASON" "parser should capture $v reason"
+    assert_eq "focus $v" "$ALMANAC_CONVERGE_STEER" "parser should capture $v steer"
+    assert_eq "unchanged" "$ALMANAC_CONVERGE_GOAL_UPDATE" "parser should capture unchanged goal update"
+  done
+
+  almanac_converge_overseer_parse "not a verdict"
+  assert_eq "CONTINUE" "$ALMANAC_CONVERGE_VERDICT" "malformed parser input should continue"
+  assert_eq "none" "$ALMANAC_CONVERGE_STEER" "malformed parser input should not steer"
+  assert_eq "unchanged" "$ALMANAC_CONVERGE_GOAL_UPDATE" "malformed parser input should not update goal"
+
+  almanac_converge_overseer_parse "VERDICT: STOP"
+  assert_eq "CONTINUE" "$ALMANAC_CONVERGE_VERDICT" "partial parser input should continue"
+  assert_eq "none" "$ALMANAC_CONVERGE_STEER" "partial parser input should not steer"
+  assert_eq "unchanged" "$ALMANAC_CONVERGE_GOAL_UPDATE" "partial parser input should not update goal"
+
+  almanac_converge_overseer_parse "VERDICT: NOPE
+REASON: bogus
+STEER: do bad thing
+GOAL_UPDATE: mutate"
+  assert_eq "CONTINUE" "$ALMANAC_CONVERGE_VERDICT" "invalid verdict should continue"
+  assert_eq "unchanged" "$ALMANAC_CONVERGE_GOAL_UPDATE" "invalid verdict should not mutate goal in slice 04"
+
+  echo "  PASS: overseer parser handles verdicts and malformed input conservatively"
+}
+
+test_overseer_agent_invoked_read_only_with_role_config() {
+  local tmp args
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  CONVERGE_OVERSEER_PROVIDER=codex CONVERGE_OVERSEER_MODEL=gpt-overseer CONVERGE_OVERSEER_EFFORT=medium \
+    run_converge "$tmp" --goal "Overseer Role" --exec "true" --rounds 1 >/dev/null
+
+  args="$(cat "$tmp/.almanac/test-overseer-args.log")"
+  assert_contains "$args" "--sandbox read-only" "overseer agent should run read-only"
+  assert_contains "$args" "--model gpt-overseer" "overseer agent should receive CONVERGE_OVERSEER_MODEL"
+  assert_contains "$args" "model_reasoning_effort=\"medium\"" "overseer agent should receive CONVERGE_OVERSEER_EFFORT"
+
+  echo "  PASS: overseer agent uses role config and read-only sandbox"
+}
+
+test_overseer_converged_stops_loop_and_writes_convergence() {
+  local tmp reports row status_file convergence
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  FAKE_CONVERGE_OVERSEER_RESPONSE="VERDICT: CONVERGED
+REASON: goal satisfied
+STEER: none
+GOAL_UPDATE: unchanged" \
+    run_converge "$tmp" --goal "Converged Goal" --exec "true" --rounds 3 >/dev/null
+
+  [ -f "$tmp/.converge-stop" ] || fail "CONVERGED should write .converge-stop"
+  reports="$tmp/docs/plans/converge/converged-goal/agent-reports.log"
+  assert_eq "1" "$(grep -c '^===== tick=[0-9][0-9]* ts=.* =====$' "$reports")" \
+    "CONVERGED should stop after current round"
+  row="$(awk -F'\t' 'NR > 1 && $2 == "converge" { print; exit }' "$tmp/.almanac/runs/index.tsv")"
+  status_file="$tmp/.almanac/runs/$(printf '%s' "$row" | cut -f1)/status.tsv"
+  assert_file_contains "$status_file" $'status\tdone' "CONVERGED should mark registry done"
+
+  convergence="$tmp/docs/plans/converge/converged-goal/convergence.md"
+  [ -f "$convergence" ] || fail "convergence.md should be written on terminal exit"
+  assert_file_contains "$convergence" "## Final verdict" "convergence.md should include final verdict section"
+  assert_file_contains "$convergence" "CONVERGED" "convergence.md should include verdict value"
+  assert_file_contains "$convergence" "## Tick count" "convergence.md should include tick count section"
+  assert_file_contains "$convergence" "## Time elapsed" "convergence.md should include elapsed section"
+  assert_file_contains "$convergence" "## Final goal" "convergence.md should include final goal section"
+  assert_file_contains "$convergence" "## Final reason" "convergence.md should include final reason section"
+
+  echo "  PASS: CONVERGED verdict stops loop, marks done, writes convergence.md"
+}
+
+test_overseer_stop_marks_aborted() {
+  local tmp row status_file
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  FAKE_CONVERGE_OVERSEER_RESPONSE="VERDICT: STOP
+REASON: operator-equivalent stop
+STEER: none
+GOAL_UPDATE: unchanged" \
+    run_converge "$tmp" --goal "Stopped Goal" --exec "true" --rounds 3 >/dev/null
+
+  row="$(awk -F'\t' 'NR > 1 && $2 == "converge" { print; exit }' "$tmp/.almanac/runs/index.tsv")"
+  status_file="$tmp/.almanac/runs/$(printf '%s' "$row" | cut -f1)/status.tsv"
+  assert_file_contains "$status_file" $'status\taborted' "STOP should mark registry aborted"
+
+  echo "  PASS: STOP verdict marks run aborted"
+}
+
+test_overseer_steer_writes_directive() {
+  local tmp
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  FAKE_CONVERGE_OVERSEER_RESPONSE="VERDICT: STEER
+REASON: needs focus
+STEER: focus the parser
+GOAL_UPDATE: new goal text for later slice" \
+    run_converge "$tmp" --goal "Steer Goal" --exec "true" --rounds 1 >/dev/null
+
+  assert_file_contains "$tmp/.converge-steer" "focus the parser" \
+    "STEER verdict should write .converge-steer"
+  assert_file_contains "$tmp/docs/plans/converge/steer-goal/overseer.log" \
+    "GOAL_UPDATE: new goal text for later slice" \
+    "slice 04 should log GOAL_UPDATE without applying it"
+  assert_file_contains "$tmp/docs/plans/converge/steer-goal/goal.md" "Steer Goal" \
+    "slice 04 should not mutate goal.md"
+
+  echo "  PASS: STEER verdict writes directive and logs inert GOAL_UPDATE"
+}
+
+test_overseer_continue_writes_no_signal() {
+  local tmp
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  FAKE_CONVERGE_OVERSEER_RESPONSE="VERDICT: CONTINUE
+REASON: keep going
+STEER: noisy non-authoritative text
+GOAL_UPDATE: unchanged" \
+    run_converge "$tmp" --goal "Continue Goal" --exec "true" --rounds 1 >/dev/null
+
+  [ ! -f "$tmp/.converge-steer" ] || fail "CONTINUE verdict should not write .converge-steer"
+  [ ! -f "$tmp/.converge-stop" ] || fail "CONTINUE verdict should not write .converge-stop"
+
+  echo "  PASS: CONTINUE verdict writes no signal files"
+}
+
+test_no_oversee_skips_overseer_agent() {
+  local tmp
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  run_converge "$tmp" --goal "No Overseer" --exec "true" --rounds 2 --no-oversee >/dev/null
+
+  [ ! -f "$tmp/.almanac/test-overseer-args.log" ] || fail "--no-oversee should not invoke overseer agent"
+  [ ! -f "$tmp/.converge-stop" ] || fail "--no-oversee should not write overseer stop signal"
+
+  echo "  PASS: --no-oversee skips overseer work"
+}
+
+test_oversee_every_controls_cadence() {
+  local tmp ticks
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  run_converge "$tmp" --goal "Cadence Goal" --exec "true" --rounds 9 --oversee-every 3 >/dev/null
+
+  ticks="$(tr '\n' ' ' < "$tmp/.almanac/test-overseer-ticks.log")"
+  assert_eq "3 6 9 " "$ticks" "--oversee-every 3 should tick on rounds 3, 6, 9"
+
+  echo "  PASS: --oversee-every controls overseer cadence"
+}
+
 test_cli_requires_goal_and_exec
 test_plan_dir_scaffold_and_exec_smoke
 test_registry_records_converge_run_done
@@ -534,6 +769,15 @@ test_prompt_template_created_and_reread
 test_worker_prompt_consumes_steer_once
 test_worker_agent_invoked_with_role_config
 test_structured_report_parser_accepts_worker_block
+test_overseer_prompt_embeds_goal_reports_commits_and_contract
+test_overseer_parse_verdicts_and_malformed_input
+test_overseer_agent_invoked_read_only_with_role_config
+test_overseer_converged_stops_loop_and_writes_convergence
+test_overseer_stop_marks_aborted
+test_overseer_steer_writes_directive
+test_overseer_continue_writes_no_signal
+test_no_oversee_skips_overseer_agent
+test_oversee_every_controls_cadence
 test_round_count_exactness
 test_default_round_budget_and_env_override
 test_diff_rounds_commit_with_converge_prefix

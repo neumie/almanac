@@ -6,12 +6,14 @@ set -euo pipefail
 source "$ALMANAC_HOME/lib/converge-core.sh"
 
 usage() {
-  printf '%s\n' "Usage: almanac converge --goal <goal> --exec <command> [--rounds N]"
+  printf '%s\n' "Usage: almanac converge --goal <goal> --exec <command> [--rounds N] [--no-oversee] [--oversee-every N]"
 }
 
 GOAL=""
 EXEC_CMD=""
 ROUNDS="${CONVERGE_ROUND_BUDGET:-10}"
+NO_OVERSEE=0
+OVERSEE_EVERY="${CONVERGE_OVERSEE_EVERY:-1}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -43,6 +45,17 @@ while [ "$#" -gt 0 ]; do
       }
       ROUNDS="$1"
       ;;
+    --no-oversee)
+      NO_OVERSEE=1
+      ;;
+    --oversee-every)
+      shift
+      [ "$#" -gt 0 ] || {
+        usage >&2
+        _die "Missing value for --oversee-every"
+      }
+      OVERSEE_EVERY="$1"
+      ;;
     --)
       shift
       break
@@ -68,4 +81,4 @@ done
   _die "Missing required --exec"
 }
 
-almanac_converge_run "$PWD" "$GOAL" "$EXEC_CMD" "$ROUNDS"
+almanac_converge_run "$PWD" "$GOAL" "$EXEC_CMD" "$ROUNDS" "$NO_OVERSEE" "$OVERSEE_EVERY"
