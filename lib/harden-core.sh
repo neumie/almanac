@@ -1456,23 +1456,18 @@ INNER
 #       caller to thread into the next round's reviewers and fixer)
 # HARDEN_HITL ("ship"|"continue"|"steer") drives the choice non-interactively
 # (tests, headless runs); on "steer" the directive comes from HARDEN_STEER. With a
-# TTY it prompts — gum choose/input when gum is present, a plain `read` otherwise
-# (graceful degradation, keeping almanac's zero-dep promise). With no TTY and no
-# override it defaults to continue so an unattended loop keeps working toward
-# convergence rather than blocking on input. The prompt text goes to stderr so
-# stdout carries only the steer directive.
+# stdin TTY it prompts through the UI seam (gum-or-plain in lib/ui.sh) — gum
+# choose/input when gum is present and stderr is a TTY, plain numbered menu / read
+# otherwise. With no TTY and no override it defaults to continue so an unattended
+# loop keeps working rather than blocking on input. The prompt text goes to stderr
+# (ui.sh contract) so stdout carries only the steer directive.
 almanac_harden_hitl_checkpoint() {
   local choice="${HARDEN_HITL:-}"
   local directive="${HARDEN_STEER:-}"
-  local reply
 
   if [ -z "$choice" ]; then
-    if [ -t 0 ] && command -v gum >/dev/null 2>&1; then
-      choice="$(gum choose --header "Round complete — ship, continue, or steer?" continue ship steer)" || choice="continue"
-    elif [ -t 0 ]; then
-      printf 'Ship, continue, or steer the run? [continue/ship/steer] ' >&2
-      read -r reply || reply=""
-      choice="$reply"
+    if [ -t 0 ]; then
+      choice="$(almanac_loop_ui_choose "Round complete — ship, continue, or steer?" continue ship steer)" || choice="continue"
     else
       choice="continue"
     fi
@@ -1485,15 +1480,10 @@ almanac_harden_hitl_checkpoint() {
     steer|st|STEER|redirect|amend)
       # Collect a directive to redirect (or amend) the next round, unless one was
       # supplied non-interactively via HARDEN_STEER. Echo it on stdout; the prompt
-      # itself goes to stderr so the caller captures only the directive.
-      if [ -z "$directive" ]; then
-        if [ -t 0 ] && command -v gum >/dev/null 2>&1; then
-          directive="$(gum input --header "Steer the run (redirect/amend)" --placeholder "e.g. focus on the auth module; treat perf findings as notes")" || directive=""
-        elif [ -t 0 ]; then
-          printf 'Steering directive: ' >&2
-          read -r reply || reply=""
-          directive="$reply"
-        fi
+      # itself goes to stderr (ui.sh contract) so the caller captures only the
+      # directive.
+      if [ -z "$directive" ] && [ -t 0 ]; then
+        directive="$(almanac_loop_ui_input "Steer the run (redirect/amend)")" || directive=""
       fi
       printf '%s\n' "$directive"
       return 2
