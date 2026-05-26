@@ -305,6 +305,52 @@ almanac_loop_mark_run_status() {
   local _fields=("status=$status" "finished_at=$finished_at")
   [ -n "$reason" ] && _fields+=("failure_reason=$reason")
   almanac_loop_record_set "$status_file" "${_fields[@]}"
+  # Best-effort end-of-run notification (macOS osascript / Linux notify-send /
+  # terminal-bell fallback). Opt out via ALMANAC_NO_NOTIFY=1. Notification
+  # trouble never sinks the mark — if osascript is missing or notify-send
+  # errors, the run is still correctly marked.
+  almanac_loop_notify_run_end "$root" "$run_id" >/dev/null 2>&1 || true
+}
+
+# Tell the user a run reached a terminal state. Reads the just-written record so
+# the notification carries type/status/target (and failure_reason on a failed
+# run). Dispatch order: macOS osascript → Linux notify-send → terminal bell
+# fallback (so you at least *hear* a finish on a bare server). Opt out entirely
+# with ALMANAC_NO_NOTIFY=1. ALMANAC_NOTIFY_TEST_SINK (a file path) replaces the
+# OS dispatcher with a write to that file, so tests can assert title+body
+# without a desktop environment.
+almanac_loop_notify_run_end() {
+  [ -z "${ALMANAC_NO_NOTIFY:-}" ] || return 0
+  # Skip when there's no terminal attached (tests, daemons, captured output) —
+  # nobody to notify. The test sink bypasses this so unit tests can still assert
+  # the dispatch path without a TTY.
+  if [ -z "${ALMANAC_NOTIFY_TEST_SINK:-}" ]; then
+    [ -t 2 ] || return 0
+  fi
+  local root="$1" run_id="$2"
+  local status_file type status target reason title body body_esc title_esc
+  status_file="$(almanac_loop_run_status_file "$root" "$run_id" 2>/dev/null)" || return 0
+  [ -f "$status_file" ] || return 0
+  type="$(almanac_loop_status_field "$status_file" type 2>/dev/null || true)"
+  status="$(almanac_loop_status_field "$status_file" status 2>/dev/null || true)"
+  target="$(almanac_loop_status_field "$status_file" target 2>/dev/null || true)"
+  reason="$(almanac_loop_status_field "$status_file" failure_reason 2>/dev/null || true)"
+  case "$status" in done|failed|aborted) ;; *) return 0 ;; esac
+  title="almanac · ${type:-run} ${status}"
+  body="${target}${reason:+ — $reason}"
+  if [ -n "${ALMANAC_NOTIFY_TEST_SINK:-}" ]; then
+    printf '%s|%s\n' "$title" "$body" >> "$ALMANAC_NOTIFY_TEST_SINK"
+    return 0
+  fi
+  if command -v osascript >/dev/null 2>&1; then
+    body_esc="$(printf '%s' "$body" | tr -d '\n' | sed 's/"/\\"/g')"
+    title_esc="$(printf '%s' "$title" | tr -d '\n' | sed 's/"/\\"/g')"
+    osascript -e "display notification \"$body_esc\" with title \"$title_esc\"" >/dev/null 2>&1 || true
+  elif command -v notify-send >/dev/null 2>&1; then
+    notify-send "$title" "$body" >/dev/null 2>&1 || true
+  else
+    printf '\a' >&2 || true
+  fi
 }
 
 # Update a live run's progress mid-flight: rewrite its status.tsv with a new

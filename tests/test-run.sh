@@ -282,6 +282,48 @@ test_set_run_config_writes_provider_model_effort() {
   echo "  PASS: set_run_config writes the config fields the resume path reads"
 }
 
+test_notify_run_end_writes_to_sink_on_terminal_transition() {
+  local tmp sink
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  sink="$tmp/notify.log"
+
+  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "9999" "ralph-notify" "2026-05-26T12:00:00Z" >/dev/null
+  ALMANAC_NOTIFY_TEST_SINK="$sink" \
+    almanac_loop_mark_run_status "$tmp" "ralph-notify" "done" "2026-05-26T12:05:00Z"
+
+  [ -f "$sink" ] || fail "notify sink should have been written on terminal transition"
+  assert_file_contains "$sink" "almanac · ralph done" "notify title carries type + status"
+  assert_file_contains "$sink" "docs/plans/x/prd.md" "notify body carries target"
+  echo "  PASS: notify_run_end fires on mark-status terminal transition"
+}
+
+test_notify_run_end_respects_opt_out() {
+  local tmp sink
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  sink="$tmp/notify.log"
+
+  almanac_loop_register_run "$tmp" "ralph" "x" "9999" "ralph-quiet" "2026-05-26T12:00:00Z" >/dev/null
+  ALMANAC_NO_NOTIFY=1 ALMANAC_NOTIFY_TEST_SINK="$sink" \
+    almanac_loop_mark_run_status "$tmp" "ralph-quiet" "done" "2026-05-26T12:05:00Z"
+
+  [ ! -f "$sink" ] || fail "ALMANAC_NO_NOTIFY=1 must suppress notification entirely (sink must stay unwritten)"
+  echo "  PASS: notify_run_end honors ALMANAC_NO_NOTIFY"
+}
+
+test_notify_run_end_carries_failure_reason() {
+  local tmp sink
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  sink="$tmp/notify.log"
+
+  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "9999" "ralph-bad" "2026-05-26T12:00:00Z" >/dev/null
+  ALMANAC_NOTIFY_TEST_SINK="$sink" \
+    almanac_loop_mark_run_status "$tmp" "ralph-bad" "failed" "2026-05-26T12:05:00Z" "exit=1; Codex failed"
+
+  assert_file_contains "$sink" "almanac · ralph failed" "failed notification carries failed status"
+  assert_file_contains "$sink" "exit=1; Codex failed" "failed notification body includes failure_reason"
+  echo "  PASS: notify_run_end carries failure_reason on failed runs"
+}
+
 test_run_is_stale_detects_dead_pid() {
   local tmp rc
   new_tmpdir
@@ -631,6 +673,9 @@ test_update_run_progress_records_round_and_summary
 test_mark_run_aborted_preserves_progress
 test_mark_run_failed_records_failure_reason
 test_set_run_config_writes_provider_model_effort
+test_notify_run_end_writes_to_sink_on_terminal_transition
+test_notify_run_end_respects_opt_out
+test_notify_run_end_carries_failure_reason
 test_run_is_stale_detects_dead_pid
 test_list_runs_returns_all_registered_runs
 test_read_run_returns_single_run_status
