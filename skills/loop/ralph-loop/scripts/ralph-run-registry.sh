@@ -47,6 +47,14 @@ ralph_update_run_progress() {
   almanac_loop_update_run_progress "$PWD" "$RALPH_RUN_ID" "$round" "$summary" >/dev/null 2>&1 || true
 }
 
+# Stamp the run's launch config onto its registry blob (after register_run) so
+# resume/clone can rebuild the same command. Best-effort: registry trouble must
+# never sink the run; absent values stay blank and are simply skipped at resume.
+ralph_set_run_config() {
+  [ -n "$RALPH_RUN_ID" ] || return 0
+  almanac_loop_set_run_config "$PWD" "$RALPH_RUN_ID" "$@" >/dev/null 2>&1 || true
+}
+
 ralph_mark_run_finished() {
   local exit_code="$1"
   local status="" reason=""

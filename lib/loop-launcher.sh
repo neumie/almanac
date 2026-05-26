@@ -105,7 +105,7 @@ _almanac_launch_need_positive_int() {
 # --- ralph ---------------------------------------------------------------------
 
 _almanac_launch_ralph() {
-  local prd="" mode="" provider="" model="" effort="" iterations="" no_oversee=""
+  local prd="" mode="" provider="" model="" effort="" iterations="" no_oversee="" yes=""
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --prd)        shift; prd="${1:-}";        [ -n "$prd" ] || _die "--prd requires a value" ;;
@@ -115,6 +115,7 @@ _almanac_launch_ralph() {
       --effort|--thinking) shift; effort="${1:-}"; [ -n "$effort" ] || _die "$1 requires a value" ;;
       --iterations) shift; iterations="${1:-}"; [ -n "$iterations" ] || _die "--iterations requires a value" ;;
       --no-oversee) no_oversee=1 ;;
+      --yes|-y) yes=1 ;;
       --help|-h) almanac_loop_launch_usage ralph; return 0 ;;
       *) _die "Unknown ralph launch option: $1" ;;
     esac
@@ -159,7 +160,7 @@ _almanac_launch_ralph() {
     "PRD:$prd" "Mode:$mode" "Provider:$provider" \
     "Model:${model:-provider default}" "Thinking:${effort:-provider default}" \
     $([ "$mode" = "afk" ] && printf '%s\n%s' "Iterations:$iterations" "Overseer:$([ -n "$no_oversee" ] && echo off || echo on)")
-  almanac_loop_ui_confirm "Launch this run?" || { _info "Cancelled."; return 0; }
+  [ -n "$yes" ] || almanac_loop_ui_confirm "Launch this run?" || { _info "Cancelled."; return 0; }
 
   # Export role config + exec the runner (no re-launch through `almanac ralph`).
   export RALPH_PROVIDER="$provider"
@@ -177,7 +178,7 @@ _almanac_launch_ralph() {
 # --- harden --------------------------------------------------------------------
 
 _almanac_launch_harden() {
-  local target="" lenses="" provider="" model="" effort="" rounds=""
+  local target="" lenses="" provider="" model="" effort="" rounds="" yes=""
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --lenses)   shift; lenses="${1:-}";   [ -n "$lenses" ] || _die "--lenses requires a value" ;;
@@ -185,6 +186,7 @@ _almanac_launch_harden() {
       --model)    shift; model="${1:-}";    [ -n "$model" ] || _die "--model requires a value" ;;
       --effort|--thinking) shift; effort="${1:-}"; [ -n "$effort" ] || _die "$1 requires a value" ;;
       --rounds)   shift; rounds="${1:-}";   [ -n "$rounds" ] || _die "--rounds requires a value" ;;
+      --yes|-y) yes=1 ;;
       --help|-h) almanac_loop_launch_usage harden; return 0 ;;
       -*) _die "Unknown harden launch option: $1" ;;
       *)  [ -z "$target" ] && target="$1" || _die "Unexpected harden argument: $1" ;;
@@ -208,7 +210,7 @@ _almanac_launch_harden() {
     "Target:$target" "Lenses:${lenses:-default set}" "Provider:$provider" \
     "Model:${model:-provider default}" "Thinking:${effort:-provider default}" \
     "Rounds:${rounds:-default budget}"
-  almanac_loop_ui_confirm "Launch this run?" || { _info "Cancelled."; return 0; }
+  [ -n "$yes" ] || almanac_loop_ui_confirm "Launch this run?" || { _info "Cancelled."; return 0; }
 
   [ -n "$lenses" ]   && export HARDEN_LENSES="$lenses"
   export HARDEN_PROVIDER="$provider"

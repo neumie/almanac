@@ -40,7 +40,8 @@ fi
 # three (finished_at/round/summary) are the per-run detail the index omits.
 almanac_loop_record_fields() {
   printf '%s\n' \
-    id type target pid status_file started_at status finished_at round summary failure_reason
+    id type target pid status_file started_at status finished_at round summary failure_reason \
+    provider model effort iterations oversee lenses rounds
 }
 
 # True when NAME is a canonical run-status field. Lets record_set reject a typo
@@ -241,6 +242,21 @@ almanac_loop_register_run() {
   almanac_loop_record_set "$status_file" "id=$run_id" "type=$type" "target=$target" "pid=$pid" "status_file=$status_rel" "started_at=$started_at" "status=running"
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$run_id" "$type" "$target" "$pid" "$status_rel" "$started_at" "running" >> "$index_file"
   printf '%s\n' "$run_id"
+}
+
+# Set config fields on a run after registration. Thin convenience over record_set
+# that names intent: "store the resolved launch config so resume can rebuild it."
+# Accepts any subset of the config keys (provider/model/effort/iterations/oversee
+# for ralph; provider/model/effort/lenses/rounds for harden). Blank values are
+# acceptable — record_set keeps the field present-but-blank. Returns 2 when the
+# run is unknown so callers can guard without aborting.
+almanac_loop_set_run_config() {
+  [ "$#" -ge 3 ] || return 2
+  local root="$1" run_id="$2"; shift 2
+  local status_file
+  status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
+  [ -f "$status_file" ] || return 2
+  almanac_loop_record_set "$status_file" "$@"
 }
 
 almanac_loop_mark_run_status() {
@@ -704,6 +720,7 @@ almanac_loop_run_detail() {
   local root="$1"
   local run_id="$2"
   local status_file id type target status round summary started finished live glyph failure_reason
+  local provider model effort iterations oversee lenses rounds
 
   status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
   [ -f "$status_file" ] || return 1
@@ -717,6 +734,13 @@ almanac_loop_run_detail() {
   started="$(almanac_loop_status_field "$status_file" "started_at" || true)"
   finished="$(almanac_loop_status_field "$status_file" "finished_at" || true)"
   failure_reason="$(almanac_loop_status_field "$status_file" "failure_reason" || true)"
+  provider="$(almanac_loop_status_field "$status_file" "provider" || true)"
+  model="$(almanac_loop_status_field "$status_file" "model" || true)"
+  effort="$(almanac_loop_status_field "$status_file" "effort" || true)"
+  iterations="$(almanac_loop_status_field "$status_file" "iterations" || true)"
+  oversee="$(almanac_loop_status_field "$status_file" "oversee" || true)"
+  lenses="$(almanac_loop_status_field "$status_file" "lenses" || true)"
+  rounds="$(almanac_loop_status_field "$status_file" "rounds" || true)"
 
   live="$status"
   if [ "$status" = "running" ] && almanac_loop_run_is_stale "$root" "$run_id"; then
@@ -731,6 +755,16 @@ almanac_loop_run_detail() {
   if [ -n "$started" ]; then printf 'started: %s\n' "$started"; fi
   if [ -n "$finished" ]; then printf 'finished: %s\n' "$finished"; fi
   if [ -n "$failure_reason" ]; then printf 'failure: %s\n' "$failure_reason"; fi
+  # Launch config (recorded at register so hub --resume can rebuild the command).
+  # Each line is conditional so a run without a stored value (older runs / fields
+  # that don't apply to this loop type) doesn't print empty placeholders.
+  [ -n "$provider" ]   && printf 'provider: %s\n' "$provider"
+  [ -n "$model" ]      && printf 'model: %s\n' "$model"
+  [ -n "$effort" ]     && printf 'effort: %s\n' "$effort"
+  [ -n "$iterations" ] && printf 'iterations: %s\n' "$iterations"
+  [ -n "$oversee" ]    && printf 'oversee: %s\n' "$oversee"
+  [ -n "$lenses" ]     && printf 'lenses: %s\n' "$lenses"
+  [ -n "$rounds" ]     && printf 'rounds: %s\n' "$rounds"
   return 0
 }
 

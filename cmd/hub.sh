@@ -19,6 +19,8 @@
 #   almanac hub --steer <id> <text…>   queue a steer directive for the next round
 #   almanac hub --new <ralph|harden> [config…] [--dry-run]
 #                                      launch a new run (dry-run previews the command)
+#   almanac hub --resume <id>          re-launch a finished run with the same config (auto-confirm)
+#   almanac hub --clone  <id>          start the launcher pre-filled from a finished run (no auto-confirm)
 
 set -euo pipefail
 
@@ -36,6 +38,8 @@ hub_usage() {
   printf '%s\n' "  almanac hub --steer <run-id> …   queue a steer directive for the next round"
   printf '%s\n' "  almanac hub --new <ralph|harden> [config…] [--dry-run]"
   printf '%s\n' "                                  launch a new run (--dry-run previews it)"
+  printf '%s\n' "  almanac hub --resume <run-id>    re-launch a finished run with the same config"
+  printf '%s\n' "  almanac hub --clone  <run-id>    start the launcher pre-filled from a finished run"
 }
 
 # Launch (or, with dry_run=1, preview) a composed new run. env_raw/argv_raw are
@@ -144,6 +148,64 @@ almanac_hub_menu() {
   done
 }
 
+# Re-build a finished run's launch command from its registry blob and either
+# launch it auto-confirmed (resume) or hand it to the launcher for review/edit
+# (clone). The composer + exec path is the same one `--new` uses, so a resumed/
+# cloned run goes through every layer a fresh launch does. Config fields come
+# from the per-run status blob (provider/model/effort/iterations/oversee for
+# ralph; target/lenses/provider/model/effort/rounds for harden); ralph's mode is
+# inferred from whether `iterations` was recorded (afk) or not (once).
+almanac_hub_resume_or_clone() {
+  local mode="$1" run_id="$2"
+  local status_file run_type target provider model effort iterations oversee lenses rounds
+  local -a opts
+  local argv env_raw prd
+
+  status_file="$(almanac_loop_run_status_file "$ROOT" "$run_id")"
+  [ -f "$status_file" ] || _die "Unknown run: $run_id"
+  run_type="$(almanac_loop_status_field "$status_file" type || true)"
+  target="$(almanac_loop_status_field "$status_file" target || true)"
+  provider="$(almanac_loop_status_field "$status_file" provider || true)"
+  model="$(almanac_loop_status_field "$status_file" model || true)"
+  effort="$(almanac_loop_status_field "$status_file" effort || true)"
+  iterations="$(almanac_loop_status_field "$status_file" iterations || true)"
+  oversee="$(almanac_loop_status_field "$status_file" oversee || true)"
+  lenses="$(almanac_loop_status_field "$status_file" lenses || true)"
+  rounds="$(almanac_loop_status_field "$status_file" rounds || true)"
+
+  case "$run_type" in
+    ralph)
+      prd="$(basename "$(dirname "$target")")"
+      opts=("prd=$prd")
+      if [ -n "$iterations" ]; then opts+=("mode=afk" "iterations=$iterations"); else opts+=("mode=once"); fi
+      [ -n "$provider" ] && opts+=("provider=$provider")
+      [ -n "$model" ]    && opts+=("model=$model")
+      [ -n "$effort" ]   && opts+=("effort=$effort")
+      [ "$oversee" = "off" ] && opts+=("oversee=off")
+      ;;
+    harden)
+      [ -n "$target" ]   && opts+=("target=$target")
+      [ -n "$lenses" ]   && opts+=("lenses=$lenses")
+      [ -n "$provider" ] && opts+=("provider=$provider")
+      [ -n "$model" ]    && opts+=("model=$model")
+      [ -n "$effort" ]   && opts+=("effort=$effort")
+      [ -n "$rounds" ]   && opts+=("rounds=$rounds")
+      ;;
+    *) _die "Cannot $mode run of unknown type: $run_type" ;;
+  esac
+
+  argv="$(almanac_loop_new_run_argv "$run_type" "${opts[@]}")" \
+    || _die "Could not compose $mode for $run_id"
+  env_raw="$(almanac_loop_new_run_env "$run_type" "${opts[@]}")" || env_raw=""
+
+  # resume auto-confirms via --yes; clone leaves the launcher's confirm in place
+  # so the operator can review and Ctrl+C to tweak before relaunching.
+  if [ "$mode" = "resume" ]; then
+    argv="${argv}"$'\n''--yes'
+  fi
+  almanac_hub_launch_new 0 "$env_raw" "$argv"
+}
+
 ACTION=""
 ACTION_ID=""
 STEER_DIRECTIVE=""
@@ -206,6 +268,18 @@ while [ "$#" -gt 0 ]; do
       STEER_DIRECTIVE="${*:-}"
       break
       ;;
+    --resume)
+      shift
+      [ "$#" -gt 0 ] || _die "Missing run id for --resume"
+      ACTION="resume"
+      ACTION_ID="$1"
+      ;;
+    --clone)
+      shift
+      [ "$#" -gt 0 ] || _die "Missing run id for --clone"
+      ACTION="clone"
+      ACTION_ID="$1"
+      ;;
     -*)
       _die "Unknown hub option: $1"
       ;;
@@ -261,6 +335,10 @@ case "$ACTION" in
       NEW_ENV_RAW="$(almanac_loop_new_run_env "$ACTION_TYPE")" || NEW_ENV_RAW=""
     fi
     almanac_hub_launch_new "$NEW_DRY_RUN" "$NEW_ENV_RAW" "$NEW_ARGV_RAW"
+    exit 0
+    ;;
+  resume|clone)
+    almanac_hub_resume_or_clone "$ACTION" "$ACTION_ID"
     exit 0
     ;;
 esac

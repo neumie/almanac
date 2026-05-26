@@ -106,6 +106,11 @@ case "$PROVIDER" in
 esac
 
 ralph_register_run "$PRD_NAME"
+# Stamp launch config onto the run so `almanac hub --resume <id>` can rebuild it.
+ralph_set_run_config \
+  "provider=$PROVIDER" \
+  "model=$AGENT_MODEL" \
+  "effort=$AGENT_EFFORT"
 trap 'ralph_finish_run "$?"; rm -f "${RALPH_SNAP_FILE:-}"' EXIT
 
 echo "======= RALPH ONCE ======="

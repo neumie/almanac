@@ -499,6 +499,13 @@ echo "========================="
 echo ""
 
 ralph_register_run "$PRD_NAME"
+# Stamp launch config onto the run so `almanac hub --resume <id>` can rebuild it.
+ralph_set_run_config \
+  "provider=$PROVIDER" \
+  "model=$AGENT_MODEL" \
+  "effort=$AGENT_EFFORT" \
+  "iterations=$ITERATIONS" \
+  "oversee=$([ -n "${RALPH_NO_OVERSEE:-}" ] && echo off || echo on)"
 echo "Run ID:      $RALPH_RUN_ID"
 echo ""
 

@@ -62,7 +62,8 @@ new_tmpdir() {
 test_record_fields_is_canonical_schema() {
   local expected actual
   expected=$(printf '%s\n' \
-    id type target pid status_file started_at status finished_at round summary failure_reason)
+    id type target pid status_file started_at status finished_at round summary failure_reason \
+    provider model effort iterations oversee lenses rounds)
   actual="$(almanac_loop_record_fields)"
   assert_eq "$expected" "$actual" "record_fields must be the canonical run-status schema, in order"
   echo "  PASS: record_fields is the canonical schema"
@@ -261,6 +262,24 @@ test_mark_run_failed_records_failure_reason() {
   assert_file_contains "$status_file" $'status\tfailed' "failed is the recorded status"
   assert_file_contains "$status_file" $'failure_reason\texit=1; Codex failed mid-iteration' "a failure reason passed to mark must be persisted on the record so the hub can show *why*"
   echo "  PASS: mark run failed records failure_reason"
+}
+
+test_set_run_config_writes_provider_model_effort() {
+  local tmp status_file
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "9999" "ralph-cfg" "2026-05-26T12:00:00Z" >/dev/null
+  almanac_loop_set_run_config "$tmp" "ralph-cfg" \
+    "provider=claude" "model=opus" "effort=xhigh" "iterations=20" "oversee=on"
+
+  status_file="$tmp/.almanac/runs/ralph-cfg/status.tsv"
+  assert_file_contains "$status_file" $'provider\tclaude' "set_run_config writes provider so hub --resume can read it back"
+  assert_file_contains "$status_file" $'model\topus' "set_run_config writes model"
+  assert_file_contains "$status_file" $'effort\txhigh' "set_run_config writes effort"
+  assert_file_contains "$status_file" $'iterations\t20' "set_run_config writes iterations (afk)"
+  assert_file_contains "$status_file" $'oversee\ton' "set_run_config writes oversee (afk)"
+  echo "  PASS: set_run_config writes the config fields the resume path reads"
 }
 
 test_run_is_stale_detects_dead_pid() {
@@ -611,6 +630,7 @@ test_marks_registered_run_done
 test_update_run_progress_records_round_and_summary
 test_mark_run_aborted_preserves_progress
 test_mark_run_failed_records_failure_reason
+test_set_run_config_writes_provider_model_effort
 test_run_is_stale_detects_dead_pid
 test_list_runs_returns_all_registered_runs
 test_read_run_returns_single_run_status
