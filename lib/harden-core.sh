@@ -1523,9 +1523,17 @@ almanac_harden_run() {
     _info "Run registered: $run_id"
     # Mark the run aborted on any unexpected exit (signal, mid-round _die) that
     # leaves it still running; the normal exit paths below mark done/failed and
-    # clear this via almanac_harden_run_finalize.
-    trap 'almanac_harden_run_finalize "$root" "$run_id" aborted; exit 130' INT TERM
-    trap 'almanac_harden_run_finalize "$root" "$run_id" aborted' EXIT
+    # clear this via almanac_harden_run_finalize. Bake $root/$run_id into the
+    # trap text at set-time via %q — bash uses dynamic scoping for trap
+    # expansion, and inner functions (e.g. almanac_harden_fanout) declare
+    # `local run_id` for their own bookkeeping; under `set -u`, _die exits from
+    # such a frame would resolve $run_id to the inner unset local, not this
+    # outer one, and bash would die on "run_id: unbound variable" before the
+    # finalize call ever runs.
+    local _harden_run_finalize_cmd
+    printf -v _harden_run_finalize_cmd 'almanac_harden_run_finalize %q %q aborted' "$root" "$run_id"
+    trap "${_harden_run_finalize_cmd}; exit 130" INT TERM
+    trap "${_harden_run_finalize_cmd}" EXIT
   fi
 
   round=0

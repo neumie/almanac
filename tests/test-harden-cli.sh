@@ -1211,6 +1211,41 @@ test_run_registers_in_the_run_registry() {
   echo "  PASS: a harden run registers in the run registry and is marked done on exit"
 }
 
+# Regression (set -u trap-scope bug): when _die fires deep in fan-out (e.g. the
+# target file does not exist), the EXIT trap set in almanac_harden_run must mark
+# the run aborted without bash dying on "run_id: unbound variable". The trap text
+# referenced $root/$run_id; bash uses dynamic scoping for trap expansion, and
+# almanac_harden_fanout declares `local run_id` for its own bookkeeping, so the
+# trap was resolving $run_id to fanout's unset local instead of the outer's value.
+# Fix bakes both values into the trap text at set-time via printf %q.
+test_run_aborts_cleanly_when_target_missing() {
+  local tmp output rc row run_id status
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  # No file created at tmp/missing.js — fanout's `[ ! -e "$target_path" ]` _die
+  # fires before any reviewer work, exercising the trap-on-mid-loop-_die path.
+  # Invoke via a fresh bash so the EXIT-trap-time unbound-variable error (which
+  # bash writes outside any captured subshell when triggered from $()) is
+  # observable in stderr.
+  output="$(cd "$tmp" && ALMANAC_HOME="$ROOT" bash "$ALMANAC" harden missing.js --loop --rounds 1 2>&1)" && rc=0 || rc=$?
+
+  [ "$rc" -ne 0 ] || fail "a missing target must exit non-zero (got rc=0)"
+  case "$output" in
+    *"unbound variable"*) fail "EXIT trap must not crash on unbound \$run_id/\$root (got: $output)" ;;
+  esac
+  assert_contains "$output" "Harden target not found" \
+    "the underlying _die message must still reach the user"
+
+  row="$(almanac_loop_list_runs "$tmp" | awk -F'\t' '$2=="harden"{print; exit}')"
+  [ -n "$row" ] || fail "the run must register before _die so the abort can be recorded"
+  run_id="$(printf '%s' "$row" | cut -f1)"
+  status="$(printf '%s' "$row" | cut -f7)"
+  assert_eq "aborted" "$status" \
+    "a run that _die's mid-loop must be marked aborted by the EXIT trap"
+
+  echo "  PASS: a mid-loop _die marks the run aborted without crashing on set -u"
+}
+
 # Criterion (67.5): the run-status contract is identical for harden and ralph —
 # both register through the same shared engine helper, so their status.tsv blobs
 # carry the exact same field keys. Register a ralph run, run a harden loop in the
@@ -1806,6 +1841,7 @@ test_reviewer_prompt_embeds_steer_directive
 test_fixer_prompt_embeds_steer_directive
 test_run_steer_threads_directive_into_round
 test_run_registers_in_the_run_registry
+test_run_aborts_cleanly_when_target_missing
 test_run_status_contract_identical_for_harden_and_ralph
 test_role_config_resolves_all_three_roles
 test_role_config_mixes_providers_across_lenses
