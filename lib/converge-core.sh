@@ -43,6 +43,13 @@ almanac_converge_plan_dir() {
   printf '%s/docs/plans/converge/%s\n' "$root" "$slug"
 }
 
+almanac_converge_plan_dir_for_slug() {
+  local root="$1"
+  local slug="$2"
+
+  printf '%s/docs/plans/converge/%s\n' "$root" "$slug"
+}
+
 almanac_converge_scaffold() {
   local root="$1"
   local goal="$2"
@@ -343,6 +350,167 @@ almanac_converge_write_convergence() {
 
 almanac_converge_goal_summary() {
   printf '%s' "$1" | tr '\n' ' ' | cut -c 1-80
+}
+
+almanac_converge_latest_run_id() {
+  local root="$1"
+  local slug="$2"
+  local rows id type target pid status_rel started status match=""
+
+  rows="$(almanac_loop_list_runs "$root" 2>/dev/null)" || return 1
+  while IFS=$'\t' read -r id type target pid status_rel started status; do
+    [ -n "$id" ] || continue
+    [ "$type" = "converge" ] || continue
+    [ "$target" = "$slug" ] || continue
+    match="$id"
+  done <<< "$rows"
+
+  [ -n "$match" ] || return 1
+  printf '%s\n' "$match"
+}
+
+almanac_converge_worker_health() {
+  local root="$1"
+  local run_id="$2"
+  local status_file status
+
+  status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
+  [ -f "$status_file" ] || { printf '%s\n' "dead"; return 0; }
+
+  status="$(almanac_loop_status_field "$status_file" "status" || true)"
+  if [ "$status" = "running" ] && ! almanac_loop_run_is_stale "$root" "$run_id"; then
+    printf '%s\n' "alive"
+  else
+    printf '%s\n' "dead"
+  fi
+}
+
+almanac_converge_last_verdict_line() {
+  local log_file="$1"
+
+  [ -f "$log_file" ] || return 1
+  awk '
+    /^===== tick=/ { verdict = ""; reason = "" }
+    /^VERDICT: / { verdict = substr($0, 10) }
+    /^REASON: / { reason = substr($0, 9) }
+    END {
+      if (verdict != "" || reason != "") {
+        printf "%s\t%s\n", verdict, reason
+      }
+    }
+  ' "$log_file"
+}
+
+almanac_converge_last_report_header() {
+  local reports_file="$1"
+
+  [ -f "$reports_file" ] || return 1
+  grep -E '^===== tick=[0-9][0-9]* ts=.* =====$' "$reports_file" 2>/dev/null | tail -n 1
+}
+
+almanac_converge_goal_mutation_count() {
+  local history_file="$1"
+
+  [ -f "$history_file" ] || { printf '%s\n' "0"; return 0; }
+  awk '/^===== tick=[0-9][0-9]* ts=.* overseer=/ { c++ } END { print c + 0 }' "$history_file"
+}
+
+almanac_converge_dashboard_frame() {
+  local root="$1"
+  local slug="$2"
+  local plan_dir goal_file reports_file history_file log_file
+  local run_id="" status_file round="" rounds="" health="dead"
+  local verdict="none" reason="none" verdict_line report_header goal_text goal_summary mutations
+  local tab=$'\t'
+
+  plan_dir="$(almanac_converge_plan_dir_for_slug "$root" "$slug")"
+  [ -d "$plan_dir" ] || return 1
+
+  goal_file="$plan_dir/goal.md"
+  reports_file="$plan_dir/agent-reports.log"
+  history_file="$plan_dir/goal.history.log"
+  log_file="$plan_dir/overseer.log"
+
+  if run_id="$(almanac_converge_latest_run_id "$root" "$slug" 2>/dev/null)"; then
+    status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
+    round="$(almanac_loop_status_field "$status_file" "round" 2>/dev/null || true)"
+    rounds="$(almanac_loop_status_field "$status_file" "rounds" 2>/dev/null || true)"
+    health="$(almanac_converge_worker_health "$root" "$run_id")"
+  fi
+  [ -n "$round" ] || round="0"
+  [ -n "$rounds" ] || rounds="?"
+
+  if verdict_line="$(almanac_converge_last_verdict_line "$log_file" 2>/dev/null)"; then
+    verdict="${verdict_line%%$tab*}"
+    reason="${verdict_line#*$tab}"
+    [ "$reason" != "$verdict_line" ] || reason="none"
+    [ -n "$verdict" ] || verdict="none"
+    [ -n "$reason" ] || reason="none"
+  fi
+
+  report_header="$(almanac_converge_last_report_header "$reports_file" 2>/dev/null || true)"
+  [ -n "$report_header" ] || report_header="none"
+
+  goal_text=""
+  [ -f "$goal_file" ] && goal_text="$(cat "$goal_file")"
+  goal_summary="$(almanac_converge_goal_summary "$goal_text")"
+  [ -n "$goal_summary" ] || goal_summary="none"
+  mutations="$(almanac_converge_goal_mutation_count "$history_file")"
+
+  printf 'converge %s\n' "$slug"
+  printf 'current round: %s/%s\n' "$round" "$rounds"
+  printf 'last verdict: %s\n' "$verdict"
+  printf 'reason: %s\n' "$reason"
+  printf 'last report: %s\n' "$report_header"
+  printf 'goal: %s\n' "$goal_summary"
+  printf 'goal mutations: %s\n' "$mutations"
+  printf 'worker health: %s\n' "$health"
+}
+
+almanac_converge_status() {
+  local root="$1"
+  local slug="$2"
+  local frame
+
+  frame="$(almanac_converge_dashboard_frame "$root" "$slug")" || return 1
+  printf '%s\n' "$frame" | almanac_loop_ui_render
+}
+
+almanac_converge_watch() {
+  local root="$1"
+  local slug="$2"
+  local mode="${3:-}"
+  local interval="${CONVERGE_WATCH_INTERVAL:-${ALMANAC_HUB_WATCH_INTERVAL:-2}}"
+  local run_id status_file status
+
+  if [ "$mode" != "follow" ] || [ ! -t 1 ]; then
+    almanac_converge_status "$root" "$slug"
+    return
+  fi
+
+  while :; do
+    almanac_loop_ui_clear
+    almanac_converge_status "$root" "$slug"
+    if run_id="$(almanac_converge_latest_run_id "$root" "$slug" 2>/dev/null)"; then
+      status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
+      status="$(almanac_loop_status_field "$status_file" "status" 2>/dev/null || true)"
+      case "$status" in
+        done|failed|aborted) break ;;
+      esac
+    fi
+    sleep "$interval"
+  done
+}
+
+almanac_converge_stop() {
+  local root="$1"
+  local slug="$2"
+  local plan_dir
+
+  plan_dir="$(almanac_converge_plan_dir_for_slug "$root" "$slug")"
+  [ -d "$plan_dir" ] || return 1
+  printf 'stop requested via almanac converge: %s\n' "$slug" > "$root/.converge-stop"
+  printf 'stop requested via almanac converge: %s\n' "$slug" > "$plan_dir/.converge-stop"
 }
 
 almanac_converge_apply_goal_update() {

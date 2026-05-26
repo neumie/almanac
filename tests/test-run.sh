@@ -526,6 +526,8 @@ test_run_signal_file_maps_type_to_dotfile() {
   assert_eq ".ralph-steer"  "$(almanac_loop_run_signal_file ralph steer)"  "ralph steer file basename"
   assert_eq ".harden-stop"  "$(almanac_loop_run_signal_file harden stop)"  "harden stop file basename"
   assert_eq ".harden-steer" "$(almanac_loop_run_signal_file harden steer)" "harden steer file basename"
+  assert_eq ".converge-stop" "$(almanac_loop_run_signal_file converge stop)" "converge stop file basename"
+  assert_eq ".converge-steer" "$(almanac_loop_run_signal_file converge steer)" "converge steer file basename"
   if almanac_loop_run_signal_file bogus stop >/dev/null 2>&1; then
     fail "unknown run type must return non-zero"
   fi

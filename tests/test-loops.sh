@@ -26,9 +26,11 @@ test_discovery_lists_present_adapters() {
   list="$(almanac_loop_adapter_list)"
   case "$list" in *ralph*) ;; *) fail "loop list should include the ralph adapter file" ;; esac
   case "$list" in *harden*) ;; *) fail "loop list should include the harden adapter file" ;; esac
+  case "$list" in *converge*) ;; *) fail "loop list should include the converge adapter file" ;; esac
 
   almanac_loop_adapter_known ralph  || fail "ralph must be a known loop"
   almanac_loop_adapter_known harden || fail "harden must be a known loop"
+  almanac_loop_adapter_known converge || fail "converge must be a known loop"
   almanac_loop_adapter_known RALPH  || fail "known must normalise case (RALPH -> ralph)"
   if almanac_loop_adapter_known bogus; then fail "an undiscovered name must not be known"; fi
   echo "  PASS: discovery lists present adapters"
@@ -46,6 +48,8 @@ test_signal_file_control_contract() {
   assert_eq ".ralph-steer"  "$(almanac_loop_adapter_call ralph signal_file steer)"  "ralph steer file basename"
   assert_eq ".harden-stop"  "$(almanac_loop_adapter_call harden signal_file stop)"  "harden stop file basename"
   assert_eq ".harden-steer" "$(almanac_loop_adapter_call harden signal_file steer)" "harden steer file basename"
+  assert_eq ".converge-stop" "$(almanac_loop_adapter_call converge signal_file stop)" "converge stop file basename"
+  assert_eq ".converge-steer" "$(almanac_loop_adapter_call converge signal_file steer)" "converge steer file basename"
 
   local rc=0
   almanac_loop_adapter_call ralph signal_file bogus >/dev/null 2>&1 || rc=$?

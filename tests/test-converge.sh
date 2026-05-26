@@ -887,10 +887,154 @@ EOF
   echo "  PASS: goal history falls back when diff command fails"
 }
 
+seed_converge_dashboard_fixture() {
+  local tmp="$1"
+  local slug="$2"
+  local run_id="${3:-converge-dashboard}"
+  local pid="${4:-$$}"
+  local plan="$tmp/docs/plans/converge/$slug"
+
+  mkdir -p "$plan"
+  printf '%s\n' "Dashboard goal for $slug" > "$plan/goal.md"
+  {
+    printf '===== tick=1 ts=2026-05-26T10:00:00Z =====\n'
+    printf 'summary:\n- first round\n'
+    printf 'concerns:\n- (none)\n'
+    printf 'next:\n- continue\n'
+    printf '===== tick=2 ts=2026-05-26T10:01:00Z =====\n'
+    printf 'summary:\n- second round\n'
+    printf 'concerns:\n- watch this\n'
+    printf 'next:\n- finish\n'
+  } > "$plan/agent-reports.log"
+  {
+    printf '===== tick=1 ts=2026-05-26T10:00:30Z overseer=codex =====\n'
+    printf 'REASON: narrowed once\n'
+    printf -- '--- DIFF ---\n'
+  } > "$plan/goal.history.log"
+  {
+    printf '===== tick=2 ts=2026-05-26T10:01:30Z overseer=codex exit=0 =====\n'
+    printf 'VERDICT: CONTINUE\n'
+    printf 'REASON: keep iterating\n'
+    printf 'STEER: none\n'
+    printf 'GOAL_UPDATE: unchanged\n'
+  } > "$plan/overseer.log"
+
+  almanac_loop_register_run "$tmp" "converge" "$slug" "$pid" "$run_id" "2026-05-26T10:00:00Z" >/dev/null
+  almanac_loop_set_run_config "$tmp" "$run_id" "rounds=5" "oversee=every-1"
+  almanac_loop_update_run_progress "$tmp" "$run_id" "2" "goal=$slug"
+}
+
+test_converge_adapter_exposes_stop_and_steer() {
+  assert_eq ".converge-stop" "$(almanac_loop_run_signal_file converge stop)" \
+    "converge stop file basename"
+  assert_eq ".converge-steer" "$(almanac_loop_run_signal_file converge steer)" \
+    "converge steer file basename"
+
+  echo "  PASS: converge adapter exposes stop and steer signals"
+}
+
+test_hub_lists_converge_run() {
+  local tmp out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  seed_converge_dashboard_fixture "$tmp" "hub-goal" "converge-hub" "$$"
+
+  out="$(cd "$tmp" && ALMANAC_NO_GUM=1 "$ALMANAC" hub </dev/null 2>&1)"
+  assert_contains "$out" "Running" "hub should show running section"
+  assert_contains "$out" "converge" "hub should list converge run type"
+  assert_contains "$out" "hub-goal" "hub should list converge target slug"
+  assert_contains "$out" "round 2" "hub should show converge live round"
+
+  echo "  PASS: hub lists converge runs"
+}
+
+test_converge_status_summary_by_slug() {
+  local tmp out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  seed_converge_dashboard_fixture "$tmp" "status-goal" "converge-status" "$$"
+
+  out="$(cd "$tmp" && ALMANAC_NO_GUM=1 "$ALMANAC" converge status-goal </dev/null 2>&1)"
+  assert_contains "$out" "converge status-goal" "status should name the converge slug"
+  assert_contains "$out" "current round: 2/5" "status should show current round and budget"
+  assert_contains "$out" "last verdict: CONTINUE" "status should show latest overseer verdict"
+  assert_contains "$out" "reason: keep iterating" "status should show latest overseer reason"
+  assert_contains "$out" "last report: ===== tick=2 ts=2026-05-26T10:01:00Z =====" \
+    "status should show last self-report header"
+  assert_contains "$out" "goal: Dashboard goal for status-goal" "status should show goal summary"
+  assert_contains "$out" "goal mutations: 1" "status should count goal mutations"
+  assert_contains "$out" "worker health: alive" "status should show live registry pid as alive"
+
+  echo "  PASS: converge slug status prints dashboard summary"
+}
+
+test_converge_watch_plain_outputs_dashboard_fields() {
+  local tmp out
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  seed_converge_dashboard_fixture "$tmp" "watch-goal" "converge-watch" "$$"
+
+  out="$(cd "$tmp" && ALMANAC_NO_GUM=1 "$ALMANAC" converge watch-goal --watch </dev/null 2>&1)"
+  assert_contains "$out" "current round: 2/5" "watch should show round budget"
+  assert_contains "$out" "last verdict: CONTINUE" "watch should show last verdict"
+  assert_contains "$out" "last report: ===== tick=2 ts=2026-05-26T10:01:00Z =====" \
+    "watch should show latest report header"
+  assert_contains "$out" "goal: Dashboard goal for watch-goal" "watch should show goal summary"
+  assert_contains "$out" "goal mutations: 1" "watch should show mutation count"
+  assert_contains "$out" "worker health: alive" "watch should show worker health"
+
+  echo "  PASS: converge --watch renders plain dashboard fields"
+}
+
+test_converge_stop_signal_exits_running_loop() {
+  local tmp reports row status_file
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  run_converge "$tmp" --goal "Self Stop" \
+    --exec "$ALMANAC converge self-stop --stop" \
+    --rounds 3 --no-oversee >/dev/null
+
+  [ -f "$tmp/.converge-stop" ] || fail "converge --stop should write .converge-stop"
+  [ -f "$tmp/docs/plans/converge/self-stop/.converge-stop" ] || \
+    fail "converge --stop should also record stop signal in the plan dir"
+  reports="$tmp/docs/plans/converge/self-stop/agent-reports.log"
+  assert_eq "1" "$(grep -c '^===== tick=[0-9][0-9]* ts=.* =====$' "$reports")" \
+    "stop signal should halt before round 2"
+  row="$(awk -F'\t' 'NR > 1 && $2 == "converge" { print; exit }' "$tmp/.almanac/runs/index.tsv")"
+  status_file="$tmp/.almanac/runs/$(printf '%s' "$row" | cut -f1)/status.tsv"
+  assert_file_contains "$status_file" $'status\taborted' \
+    "stop signal should mark running loop aborted at boundary"
+
+  echo "  PASS: converge --stop signals and loop exits cleanly"
+}
+
+test_hub_stop_writes_converge_signal() {
+  local tmp
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  seed_converge_dashboard_fixture "$tmp" "hub-stop" "converge-stop-cli" "2147483647"
+
+  (cd "$tmp" && "$ALMANAC" hub --stop converge-stop-cli </dev/null >/dev/null 2>&1)
+  [ -f "$tmp/.converge-stop" ] || fail "hub --stop should write converge stop signal"
+
+  echo "  PASS: hub --stop writes converge signal"
+}
+
 test_cli_requires_goal_and_exec
 test_plan_dir_scaffold_and_exec_smoke
 test_registry_records_converge_run_done
 test_run_aborts_cleanly_when_plan_dir_unwritable
+test_converge_adapter_exposes_stop_and_steer
+test_hub_lists_converge_run
+test_converge_status_summary_by_slug
+test_converge_watch_plain_outputs_dashboard_fields
+test_converge_stop_signal_exits_running_loop
+test_hub_stop_writes_converge_signal
 test_worker_prompt_embeds_goal_exec_and_report_contract
 test_prompt_template_created_and_reread
 test_worker_prompt_consumes_steer_once
