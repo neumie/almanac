@@ -21,6 +21,7 @@
 #                                      launch a new run (dry-run previews the command)
 #   almanac hub --resume <id>          re-launch a finished run with the same config (auto-confirm)
 #   almanac hub --clone  <id>          start the launcher pre-filled from a finished run (no auto-confirm)
+#   almanac hub --stats                summarise finished runs by (type, provider, model)
 
 set -euo pipefail
 
@@ -40,6 +41,7 @@ hub_usage() {
   printf '%s\n' "                                  launch a new run (--dry-run previews it)"
   printf '%s\n' "  almanac hub --resume <run-id>    re-launch a finished run with the same config"
   printf '%s\n' "  almanac hub --clone  <run-id>    start the launcher pre-filled from a finished run"
+  printf '%s\n' "  almanac hub --stats              summarise finished runs (runs + success rate per provider/model)"
 }
 
 # Launch (or, with dry_run=1, preview) a composed new run. env_raw/argv_raw are
@@ -280,6 +282,9 @@ while [ "$#" -gt 0 ]; do
       ACTION="clone"
       ACTION_ID="$1"
       ;;
+    --stats)
+      ACTION="stats"
+      ;;
     -*)
       _die "Unknown hub option: $1"
       ;;
@@ -339,6 +344,14 @@ case "$ACTION" in
     ;;
   resume|clone)
     almanac_hub_resume_or_clone "$ACTION" "$ACTION_ID"
+    exit 0
+    ;;
+  stats)
+    if STATS_OUT="$(almanac_loop_hub_stats "$ROOT")"; then
+      printf '%s\n' "$STATS_OUT" | almanac_loop_ui_render
+    else
+      printf '%s\n' "(no finished runs to summarise)" | almanac_loop_ui_render
+    fi
     exit 0
     ;;
 esac

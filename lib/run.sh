@@ -687,6 +687,54 @@ almanac_loop_hub_overview() {
   } | almanac_loop_ui_render
 }
 
+# Aggregate finished runs (done/failed/aborted) by (type, provider, model) and
+# print a small table: runs + success rate. Reads provider/model from each run's
+# blob, so older runs (no recorded config) bucket under `?` for the missing
+# fields rather than disappearing. Returns 1 (with no output) when the registry
+# has no finished runs, so the caller can print an empty-state line.
+#
+# Pipeline is `read registry rows → emit (type,provider,model,status) lines →
+# awk groups + counts → sort by total runs desc → awk reformats with a header`.
+# Pure data + awk so the table is identical with or without gum (the caller
+# frames it).
+almanac_loop_hub_stats() {
+  local root="$1"
+  local rows lines id type target pid status_rel started status blob provider model
+  rows="$(almanac_loop_list_runs "$root" 2>/dev/null)" || return 1
+  [ -n "$rows" ] || return 1
+
+  lines=""
+  while IFS=$'\t' read -r id type target pid status_rel started status; do
+    [ -n "$id" ] || continue
+    case "$status" in done|failed|aborted) ;; *) continue ;; esac
+    blob="$(almanac_loop_run_status_file "$root" "$id")"
+    provider="$(almanac_loop_status_field "$blob" provider 2>/dev/null || true)"
+    model="$(almanac_loop_status_field "$blob" model 2>/dev/null || true)"
+    lines+="$type"$'\t'"${provider:-?}"$'\t'"${model:-?}"$'\t'"$status"$'\n'
+  done <<< "$rows"
+  [ -n "$lines" ] || return 1
+
+  printf '%s' "$lines" | awk -F'\t' '
+    {
+      key = $1 "|" $2 "|" $3
+      total[key]++
+      if ($4 == "done") done[key]++
+    }
+    END {
+      for (k in total) {
+        n = total[k]; d = (k in done) ? done[k] : 0
+        rate = (n > 0) ? (d * 100.0 / n) : 0
+        split(k, kk, "|")
+        printf "%s\t%s\t%s\t%d\t%.0f\n", kk[1], kk[2], kk[3], n, rate
+      }
+    }
+  ' | sort -t$'\t' -k4,4 -n -r | awk -F'\t' '
+    BEGIN { printf "%-8s %-8s %-22s %6s %8s\n", "type", "provider", "model", "runs", "success" }
+    { printf "%-8s %-8s %-22s %6d %7d%%\n", $1, $2, $3, $4, $5 }
+  '
+  return 0
+}
+
 # --- Hub per-run actions -------------------------------------------------------
 #
 # The interactive hub lets the operator act on a selected running loop: watch its

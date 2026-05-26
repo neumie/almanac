@@ -655,6 +655,44 @@ test_new_run_env_maps_harden_config() {
   echo "  PASS: new-run env maps harden config"
 }
 
+test_hub_stats_groups_by_type_provider_model() {
+  local tmp out
+  new_tmpdir; tmp="$NEW_TMPDIR"
+
+  # 3 ralph runs with claude/opus: 2 done, 1 failed → expect 67% success.
+  almanac_loop_register_run "$tmp" "ralph" "demo" "1" "r1" "2026-05-26T10:00:00Z" >/dev/null
+  almanac_loop_set_run_config "$tmp" "r1" "provider=claude" "model=opus"
+  almanac_loop_mark_run_status "$tmp" "r1" "done" "2026-05-26T10:30:00Z"
+  almanac_loop_register_run "$tmp" "ralph" "demo" "2" "r2" "2026-05-26T11:00:00Z" >/dev/null
+  almanac_loop_set_run_config "$tmp" "r2" "provider=claude" "model=opus"
+  almanac_loop_mark_run_status "$tmp" "r2" "done" "2026-05-26T11:30:00Z"
+  almanac_loop_register_run "$tmp" "ralph" "demo" "3" "r3" "2026-05-26T12:00:00Z" >/dev/null
+  almanac_loop_set_run_config "$tmp" "r3" "provider=claude" "model=opus"
+  almanac_loop_mark_run_status "$tmp" "r3" "failed" "2026-05-26T12:30:00Z"
+
+  # 1 harden run with codex/gpt-5.4: done → expect 100%.
+  almanac_loop_register_run "$tmp" "harden" "src/x" "4" "h1" "2026-05-26T13:00:00Z" >/dev/null
+  almanac_loop_set_run_config "$tmp" "h1" "provider=codex" "model=gpt-5.4"
+  almanac_loop_mark_run_status "$tmp" "h1" "done" "2026-05-26T13:30:00Z"
+
+  out=$(almanac_loop_hub_stats "$tmp")
+  assert_contains "$out" "type" "stats prints a header row"
+  assert_contains "$out" "ralph" "stats includes the ralph (claude/opus) bucket"
+  assert_contains "$out" "harden" "stats includes the harden (codex/gpt-5.4) bucket"
+  assert_contains "$out" "opus" "stats groups by model"
+  assert_contains "$out" "67%" "stats computes success rate (2 done / 3 ralph runs = 67%)"
+  assert_contains "$out" "100%" "stats computes 100% for the single harden done run"
+  echo "  PASS: hub_stats groups by (type, provider, model) and reports counts + success rate"
+}
+
+test_hub_stats_empty_registry_returns_nonzero() {
+  local tmp rc
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  rc=0; almanac_loop_hub_stats "$tmp" >/dev/null || rc=$?
+  assert_eq "1" "$rc" "empty registry → no rows → returns 1 so the caller can print an empty-state line"
+  echo "  PASS: hub_stats returns 1 on empty registry"
+}
+
 echo "=== Run-Status Record Tests ==="
 test_record_fields_is_canonical_schema
 test_record_has_field_recognises_only_canonical
@@ -694,6 +732,8 @@ test_new_run_argv_ralph_composes_flags
 test_new_run_argv_harden_composes_loop
 test_new_run_argv_rejects_unknown_and_missing
 test_new_run_env_maps_harden_config
+test_hub_stats_groups_by_type_provider_model
+test_hub_stats_empty_registry_returns_nonzero
 
 echo ""
 echo "All run registry tests passed."
