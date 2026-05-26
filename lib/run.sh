@@ -531,13 +531,11 @@ almanac_loop_count_lines() {
 almanac_loop_trailing_repeat() {
   [ -f "$1" ] || { printf '%s\n' "0"; return 0; }
   awk '
-    { lines[NR] = $0 }
+    NR == 1 { last = $0; c = 1; next }
+    $0 == last { c++; next }
+    { last = $0; c = 1 }
     END {
       if (NR == 0) { print 0; exit }
-      last = lines[NR]; c = 1
-      for (i = NR - 1; i >= 1; i--) {
-        if (lines[i] == last) c++; else break
-      }
       print c
     }
   ' "$1"
@@ -757,30 +755,26 @@ almanac_loop_run_signal_file() {
   almanac_loop_adapter_call "$type" signal_file "$kind" || return 1
 }
 
-# Stop a registered run: write the run type's stop file under root (runs register
-# with root = their working dir, so the loop sees it at its next between-round
-# check) AND best-effort signal the live pid with TERM so a run blocked mid-round
-# also tears down. The pid is only signalled when it is numeric and currently
-# alive, so a dead/finished run is never killed. Returns 2 when the run is unknown
-# and 3 when its type has no stop convention.
+# Stop a registered running run: write the run type's stop file under root (runs
+# register with root = their working dir, so the loop sees it at its next
+# between-round check). The registry lives in the project and is not trusted for
+# host PID signaling, so hub stop never sends TERM from a recorded pid. Returns 2
+# when the run is unknown, 3 when its type has no stop convention, and 4 when the
+# run is already terminal/non-running.
 almanac_loop_run_stop() {
   local root="$1"
   local run_id="$2"
-  local status_file type pid stop_file
+  local status_file type status stop_file
 
   status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
   [ -f "$status_file" ] || return 2
 
   type="$(almanac_loop_status_field "$status_file" "type" || true)"
-  pid="$(almanac_loop_status_field "$status_file" "pid" || true)"
+  status="$(almanac_loop_status_field "$status_file" "status" || true)"
+  [ "$status" = "running" ] || return 4
 
   stop_file="$(almanac_loop_run_signal_file "$type" stop)" || return 3
   printf '%s\n' "stop requested via almanac hub: $run_id" > "$root/$stop_file"
-
-  case "$pid" in
-    ''|*[!0-9]*) ;;
-    *) if kill -0 "$pid" 2>/dev/null; then kill -TERM "$pid" 2>/dev/null || true; fi ;;
-  esac
   return 0
 }
 

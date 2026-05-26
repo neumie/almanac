@@ -29,11 +29,24 @@ _uninstall_claude_code() {
 
   _info "Removed $count skill symlinks from ~/.claude/commands/almanac/"
 
-  # Remove skills resource symlink (added in newer installs)
+  # Remove skill resource links (newer installs use a real almanac dir containing
+  # one symlink per skill; older installs used one almanac dir symlink).
   local skills_link="$HOME/.claude/skills/almanac"
   if [[ -L "$skills_link" ]] && [[ "$(readlink "$skills_link")" == *almanac* ]]; then
     rm "$skills_link"
     _info "Removed skill resource link ~/.claude/skills/almanac"
+  elif [[ -d "$skills_link" ]]; then
+    while IFS= read -r dir; do
+      [ -f "$dir/SKILL.md" ] || continue
+      local name
+      name=$(basename "$dir")
+      local skill_target="$skills_link/$name"
+      if [[ -L "$skill_target" ]] && [[ "$(readlink "$skill_target")" == *almanac* ]]; then
+        rm "$skill_target"
+      fi
+    done < <(almanac_list_skills)
+    rmdir "$skills_link" 2>/dev/null || true
+    _info "Removed skill resource links from ~/.claude/skills/almanac/"
   fi
 
   # Remove CLAUDE.md symlink if it's ours (direct -> almanac, or legacy hop -> AGENTS.md)
@@ -60,32 +73,36 @@ _uninstall_claude_code() {
   local settings="$HOME/.claude/settings.json"
 
   if [[ -f "$installed_plugins" ]] && grep -q 'almanac@local' "$installed_plugins"; then
-    python3 -c "
+    python3 - "$installed_plugins" <<'PY'
 import json
-path = '$installed_plugins'
+import sys
+path = sys.argv[1]
 data = json.load(open(path))
 data.get('plugins', {}).pop('almanac@local', None)
 json.dump(data, open(path, 'w'), indent=2)
-"
+PY
     _info "Removed legacy almanac@local from installed_plugins.json"
   fi
 
   if [[ -f "$settings" ]] && grep -q 'almanac@local' "$settings"; then
-    python3 -c "
+    python3 - "$settings" <<'PY'
 import json
-path = '$settings'
+import sys
+path = sys.argv[1]
 data = json.load(open(path))
 data.get('enabledPlugins', {}).pop('almanac@local', None)
 json.dump(data, open(path, 'w'), indent=2)
-"
+PY
     _info "Removed legacy almanac@local from settings.json"
   fi
 
   # Clean up legacy alias from shell rc (from older installs)
   for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
     if [[ -f "$rc" ]] && grep -q 'plugin-dir.*almanac' "$rc"; then
-      python3 -c "
-lines = open('$rc').readlines()
+      python3 - "$rc" <<'PY'
+import sys
+path = sys.argv[1]
+lines = open(path).readlines()
 out = []
 skip_next = False
 for line in lines:
@@ -100,8 +117,8 @@ for line in lines:
 while out and out[-1].strip() == '':
     out.pop()
 out.append('\n')
-open('$rc', 'w').write(''.join(out))
-"
+open(path, 'w').write(''.join(out))
+PY
       _info "Removed legacy alias from $rc"
     fi
   done

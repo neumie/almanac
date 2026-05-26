@@ -48,6 +48,7 @@ setup_origin() {
     cd "$tmp/seed"
     git config user.email "test@example.com"
     git config user.name "Almanac Test"
+    git config commit.gpgsign false
     printf 'base\n' > README.md
     git add README.md
     git commit -m "base" >/dev/null
@@ -70,6 +71,7 @@ test_mismatched_upstream_pushes_to_same_named_branch() {
     cd "$tmp/work"
     git config user.email "test@example.com"
     git config user.name "Almanac Test"
+    git config commit.gpgsign false
     git config push.default simple
 
     git checkout -b ralph-push-test origin/main >/dev/null 2>&1
@@ -106,6 +108,7 @@ test_no_upstream_sets_same_named_branch() {
     cd "$tmp/work"
     git config user.email "test@example.com"
     git config user.name "Almanac Test"
+    git config commit.gpgsign false
 
     git checkout -b no-upstream main >/dev/null 2>&1
     git branch --unset-upstream >/dev/null 2>&1 || true

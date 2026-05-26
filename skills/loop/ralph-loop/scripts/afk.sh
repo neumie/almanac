@@ -221,6 +221,7 @@ check_ci_status() {
   run_json=$(gh run list --branch "$branch" --limit 1 \
     --json databaseId,status,conclusion,url,name 2>/dev/null) || return 0
   [ -z "$run_json" ] || [ "$run_json" = "[]" ] && return 0
+  command -v jq >/dev/null 2>&1 || return 0
 
   status=$(echo "$run_json" | jq -r '.[0].status // ""')
   conclusion=$(echo "$run_json" | jq -r '.[0].conclusion // ""')

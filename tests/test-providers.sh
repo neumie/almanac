@@ -10,6 +10,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+export ALMANAC_HOME="$ROOT"
+source "$ROOT/lib/core.sh"
 source "$ROOT/lib/agent.sh"
 
 # A minimal PATH that excludes any real codex/claude (those live in
@@ -66,6 +68,13 @@ test_discovery_lists_present_adapters() {
   almanac_provider_known claude-code || fail "known must normalise claude-code -> claude"
   if almanac_provider_known bogus; then fail "an undiscovered name must not be known"; fi
   echo "  PASS: discovery lists present adapters"
+}
+
+test_cli_provider_list_hides_internal_shared_dir() {
+  local list
+  list="$(almanac_providers)"
+  assert_not_contains "$list" "_shared" "CLI provider enumeration must hide internal shared provider assets"
+  echo "  PASS: CLI provider list hides internal shared dir"
 }
 
 test_availability_behind_fake_command_v() {
@@ -186,6 +195,7 @@ test_default_selection_policy() {
 
 echo "=== Provider Seam Tests ==="
 test_discovery_lists_present_adapters
+test_cli_provider_list_hides_internal_shared_dir
 test_availability_behind_fake_command_v
 test_active_env_signals
 test_menus_and_display

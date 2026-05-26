@@ -17,7 +17,7 @@ usage() {
   printf '%s\n' ""
   printf '%s\n' "With no flags, fans out one read-only reviewer per lens over the target,"
   printf '%s\n' "aggregates their findings into the ledger, and prints them. Configure the"
-  printf '%s\n' "lens set via HARDEN_LENSES (comma- or space-separated; no enforced cap)."
+  printf '%s\n' "lens set via HARDEN_LENSES (comma- or space-separated; capped by HARDEN_MAX_REVIEWERS)."
   printf '%s\n' "If a rubric has been drafted for the target, it must be approved first;"
   printf '%s\n' "a target with no rubric runs ad-hoc."
   printf '%s\n' "With --goal, creates docs/plans/harden/<target-slug>/rubric.md in the repo."

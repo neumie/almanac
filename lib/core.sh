@@ -50,8 +50,12 @@ almanac_resolve_home() {
 
 # Providers with adapters
 almanac_providers() {
+  local provider
   for dir in "$ALMANAC_HOME"/providers/*/; do
-    [[ -d "$dir" ]] && basename "$dir"
+    [[ -d "$dir" ]] || continue
+    provider="$(basename "$dir")"
+    [[ "$provider" == _* ]] && continue
+    printf '%s\n' "$provider"
   done
 }
 

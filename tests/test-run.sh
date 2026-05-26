@@ -424,6 +424,15 @@ test_worker_health_of_reads_state() {
   echo "  PASS: worker health of reads worker state"
 }
 
+test_trailing_repeat_does_not_cache_full_log() {
+  local body
+  body="$(declare -f almanac_loop_trailing_repeat)"
+  case "$body" in
+    *"lines[NR]"*) fail "trailing_repeat must stream the log, not cache every line in awk" ;;
+  esac
+  echo "  PASS: trailing repeat does not cache the full log"
+}
+
 test_hub_render_lists_running_with_live_status() {
   local tmp out
   new_tmpdir
@@ -540,6 +549,49 @@ test_run_stop_writes_stopfile_and_signals() {
   rc=0; almanac_loop_run_stop "$tmp" "ghost" || rc=$?
   assert_eq "2" "$rc" "stopping an unknown run must return 2"
   echo "  PASS: run stop writes stop file and is best-effort"
+}
+
+test_run_stop_does_not_signal_recorded_pid() {
+  local tmp pid
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  sleep 60 &
+  pid="$!"
+
+  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "$pid" "stop-live" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_run_stop "$tmp" "stop-live"
+  sleep 0.2
+
+  if ! kill -0 "$pid" 2>/dev/null; then
+    fail "hub stop must not TERM project-controlled recorded pids"
+  fi
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  echo "  PASS: run stop does not signal recorded pid"
+}
+
+test_run_stop_ignores_finished_runs() {
+  local tmp pid rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  sleep 60 &
+  pid="$!"
+
+  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "$pid" "done-run" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_mark_run_status "$tmp" "done-run" "done" "2026-05-25T12:01:00Z"
+
+  rc=0; almanac_loop_run_stop "$tmp" "done-run" || rc=$?
+  assert_eq "4" "$rc" "stopping a terminal run must return 4"
+  sleep 0.2
+  if ! kill -0 "$pid" 2>/dev/null; then
+    fail "stopping a finished run must not TERM a reused recorded pid"
+  fi
+  [ ! -f "$tmp/.ralph-stop" ] || fail "terminal runs should not receive a new stop file"
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  echo "  PASS: run stop ignores finished runs"
 }
 
 test_run_steer_writes_steerfile_with_directive() {
@@ -719,12 +771,15 @@ test_list_runs_returns_all_registered_runs
 test_read_run_returns_single_run_status
 test_worker_health_classifies_states
 test_worker_health_of_reads_state
+test_trailing_repeat_does_not_cache_full_log
 test_hub_render_lists_running_with_live_status
 test_hub_render_recent_newest_first_capped
 test_hub_overview_degrades_without_gum
 test_hub_overview_empty_registry_shows_empty_states
 test_run_signal_file_maps_type_to_dotfile
 test_run_stop_writes_stopfile_and_signals
+test_run_stop_does_not_signal_recorded_pid
+test_run_stop_ignores_finished_runs
 test_run_steer_writes_steerfile_with_directive
 test_run_detail_renders_run_status
 test_run_watch_one_shot_renders_detail

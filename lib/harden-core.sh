@@ -287,7 +287,8 @@ almanac_harden_rubric_append_criterion() {
   [ -f "$path" ] || return 2
   grep -q '^## Acceptance[[:space:]]*$' "$path" || return 2
 
-  if grep -Fxq -- "- [ ] $criterion" "$path"; then
+  if grep -Fxq -- "- [ ] $criterion" "$path" || \
+      grep -Fxq -- "- [x] $criterion" "$path"; then
     return 1
   fi
 
@@ -370,14 +371,17 @@ almanac_harden_rubric_verify() {
 
 # Emit the configured reviewer lens set, one lens per line. Defaults to the five
 # PRD lenses; override at runtime via HARDEN_LENSES (comma- or whitespace-
-# separated). The lens set determines the reviewer count — there is no enforced
-# cap, so adding lenses adds reviewers.
+# separated).
 almanac_harden_lenses() {
   local raw="${HARDEN_LENSES:-correctness security perf edge-cases contracts}"
 
   # Trailing newline matters: a `read` loop consumer drops a final line that
   # lacks one, which would silently swallow the last lens.
   printf '%s\n' "$raw" | tr -s ', \t' '\n' | sed '/^$/d'
+}
+
+almanac_harden_max_reviewers() {
+  printf '%s\n' "${HARDEN_MAX_REVIEWERS:-16}"
 }
 
 # Build the fixed prompt for one read-only reviewer over a target, including the
@@ -454,7 +458,21 @@ almanac_harden_findings_tsv() {
     jq -Rr '
       fromjson?
       | select(type == "object")
-      | [(.lens // ""), (.severity // ""), (.location // ""), (.claim // ""), (.demonstration // "")]
+      | {
+          lens: (.lens // ""),
+          severity: (.severity // ""),
+          location: (.location // ""),
+          claim: (.claim // ""),
+          demonstration: (.demonstration // "")
+        }
+      | select(
+          (.lens | type == "string" and length > 0) and
+          (.severity | type == "string" and length > 0) and
+          (.location | type == "string" and length > 0) and
+          (.claim | type == "string" and length > 0) and
+          (.demonstration | type == "string" and length > 0)
+        )
+      | [.lens, .severity, .location, .claim, .demonstration]
       | @tsv
     ' "$result_file" 2>/dev/null
     return 0
@@ -471,9 +489,14 @@ almanac_harden_findings_tsv() {
       return ""
     }
     /"claim"[ \t]*:/ {
-      printf "%s\t%s\t%s\t%s\t%s\n", \
-        field($0, "lens"), field($0, "severity"), field($0, "location"), \
-        field($0, "claim"), field($0, "demonstration")
+      lens = field($0, "lens")
+      severity = field($0, "severity")
+      location = field($0, "location")
+      claim = field($0, "claim")
+      demonstration = field($0, "demonstration")
+      if (lens != "" && severity != "" && location != "" && claim != "" && demonstration != "") {
+        printf "%s\t%s\t%s\t%s\t%s\n", lens, severity, location, claim, demonstration
+      }
     }
   ' "$result_file"
 }
@@ -582,6 +605,28 @@ almanac_harden_ledger_append_entry() {
     return 1
   fi
 
+  almanac_harden_ledger_append_entry_unchecked \
+    "$path" "$id" "$lens" "$severity" "$location" "$claim" \
+    "$demonstration" "$status" "$round" "$adjudication"
+}
+
+# Append one already-deduped finding section. Callers must have initialised the
+# ledger and decided the id is new; this keeps bulk ingestion from grepping the
+# growing ledger once per finding.
+almanac_harden_ledger_append_entry_unchecked() {
+  [ "$#" -ge 7 ] || return 2
+
+  local path="$1"
+  local id="$2"
+  local lens="$3"
+  local severity="$4"
+  local location="$5"
+  local claim="$6"
+  local demonstration="$7"
+  local status="${8:-open}"
+  local round="${9:-1}"
+  local adjudication="${10:-}"
+
   {
     printf '\n## %s\n\n' "$id"
     printf -- '- lens: %s\n' "$lens"
@@ -619,17 +664,64 @@ almanac_harden_ledger_record() {
   local path="$1"
   local result_file="$2"
   local round="${3:-1}"
+  local parsed statuses actions reopen_ids action
   local id lens severity location claim demonstration status r adjudication
   local added=0
 
-  while IFS=$'\t' read -r id lens severity location claim demonstration status r adjudication; do
+  almanac_harden_ledger_init "$path"
+
+  parsed="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-findings.XXXXXX")"
+  statuses="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-statuses.XXXXXX")"
+  actions="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-actions.XXXXXX")"
+  reopen_ids="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-reopen.XXXXXX")"
+
+  almanac_harden_parse_findings "$result_file" "$round" > "$parsed"
+
+  awk '
+    /^## / { id = substr($0, 4); next }
+    /^- status:/ && id != "" {
+      val = $0
+      sub(/^- status:[ \t]*/, "", val)
+      print id "\t" val
+    }
+  ' "$path" > "$statuses"
+
+  awk '
+    BEGIN { FS = "\t" }
+    FILENAME == ARGV[1] { existing[$1] = $2; next }
+    $1 == "" { next }
+    seen[$1]++ { next }
+    !($1 in existing) {
+      print "append\t" $0
+      next
+    }
+    existing[$1] == "fixed" {
+      print "reopen\t" $0
+      next
+    }
+  ' "$statuses" "$parsed" > "$actions"
+
+  while IFS=$'\t' read -r action id lens severity location claim demonstration status r adjudication; do
     [ -n "$id" ] || continue
-    if almanac_harden_ledger_append_entry \
-      "$path" "$id" "$lens" "$severity" "$location" "$claim" \
-      "$demonstration" "$status" "$r" "$adjudication"; then
-      added=$((added + 1))
-    fi
-  done < <(almanac_harden_parse_findings "$result_file" "$round")
+    case "$action" in
+      append)
+        almanac_harden_ledger_append_entry_unchecked \
+          "$path" "$id" "$lens" "$severity" "$location" "$claim" \
+          "$demonstration" "$status" "$r" "$adjudication"
+        added=$((added + 1))
+        ;;
+      reopen)
+        printf '%s\n' "$id" >> "$reopen_ids"
+        ;;
+    esac
+  done < "$actions"
+
+  if [ -s "$reopen_ids" ]; then
+    almanac_harden_ledger_set_status_many "$path" "open" \
+      "re-raised by reviewer at round $round; pending ratification" < "$reopen_ids"
+  fi
+
+  rm -f "$parsed" "$statuses" "$actions" "$reopen_ids"
 
   printf '%s\n' "$added"
 }
@@ -713,6 +805,38 @@ almanac_harden_ledger_set_status() {
   mv "$tmp" "$path"
 }
 
+# Rewrite status/adjudication for many finding ids in one ledger pass. Reads ids
+# from stdin, one per line. Used after a batch fix so marking N findings fixed is
+# O(ledger) instead of N full ledger rewrites.
+almanac_harden_ledger_set_status_many() {
+  local path="$1"
+  local status="$2"
+  local adjudication="${3:-}"
+  local ids tmp
+
+  [ -f "$path" ] || return 1
+
+  ids="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-ids.XXXXXX")"
+  cat > "$ids"
+  [ -s "$ids" ] || { rm -f "$ids"; return 0; }
+
+  tmp="$(mktemp "${path}.XXXXXX")"
+  awk -v ids="$ids" -v status="$status" -v adj="$adjudication" '
+    BEGIN {
+      while ((getline line < ids) > 0) {
+        if (line != "") wanted[line] = 1
+      }
+      close(ids)
+    }
+    /^## / { cur = substr($0, 4); print; next }
+    (cur in wanted) && /^- status:/ { print "- status: " status; next }
+    (cur in wanted) && /^- adjudication:/ { print "- adjudication: " adj; next }
+    { print }
+  ' "$path" > "$tmp"
+  mv "$tmp" "$path"
+  rm -f "$ids"
+}
+
 # --- Ratification engine -------------------------------------------------------
 #
 # A finding is "blocking" only if its demonstration objectively reproduces
@@ -764,7 +888,7 @@ almanac_harden_ratify_verdict() {
 
   [ -f "$result_file" ] || { printf '%s\n' "not"; return 0; }
 
-  if grep -qiE 'harden_verdict[[:space:]]*=[[:space:]]*reproduces([^-]|$)' "$result_file" 2>/dev/null; then
+  if grep -Fxq 'HARDEN_VERDICT=reproduces' "$result_file" 2>/dev/null; then
     printf '%s\n' "reproduces"
   else
     printf '%s\n' "not"
@@ -803,13 +927,11 @@ almanac_harden_demo_reproduces() {
 
   almanac_harden_ratify_prompt "$demonstration" "$target_path" > "$prompt_file"
 
-  # The conductor judges by execution, so it needs to actually run the
-  # demonstration (write+run a proposed test, try the input) — workspace-write,
-  # like the fixer; the prompt forbids it from mutating the target to change the
-  # outcome. Output is discarded; only the verdict in result_file matters.
+  # Reviewer text is untrusted. Ratification may inspect/run existing repro
+  # commands, but it must not write to the repo before the single fixer phase.
   rc=0
   almanac_loop_agent_capture "$conductor_provider" "$conductor_model" "$conductor_effort" \
-    "workspace-write" "$prompt_file" "$result_file" "$events_file" >/dev/null 2>&1 || rc=$?
+    "read-only" "$prompt_file" "$result_file" "$events_file" >/dev/null 2>&1 || rc=$?
 
   if [ "$rc" -ne 0 ]; then
     # Provider missing/crashed or the demonstration was un-runnable: cannot
@@ -916,8 +1038,8 @@ almanac_harden_ratify() {
 # the ledger (deduped). Reviewers run concurrently and never write to the target
 # (read-only sandbox); the parent aggregates sequentially after they finish, so
 # there are no concurrent ledger writers. The lens set is configurable via
-# HARDEN_LENSES with no enforced cap. Each reviewer's provider/model/effort
-# resolves through the shared role config
+# HARDEN_LENSES, capped by HARDEN_MAX_REVIEWERS. Each reviewer's
+# provider/model/effort resolves through the shared role config
 # (HARDEN_REVIEWER[_<LENS>]_{PROVIDER,MODEL,EFFORT}). _die on a missing target
 # before spawning anything.
 almanac_harden_fanout() {
@@ -925,9 +1047,9 @@ almanac_harden_fanout() {
   local target="$2"
   local round="${3:-1}"
   local directive="${4:-}"
-  local target_path run_id ledger_path rubric_path lens provider model effort
+  local target_path run_id run_id_base registry_dir ledger_path rubric_path lens provider model effort
   local worker_id prompt_file pidfile pid result_file status_file wstatus
-  local added total_added i
+  local added total_added i max_reviewers succeeded_count suffix
   local -a lenses=() worker_ids=() worker_pids=() prompt_files=()
 
   case "$target" in
@@ -945,8 +1067,23 @@ almanac_harden_fanout() {
   done < <(almanac_harden_lenses)
 
   [ "${#lenses[@]}" -gt 0 ] || _die "No reviewer lenses configured"
+  max_reviewers="$(almanac_harden_max_reviewers)"
+  case "$max_reviewers" in
+    ''|*[!0-9]*) _die "HARDEN_MAX_REVIEWERS must be a positive integer: $max_reviewers" ;;
+  esac
+  [ "$max_reviewers" -ge 1 ] || _die "HARDEN_MAX_REVIEWERS must be at least 1: $max_reviewers"
+  if [ "${#lenses[@]}" -gt "$max_reviewers" ]; then
+    _die "Too many reviewer lenses (${#lenses[@]}); cap is $max_reviewers (set HARDEN_MAX_REVIEWERS to change it)"
+  fi
 
   run_id="$(almanac_loop_run_id "harden" "$target")"
+  run_id_base="$run_id"
+  registry_dir="$(almanac_loop_registry_dir "$root")"
+  suffix=1
+  while [ -e "$registry_dir/$run_id" ]; do
+    suffix=$((suffix + 1))
+    run_id="${run_id_base}-${suffix}"
+  done
   ledger_path="$(almanac_harden_ledger_path "$root" "$target")"
   rubric_path="$(almanac_harden_rubric_path "$root" "$target")"
 
@@ -1003,6 +1140,7 @@ almanac_harden_fanout() {
   done
 
   total_added=0
+  succeeded_count=0
   i=0
   for worker_id in "${worker_ids[@]}"; do
     lens="${lenses[$i]}"
@@ -1015,10 +1153,11 @@ almanac_harden_fanout() {
       wstatus="$(almanac_loop_status_field "$status_file" "status" || true)"
     fi
 
-    if [ "$wstatus" = "failed" ]; then
-      _warn "reviewer lens=$lens failed; skipping its findings"
+    if [ "$wstatus" != "done" ]; then
+      _warn "reviewer lens=$lens failed or did not finish cleanly; skipping its findings"
       continue
     fi
+    succeeded_count=$((succeeded_count + 1))
 
     _info "Findings (lens: $lens):"
     almanac_harden_format_findings "$result_file"
@@ -1035,6 +1174,11 @@ almanac_harden_fanout() {
   # an agent slipped in during the round.
   if [ -n "$rubric_snapshot" ]; then
     almanac_harden_rubric_verify "$rubric_path" "$rubric_snapshot" || true
+  fi
+
+  if [ "$succeeded_count" -eq 0 ]; then
+    _warn "All reviewer workers failed; no reliable review result was produced."
+    return 1
   fi
 
   _success "Aggregated $total_added new finding(s) into ${ledger_path#"$root"/}"
@@ -1199,15 +1343,12 @@ INNER
     return "$rc"
   fi
 
-  # The single fixer addresses the whole kill-list; mark each open blocking
-  # finding fixed. A finding that still reproduces is reopened next round.
-  while IFS=$'\t' read -r id lens severity location claim demonstration; do
-    [ -n "$id" ] || continue
-    almanac_harden_ledger_set_status "$ledger_path" "$id" "fixed" \
+  # The single fixer addresses the whole kill-list; mark all open blocking
+  # findings fixed in one ledger rewrite. A finding that still reproduces is
+  # reopened next round.
+  printf '%s\n' "$open" | awk -F '\t' '$1 != "" { print $1 }' \
+    | almanac_harden_ledger_set_status_many "$ledger_path" "fixed" \
       "fixed by sequential fixer at round $round"
-  done <<INNER
-$open
-INNER
 
   _success "Applied fixes for $count finding(s); regenerated tests persist in the working tree."
 }
@@ -1470,6 +1611,36 @@ almanac_harden_run_finalize() {
   almanac_loop_mark_run_status "$root" "$run_id" "$status" >/dev/null 2>&1 || true
 }
 
+almanac_harden_control_file() {
+  local root="$1"
+  local kind="$2"
+  local name
+
+  name="$(almanac_loop_run_signal_file harden "$kind")" || return 1
+  printf '%s/%s\n' "$root" "$name"
+}
+
+almanac_harden_consume_stop() {
+  local root="$1"
+  local file
+
+  file="$(almanac_harden_control_file "$root" stop)" || return 1
+  [ -f "$file" ] || return 1
+  rm -f "$file"
+  return 0
+}
+
+almanac_harden_consume_steer() {
+  local root="$1"
+  local file
+
+  file="$(almanac_harden_control_file "$root" steer)" || return 1
+  [ -f "$file" ] || return 1
+  cat "$file"
+  rm -f "$file"
+  return 0
+}
+
 # Drive the convergence loop: repeat almanac_harden_round under the gate until
 # the target converges, the round budget is exhausted, or the human ships.
 # Budget is configurable (3rd arg, else HARDEN_ROUND_BUDGET, else 5). Each round
@@ -1521,6 +1692,12 @@ almanac_harden_run() {
   lens_summary="$(almanac_harden_lenses | tr '\n' ',' | sed 's/,$//' || true)"
   if [ -n "$run_id" ]; then
     _info "Run registered: $run_id"
+    almanac_loop_set_run_config "$root" "$run_id" \
+      "provider=${HARDEN_PROVIDER:-$cond_provider}" \
+      "model=${HARDEN_MODEL:-$cond_model}" \
+      "effort=${HARDEN_EFFORT:-$cond_effort}" \
+      "lenses=$lens_summary" \
+      "rounds=$budget" >/dev/null 2>&1 || true
     # Mark the run aborted on any unexpected exit (signal, mid-round _die) that
     # leaves it still running; the normal exit paths below mark done/failed and
     # clear this via almanac_harden_run_finalize. Bake $root/$run_id into the
@@ -1538,6 +1715,18 @@ almanac_harden_run() {
 
   round=0
   while :; do
+    if almanac_harden_consume_stop "$root"; then
+      _success "Stop signal detected (.harden-stop); exiting before next round."
+      almanac_harden_run_finalize "$root" "$run_id" "done"
+      return 0
+    fi
+
+    steer_directive="$(almanac_harden_consume_steer "$root" || true)"
+    if [ -n "$steer_directive" ]; then
+      directive="$steer_directive"
+      _info "Steering applied for the next round: $directive"
+    fi
+
     round=$((round + 1))
     _info "=== Harden round $round/$budget ==="
 

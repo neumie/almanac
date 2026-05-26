@@ -169,6 +169,26 @@ test_hub_new_missing_required_errors() {
   echo "  PASS: hub --new without required config errors"
 }
 
+test_hub_resume_harden_does_not_append_yes() {
+  local tmp out rc=0
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "harden" "src/missing.js" "2147483647" "harden-resume" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_set_run_config "$tmp" "harden-resume" "lenses=correctness" "rounds=2"
+  almanac_loop_mark_run_status "$tmp" "harden-resume" "done" "2026-05-25T12:10:00Z"
+
+  out="$(cd "$tmp" && "$ALMANAC_BIN" hub --resume harden-resume </dev/null 2>&1)" || rc=$?
+
+  [ "$rc" -ne 0 ] || fail "resuming a missing harden target should fail before review"
+  case "$out" in
+    *"Unknown harden option: --yes"*) fail "hub resume must not append launcher-only --yes to harden argv" ;;
+    *) ;;
+  esac
+  assert_contains "$out" "Harden target not found" "harden resume should reach the harden runner without --yes"
+  echo "  PASS: hub resume harden does not append --yes"
+}
+
 echo "=== Hub Tests ==="
 test_bare_almanac_non_tty_prints_help
 test_hub_command_renders_registry_overview
@@ -178,5 +198,6 @@ test_hub_watch_renders_run_detail
 test_hub_new_dry_run_composes_ralph_launch
 test_hub_new_dry_run_composes_harden_launch
 test_hub_new_missing_required_errors
+test_hub_resume_harden_does_not_append_yes
 echo ""
 echo "All hub tests passed."

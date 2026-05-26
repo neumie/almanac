@@ -15,7 +15,7 @@
 # The per-run actions are also drivable non-interactively, the seam the menu and
 # scripts/tests share:
 #   almanac hub --watch <id>           tail a run's live status (one frame off a TTY)
-#   almanac hub --stop  <id>           signal a run to stop (.stop file + TERM)
+#   almanac hub --stop  <id>           signal a run to stop (loop stop file)
 #   almanac hub --steer <id> <text…>   queue a steer directive for the next round
 #   almanac hub --new <ralph|harden> [config…] [--dry-run]
 #                                      launch a new run (dry-run previews the command)
@@ -200,9 +200,10 @@ almanac_hub_resume_or_clone() {
     || _die "Could not compose $mode for $run_id"
   env_raw="$(almanac_loop_new_run_env "$run_type" "${opts[@]}")" || env_raw=""
 
-  # resume auto-confirms via --yes; clone leaves the launcher's confirm in place
-  # so the operator can review and Ctrl+C to tweak before relaunching.
-  if [ "$mode" = "resume" ]; then
+  # resume auto-confirms launcher-backed runs via --yes; harden argv is already
+  # the direct runner (`almanac harden <target> --loop`) and rejects launcher-only
+  # flags. clone leaves confirm in place where a launcher is used.
+  if [ "$mode" = "resume" ] && [ "$run_type" != "harden" ]; then
     argv="${argv}"$'\n''--yes'
   fi
   almanac_hub_launch_new 0 "$env_raw" "$argv"

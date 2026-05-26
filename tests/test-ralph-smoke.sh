@@ -144,6 +144,14 @@ EOF
   chmod +x "$fakebin/codex"
 }
 
+test_afk_ci_monitor_noops_without_jq() {
+  local body
+  body="$(sed -n '/^check_ci_status()/,/^}/p' "$ROOT/skills/loop/ralph-loop/scripts/afk.sh")"
+  assert_contains "$body" "command -v jq >/dev/null 2>&1 || return 0" \
+    "AFK CI monitor should no-op when gh returns runs but jq is unavailable"
+  echo "  PASS: AFK CI monitor no-ops without jq"
+}
+
 # `almanac ralph --mode once` dispatches end-to-end through the launcher to
 # once.sh, runs the single iteration, and registers a run marked done.
 test_almanac_ralph_once_smoke() {
@@ -257,6 +265,7 @@ test_almanac_ralph_afk_pushes_agent_commits() {
     cd "$work"
     git config user.email "test@example.com"
     git config user.name "Almanac Test"
+    git config commit.gpgsign false
     printf 'base\n' > README.md
     git add README.md
     git commit -q -m "base"
@@ -280,6 +289,7 @@ test_almanac_ralph_afk_pushes_agent_commits() {
 }
 
 echo "=== Ralph CLI Smoke Tests ==="
+test_afk_ci_monitor_noops_without_jq
 test_almanac_ralph_once_smoke
 test_almanac_ralph_afk_runs_requested_iterations
 test_almanac_ralph_afk_stops_on_completion_promise
