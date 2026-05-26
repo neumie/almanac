@@ -8,9 +8,17 @@ Skills follow the [Agent Skills Open Standard](https://agentskills.io/specificat
 
 Skills are portable instruction sets that teach coding agents *how* to do things — commit code, create PRs, run TDD, fix CI, and more. Each skill is a single Markdown file (`SKILL.md`) with YAML frontmatter. Agents discover and load them automatically.
 
-Run any skill as a slash command in your agent (e.g. `/commit`, `/ship`, `/ralph-loop`, `/harden-loop`).
+Run any skill as a slash command in your agent (e.g. `/commit`, `/ship`, `/ralph-loop`, `/harden-loop`, `/converge-loop`).
 
 Skills are organized by category in the repo (`skills/git/`, `skills/productivity/`, `skills/other/`, …) and flattened at install time so Claude Code's flat skill discovery finds them.
+
+### Skill highlights
+
+| Skill | Use |
+|-------|-----|
+| `ralph-loop` | Build a PRD slice queue task-by-task, with each iteration committed. |
+| `harden-loop` | Harden one target through reviewers, ratification, fixer, and feedback gates. |
+| `converge-loop` | Repeat one custom exec command toward a mutable `goal.md` until an overseer says done. |
 
 ## Install
 
@@ -81,10 +89,54 @@ almanac harden <target> --watch
                              Redraw the live supervision dashboard for the latest run
 almanac harden <target> --watch-worker <lens>
                              Stream one reviewer's live event log
+almanac converge --goal "<goal>" --exec "<cmd>" [--rounds N]
+                             Run a generic convergence loop with one custom exec per round
+almanac converge <slug>      Print a converge run status summary
+almanac converge <slug> --watch
+                             Redraw the live converge dashboard
+almanac converge <slug> --stop
+                             Request a graceful stop at the next round boundary
 almanac update               Update almanac (git pull + re-install)
 almanac sync                 Check adapted skills for upstream changes
 almanac doctor               Report optional-dependency status (gum, gh, jq)
 almanac help                 Show help
+```
+
+### Loop examples
+
+```bash
+almanac ralph
+almanac harden lib/role.sh --loop --rounds 3
+almanac converge \
+  --goal "Improve the codebase until no major architecture friction remains" \
+  --exec "claude -p '/almanac:codebase-improve'" \
+  --rounds 5
+```
+
+### Repository structure
+
+```text
+bin/almanac
+cmd/
+  converge.sh
+  harden.sh
+  ralph.sh
+lib/
+  converge-core.sh
+  harden-core.sh
+  loop-launcher.sh
+  loops/
+    converge.sh
+    harden.sh
+    ralph.sh
+skills/
+  loop/
+    converge-loop/
+      SKILL.md
+    harden-loop/
+      SKILL.md
+    ralph-loop/
+      SKILL.md
 ```
 
 ### Upstream sync

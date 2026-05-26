@@ -2,7 +2,7 @@
 
 ## Adding a Skill
 
-1. Pick a category — `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (PRD/issues/autonomous loops — ralph-loop, harden-loop), `comms/` (client/team-facing comms), or `other/`. Add a new category freely if none fit. Create `skills/<category>/<name>/SKILL.md`:
+1. Pick a category — `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (PRD/issues/autonomous loops — ralph-loop, harden-loop, converge-loop), `comms/` (client/team-facing comms), or `other/`. Add a new category freely if none fit. Create `skills/<category>/<name>/SKILL.md`:
 
 ```yaml
 ---
@@ -29,7 +29,9 @@ Step-by-step instructions for the agent...
 
 6. **Keep SKILL.md under 500 lines.** Move detailed reference material to `references/`.
 
-7. **Validate**: `bash tests/test-skills.sh`
+7. **Loop consumers**: if a loop uses shared role config, document its consumer prefix and role env vars in its skill docs and architecture notes. Follow the shared pattern: `<CONSUMER>_<ROLE>_{PROVIDER,MODEL,EFFORT}` first, then `<CONSUMER>_{PROVIDER,MODEL,EFFORT}`, then defaults. Example: converge uses `CONVERGE_AGENT_*` and `CONVERGE_OVERSEER_*`.
+
+8. **Validate**: `bash tests/test-skills.sh`
 
 ## Adapting an Upstream Skill
 
