@@ -2,6 +2,7 @@
 # converge-core.sh - Generic convergence loop core
 
 # Source focused deps idempotently so tests can source this file directly.
+# core.sh owns the helper, so it's pulled in via the literal pattern.
 if ! declare -F _error >/dev/null 2>&1; then
   __converge_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
   # shellcheck source=lib/core.sh
@@ -9,26 +10,9 @@ if ! declare -F _error >/dev/null 2>&1; then
   unset __converge_core_dir
 fi
 
-if ! declare -F almanac_loop_register_run >/dev/null 2>&1; then
-  __converge_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  # shellcheck source=lib/run.sh
-  source "$__converge_core_dir/run.sh"
-  unset __converge_core_dir
-fi
-
-if ! declare -F almanac_loop_agent_capture >/dev/null 2>&1; then
-  __converge_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  # shellcheck source=lib/agent.sh
-  source "$__converge_core_dir/agent.sh"
-  unset __converge_core_dir
-fi
-
-if ! declare -F almanac_loop_role_config >/dev/null 2>&1; then
-  __converge_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  # shellcheck source=lib/role.sh
-  source "$__converge_core_dir/role.sh"
-  unset __converge_core_dir
-fi
+_almanac_source_sibling run.sh    almanac_loop_register_run
+_almanac_source_sibling agent.sh  almanac_loop_agent_capture
+_almanac_source_sibling role.sh   almanac_loop_role_config
 
 almanac_converge_plan_dir() {
   local root="$1"

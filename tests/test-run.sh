@@ -800,6 +800,66 @@ test_hub_stats_empty_registry_returns_nonzero() {
   echo "  PASS: hub_stats returns 1 on empty registry"
 }
 
+# --- Worker path helpers ------------------------------------------------------
+#
+# Pin almanac_loop_worker_{dir,status_file,file} in isolation. These three pure
+# path-builders sit beneath every worker write/read in the engine — harden's
+# reviewer/fixer fan-out, the worker watch, the hub's worker views — so a single
+# format bug (trailing slash, missing slug, etc) would silently fan out across
+# the system. The lifecycle tests above exercise them transitively; these tests
+# pin the path shape directly.
+
+test_worker_dir_composes_registry_run_worker_with_slug() {
+  local tmp expected actual
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  expected="$tmp/.almanac/runs/r1/workers/reviewer-correctness"
+  actual="$(almanac_loop_worker_dir "$tmp" "r1" "reviewer-correctness")"
+  assert_eq "$expected" "$actual" "worker_dir = <registry>/<run_id>/workers/<slug(worker_id)>"
+  echo "  PASS: worker_dir composes <registry>/<run_id>/workers/<slug>"
+}
+
+test_worker_dir_slugifies_the_worker_id() {
+  local tmp actual
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  # Upper-case, spaces, and punctuation must collapse through almanac_loop_slug
+  # so the on-disk path is file-safe regardless of how the caller spells the id.
+  actual="$(almanac_loop_worker_dir "$tmp" "r1" "Reviewer / Edge & Tests")"
+  assert_eq "$tmp/.almanac/runs/r1/workers/reviewer-edge-tests" "$actual" \
+    "worker_dir must slugify the worker_id (lowercase, non-alnum runs → single dash, trim)"
+  echo "  PASS: worker_dir slugifies the worker_id segment"
+}
+
+test_worker_status_file_is_status_tsv_under_worker_dir() {
+  local tmp expected actual
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  expected="$tmp/.almanac/runs/r1/workers/fixer/status.tsv"
+  actual="$(almanac_loop_worker_status_file "$tmp" "r1" "fixer")"
+  assert_eq "$expected" "$actual" "worker_status_file = <worker_dir>/status.tsv"
+  echo "  PASS: worker_status_file is status.tsv under worker_dir"
+}
+
+test_worker_file_joins_filename_under_worker_dir() {
+  local tmp expected actual
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  expected="$tmp/.almanac/runs/r1/workers/reviewer-security/events.log"
+  actual="$(almanac_loop_worker_file "$tmp" "r1" "reviewer-security" "events.log")"
+  assert_eq "$expected" "$actual" "worker_file = <worker_dir>/<filename>"
+  echo "  PASS: worker_file appends a named file under worker_dir"
+}
+
+test_worker_paths_agree_on_shared_directory() {
+  local tmp dir status_file event_file
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  dir="$(almanac_loop_worker_dir "$tmp" "r1" "reviewer-perf")"
+  status_file="$(almanac_loop_worker_status_file "$tmp" "r1" "reviewer-perf")"
+  event_file="$(almanac_loop_worker_file "$tmp" "r1" "reviewer-perf" "events.log")"
+  # All three must root in the same worker dir — if one diverged, every
+  # status/event mkdir would land in the wrong place. Pin the agreement.
+  assert_eq "$dir/status.tsv" "$status_file" "status_file must live under worker_dir"
+  assert_eq "$dir/events.log" "$event_file"  "worker_file must live under worker_dir"
+  echo "  PASS: worker_dir / worker_status_file / worker_file share the same parent"
+}
+
 echo "=== Run-Status Record Tests ==="
 test_record_fields_is_canonical_schema
 test_record_has_field_recognises_only_canonical
@@ -846,6 +906,14 @@ test_new_run_env_maps_harden_config
 test_new_run_env_maps_converge_config
 test_hub_stats_groups_by_type_provider_model
 test_hub_stats_empty_registry_returns_nonzero
+
+echo ""
+echo "=== Worker Path Helper Tests ==="
+test_worker_dir_composes_registry_run_worker_with_slug
+test_worker_dir_slugifies_the_worker_id
+test_worker_status_file_is_status_tsv_under_worker_dir
+test_worker_file_joins_filename_under_worker_dir
+test_worker_paths_agree_on_shared_directory
 
 echo ""
 echo "All run registry tests passed."

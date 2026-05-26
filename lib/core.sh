@@ -48,6 +48,34 @@ almanac_resolve_home() {
   printf '%s\n' "$home"
 }
 
+# --- Sibling-source helper -------------------------------------------------
+# Idempotently source a sibling lib/ file from the caller's directory.
+# Usage (from inside lib/<some-module>.sh, after core.sh has been sourced):
+#   _almanac_source_sibling <basename.sh> <guard_function>
+# If <guard_function> already exists, returns 0 without sourcing — so the same
+# module can be pulled in via multiple paths (bin/almanac, a test sourcing it
+# directly, transitive sourcing) without re-defining its functions.
+#
+# The caller's directory is resolved via BASH_SOURCE[1] (the file that called
+# this helper) with pwd -P, so the install-time symlink
+# ~/.claude/skills/almanac/<name> → repo/skills/<cat>/<name> and a plain
+# checkout both land on the real lib/.
+#
+# Replaces the verbose five-line idiom that used to live at the top of every
+# consumer module (`if ! declare -F X; then __dir=…; source …; unset __dir; fi`).
+# Lives in core.sh because every consumer of this helper already depends on
+# core.sh; modules that deliberately have NO core.sh dependency (run.sh, ui.sh,
+# loops.sh, agent.sh) keep the literal snippet instead.
+_almanac_source_sibling() {
+  local module="$1"
+  local guard_fn="$2"
+  declare -F "$guard_fn" >/dev/null 2>&1 && return 0
+  local caller_dir
+  caller_dir="$(cd "$(dirname "${BASH_SOURCE[1]}")" && pwd -P)"
+  # shellcheck source=/dev/null
+  source "$caller_dir/$module"
+}
+
 # Providers with adapters
 almanac_providers() {
   local provider

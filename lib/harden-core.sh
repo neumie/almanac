@@ -3,11 +3,9 @@
 
 # loop-core.sh (the old shared-engine barrel) is deleted; harden-core sources the
 # focused modules it actually uses, each directly and idempotently so it works
-# both through bin/almanac and when a test sources this file directly. pwd -P
-# resolves the install symlink so the siblings are found from either path.
-#
-# Output helpers (_die/_info/_warn/…) — lib/core.sh. (Came in transitively via
-# loop-core before; now an explicit dependency.)
+# both through bin/almanac and when a test sources this file directly. core.sh
+# is sourced literally (it owns the helper); the other deps go through
+# _almanac_source_sibling so the boilerplate stays minimal.
 if ! declare -F _error >/dev/null 2>&1; then
   __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
   # shellcheck source=lib/core.sh
@@ -15,62 +13,14 @@ if ! declare -F _error >/dev/null 2>&1; then
   unset __harden_core_dir
 fi
 
-# The agent run shapes (almanac_loop_agent_capture, the ratify/fixer path) live in
-# lib/agent.sh.
-if ! declare -F almanac_loop_agent_capture >/dev/null 2>&1; then
-  __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  # shellcheck source=lib/agent.sh
-  source "$__harden_core_dir/agent.sh"
-  unset __harden_core_dir
-fi
-
-# The run registry + worker path/health helpers (register/mark/update the run,
-# worker_status_file / worker_file / worker_health_of) live in lib/run.sh.
-if ! declare -F almanac_loop_register_run >/dev/null 2>&1; then
-  __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  # shellcheck source=lib/run.sh
-  source "$__harden_core_dir/run.sh"
-  unset __harden_core_dir
-fi
-
-# Worker orchestration (almanac_loop_worker_start / _worker_watch — the reviewer/
-# fixer fan-out) lives in lib/worker.sh.
-if ! declare -F almanac_loop_worker_start >/dev/null 2>&1; then
-  __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  # shellcheck source=lib/worker.sh
-  source "$__harden_core_dir/worker.sh"
-  unset __harden_core_dir
-fi
-
-# The dashboard composes the gum-or-plain UI seam (status glyph / render / clear)
-# from lib/ui.sh — source it directly and idempotently so harden-core's own
-# dependency is explicit (not borrowed transitively).
-if ! declare -F almanac_loop_ui_render >/dev/null 2>&1; then
-  __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  # shellcheck source=lib/ui.sh
-  source "$__harden_core_dir/ui.sh"
-  unset __harden_core_dir
-fi
-
-# Per-role provider/model/effort resolution (almanac_loop_role_config) lives in
-# lib/role.sh — source it directly and idempotently so harden-core's dependency
-# on the role resolver is explicit (not borrowed transitively).
-if ! declare -F almanac_loop_role_config >/dev/null 2>&1; then
-  __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  # shellcheck source=lib/role.sh
-  source "$__harden_core_dir/role.sh"
-  unset __harden_core_dir
-fi
-
-# The feedback runner (almanac_loop_feedback_run) lives in lib/feedback.sh — the
-# fixer's objective gate (almanac_harden_report_feedback) calls it, so source it
-# directly and idempotently rather than borrowing it transitively.
-if ! declare -F almanac_loop_feedback_run >/dev/null 2>&1; then
-  __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  # shellcheck source=lib/feedback.sh
-  source "$__harden_core_dir/feedback.sh"
-  unset __harden_core_dir
-fi
+# Explicit deps (each declared module is the contract surface this file consumes;
+# transitive availability is not relied on).
+_almanac_source_sibling agent.sh    almanac_loop_agent_capture   # agent run shapes (ratify/fixer)
+_almanac_source_sibling run.sh      almanac_loop_register_run    # run registry + worker paths/health
+_almanac_source_sibling worker.sh   almanac_loop_worker_start    # worker orchestration (reviewer/fixer fan-out)
+_almanac_source_sibling ui.sh       almanac_loop_ui_render       # gum-or-plain dashboard seam
+_almanac_source_sibling role.sh     almanac_loop_role_config     # per-role provider/model/effort resolution
+_almanac_source_sibling feedback.sh almanac_loop_feedback_run    # objective fixer gate
 
 # --- Role config (per-role provider / model / effort) --------------------------
 #

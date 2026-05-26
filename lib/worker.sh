@@ -8,31 +8,19 @@
 # consumer; the run-level registry, the worker PATH helpers + the worker-health
 # read views live in lib/run.sh (this is the orchestration layer on top of them).
 #
-# Dependencies (sourced idempotently): lib/run.sh (worker path helpers +
-# almanac_loop_status_field + almanac_loop_now_utc), lib/agent.sh (the capture
-# shape the spawned worker runs), and lib/core.sh (_warn, for worker_watch's
-# no-event-log notice). pwd -P resolves the install symlink so the siblings are
-# found from either path.
-if ! declare -F almanac_loop_worker_status_file >/dev/null 2>&1; then
-  __worker_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  # shellcheck source=lib/run.sh
-  source "$__worker_dir/run.sh"
-  unset __worker_dir
-fi
-
-if ! declare -F almanac_loop_agent_capture >/dev/null 2>&1; then
-  __worker_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  # shellcheck source=lib/agent.sh
-  source "$__worker_dir/agent.sh"
-  unset __worker_dir
-fi
-
+# Dependencies (sourced idempotently): lib/core.sh (_warn + the _almanac_source_sibling
+# helper used below), lib/run.sh (worker path helpers + almanac_loop_status_field +
+# almanac_loop_now_utc), lib/agent.sh (the capture shape the spawned worker runs).
+# core.sh loads first via the literal snippet so the sibling helper is in scope.
 if ! declare -F _warn >/dev/null 2>&1; then
   __worker_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
   # shellcheck source=lib/core.sh
   source "$__worker_dir/core.sh"
   unset __worker_dir
 fi
+
+_almanac_source_sibling run.sh   almanac_loop_worker_status_file
+_almanac_source_sibling agent.sh almanac_loop_agent_capture
 
 # THE single source of truth for the worker-status schema: the canonical field
 # list in write order. Mirrors run.sh's almanac_loop_record_fields; the generic

@@ -18,42 +18,13 @@
 # are sourced once at launcher boot, so any adapter dispatched through
 # `almanac_loop_launch` finds them in scope.
 #
-# Requires lib/core.sh (_die/_info/_success), sourced by every entry point before
-# this file. The gum-or-plain UI seam (almanac_loop_ui_*) lives in lib/ui.sh and
-# is pulled in directly below, so the launcher's dependency on it is explicit.
-
-# The launcher drives the whole config UX through the gum-or-plain seam
-# (choose/input/confirm/render). Source it directly and idempotently so the
-# dependency is the launcher's own, not borrowed from whatever sourced this file.
-if ! declare -F almanac_loop_ui_choose >/dev/null 2>&1; then
-  __loop_launcher_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  # shellcheck source=lib/ui.sh
-  source "$__loop_launcher_dir/ui.sh"
-  unset __loop_launcher_dir
-fi
-
-# Provider knowledge (availability, the model/effort menus, default-selection,
-# the provider list) lives in the provider-adapter seam (lib/agent.sh →
-# almanac_provider_*). The launcher consumes it rather than branching on provider
-# name. Source it directly and idempotently so the dependency is the launcher's
-# own, not borrowed from whatever sourced this file.
-if ! declare -F almanac_provider_default >/dev/null 2>&1; then
-  __loop_launcher_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  # shellcheck source=lib/agent.sh
-  source "$__loop_launcher_dir/agent.sh"
-  unset __loop_launcher_dir
-fi
-
-# The loop-adapter seam (almanac_loop_adapter_*) lives in lib/loops.sh. The
-# launcher dispatches the `launch` verb through it (each loop adapter owns its
-# own config UI + exec). Source it directly and idempotently so the dependency
-# is the launcher's own, not borrowed from whatever sourced this file.
-if ! declare -F almanac_loop_adapter_call >/dev/null 2>&1; then
-  __loop_launcher_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  # shellcheck source=lib/loops.sh
-  source "$__loop_launcher_dir/loops.sh"
-  unset __loop_launcher_dir
-fi
+# Requires lib/core.sh (_die/_info/_success + _almanac_source_sibling), sourced
+# by every entry point before this file. The deps below are each declared
+# explicitly through the sibling helper so the launcher's seam dependencies
+# aren't borrowed from whatever sourced this file.
+_almanac_source_sibling ui.sh    almanac_loop_ui_choose       # gum-or-plain UI seam
+_almanac_source_sibling agent.sh almanac_provider_default     # provider-adapter seam (availability/default)
+_almanac_source_sibling loops.sh almanac_loop_adapter_call    # loop-adapter dispatch
 
 # --- field collectors ---------------------------------------------------------
 #
