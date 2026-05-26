@@ -25,14 +25,14 @@ source "$SCRIPT_DIR/ralph-run-registry.sh"
 
 # Provider seam (almanac_provider_*) — sourced directly so this runner's use of
 # the seam (default-selection / availability / display) is an explicit
-# dependency, not borrowed transitively via loop-core.
+# dependency, not borrowed transitively.
 if ! declare -F almanac_provider_default >/dev/null 2>&1; then
   source "$ALMANAC_HOME/lib/agent.sh"
 fi
 
 # Role config seam (almanac_loop_role_field) — sourced directly so this runner's
 # per-role provider/model/effort resolution is an explicit dependency, not
-# borrowed transitively via loop-core.
+# borrowed transitively.
 if ! declare -F almanac_loop_role_field >/dev/null 2>&1; then
   source "$ALMANAC_HOME/lib/role.sh"
 fi
@@ -499,6 +499,13 @@ echo "========================="
 echo ""
 
 ralph_register_run "$PRD_NAME"
+# Stamp launch config onto the run so `almanac hub --resume <id>` can rebuild it.
+ralph_set_run_config \
+  "provider=$PROVIDER" \
+  "model=$AGENT_MODEL" \
+  "effort=$AGENT_EFFORT" \
+  "iterations=$ITERATIONS" \
+  "oversee=$([ -n "${RALPH_NO_OVERSEE:-}" ] && echo off || echo on)"
 echo "Run ID:      $RALPH_RUN_ID"
 echo ""
 

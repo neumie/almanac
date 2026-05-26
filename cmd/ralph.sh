@@ -6,7 +6,6 @@
 
 set -euo pipefail
 
-source "$ALMANAC_HOME/lib/loop-core.sh"
 source "$ALMANAC_HOME/lib/loop-launcher.sh"
 
 almanac_loop_launch ralph "$@"

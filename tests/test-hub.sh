@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 # test-hub.sh — almanac interactive hub (TTY-gated front door) CLI tests
 #
-# Drives the real `bin/almanac` chain (dispatch -> cmd/hub.sh -> loop-core hub
+# Drives the real `bin/almanac` chain (dispatch -> cmd/hub.sh -> lib/run.sh hub
 # render) the way a user / script invokes it. The interactive menus are TTY-only
 # and not exercised here; these pin the read-only, scripts-safe contract:
 #   - bare `almanac`, non-interactive, prints help and never opens the hub
 #   - `almanac hub` renders the registry overview (running + recent) plainly
+#
+# Sources lib/run.sh directly (the run registry — register/mark/update — moved
+# there when loop-core.sh was deleted) to seed the fixture registry.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ALMANAC_BIN="$ROOT/bin/almanac"
-source "$ROOT/lib/loop-core.sh"
+source "$ROOT/lib/run.sh"
 
 TMPDIRS=()
 NEW_TMPDIR=""

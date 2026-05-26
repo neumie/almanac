@@ -1,20 +1,50 @@
 #!/usr/bin/env bash
 # harden-core.sh - Harden loop rubric bootstrap + reviewer helpers
 
-# The reviewer path leans on the shared loop engine (role config + agent runner).
-# Source it idempotently so harden-core works both through bin/almanac and when a
-# test sources this file directly. pwd -P resolves the install symlink so the
-# sibling loop-core.sh is found from either path.
+# loop-core.sh (the old shared-engine barrel) is deleted; harden-core sources the
+# focused modules it actually uses, each directly and idempotently so it works
+# both through bin/almanac and when a test sources this file directly. pwd -P
+# resolves the install symlink so the siblings are found from either path.
+#
+# Output helpers (_die/_info/_warn/…) — lib/core.sh. (Came in transitively via
+# loop-core before; now an explicit dependency.)
+if ! declare -F _error >/dev/null 2>&1; then
+  __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/core.sh
+  source "$__harden_core_dir/core.sh"
+  unset __harden_core_dir
+fi
+
+# The agent run shapes (almanac_loop_agent_capture, the ratify/fixer path) live in
+# lib/agent.sh.
 if ! declare -F almanac_loop_agent_capture >/dev/null 2>&1; then
   __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  # shellcheck source=lib/loop-core.sh
-  source "$__harden_core_dir/loop-core.sh"
+  # shellcheck source=lib/agent.sh
+  source "$__harden_core_dir/agent.sh"
+  unset __harden_core_dir
+fi
+
+# The run registry + worker path/health helpers (register/mark/update the run,
+# worker_status_file / worker_file / worker_health_of) live in lib/run.sh.
+if ! declare -F almanac_loop_register_run >/dev/null 2>&1; then
+  __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/run.sh
+  source "$__harden_core_dir/run.sh"
+  unset __harden_core_dir
+fi
+
+# Worker orchestration (almanac_loop_worker_start / _worker_watch — the reviewer/
+# fixer fan-out) lives in lib/worker.sh.
+if ! declare -F almanac_loop_worker_start >/dev/null 2>&1; then
+  __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/worker.sh
+  source "$__harden_core_dir/worker.sh"
   unset __harden_core_dir
 fi
 
 # The dashboard composes the gum-or-plain UI seam (status glyph / render / clear)
 # from lib/ui.sh — source it directly and idempotently so harden-core's own
-# dependency is explicit (not borrowed transitively through loop-core).
+# dependency is explicit (not borrowed transitively).
 if ! declare -F almanac_loop_ui_render >/dev/null 2>&1; then
   __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
   # shellcheck source=lib/ui.sh
@@ -24,7 +54,7 @@ fi
 
 # Per-role provider/model/effort resolution (almanac_loop_role_config) lives in
 # lib/role.sh — source it directly and idempotently so harden-core's dependency
-# on the role resolver is explicit (not borrowed transitively through loop-core).
+# on the role resolver is explicit (not borrowed transitively).
 if ! declare -F almanac_loop_role_config >/dev/null 2>&1; then
   __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
   # shellcheck source=lib/role.sh
@@ -34,8 +64,7 @@ fi
 
 # The feedback runner (almanac_loop_feedback_run) lives in lib/feedback.sh — the
 # fixer's objective gate (almanac_harden_report_feedback) calls it, so source it
-# directly and idempotently rather than borrowing it transitively through
-# loop-core.
+# directly and idempotently rather than borrowing it transitively.
 if ! declare -F almanac_loop_feedback_run >/dev/null 2>&1; then
   __harden_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
   # shellcheck source=lib/feedback.sh
@@ -1582,7 +1611,7 @@ almanac_harden_run() {
 # -> printable rows) so it is unit-testable without a terminal; the gather helpers
 # read live run state into that pure composer, and almanac_harden_render_dashboard
 # wraps the result in gum styling that degrades to plain output when gum is absent
-# (via the shared UI primitives in loop-core).
+# (via the shared UI primitives in lib/ui.sh).
 
 # Findings tally for the dashboard: counts the ledger's findings by status as
 # `open=N fixed=N notes=N`, where notes = rejected-subjective + wontfix-per-context

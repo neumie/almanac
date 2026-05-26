@@ -40,6 +40,18 @@ if ! declare -F almanac_provider_default >/dev/null 2>&1; then
   unset __loop_launcher_dir
 fi
 
+# The loop-adapter seam (almanac_loop_adapter_*) lives in lib/loops.sh. The
+# launcher execs each loop's runner via its adapter's exec_argv (so no central
+# code hard-codes a loop's runner path). Source it directly and idempotently so
+# the dependency is the launcher's own, not borrowed from whatever sourced this
+# file.
+if ! declare -F almanac_loop_adapter_call >/dev/null 2>&1; then
+  __loop_launcher_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/loops.sh
+  source "$__loop_launcher_dir/loops.sh"
+  unset __loop_launcher_dir
+fi
+
 # --- field collectors ---------------------------------------------------------
 
 # Pick a provider into the named-by-$1 variable if it is empty. Lists only
@@ -93,7 +105,7 @@ _almanac_launch_need_positive_int() {
 # --- ralph ---------------------------------------------------------------------
 
 _almanac_launch_ralph() {
-  local prd="" mode="" provider="" model="" effort="" iterations="" no_oversee=""
+  local prd="" mode="" provider="" model="" effort="" iterations="" no_oversee="" yes=""
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --prd)        shift; prd="${1:-}";        [ -n "$prd" ] || _die "--prd requires a value" ;;
@@ -103,6 +115,7 @@ _almanac_launch_ralph() {
       --effort|--thinking) shift; effort="${1:-}"; [ -n "$effort" ] || _die "$1 requires a value" ;;
       --iterations) shift; iterations="${1:-}"; [ -n "$iterations" ] || _die "--iterations requires a value" ;;
       --no-oversee) no_oversee=1 ;;
+      --yes|-y) yes=1 ;;
       --help|-h) almanac_loop_launch_usage ralph; return 0 ;;
       *) _die "Unknown ralph launch option: $1" ;;
     esac
@@ -147,7 +160,7 @@ _almanac_launch_ralph() {
     "PRD:$prd" "Mode:$mode" "Provider:$provider" \
     "Model:${model:-provider default}" "Thinking:${effort:-provider default}" \
     $([ "$mode" = "afk" ] && printf '%s\n%s' "Iterations:$iterations" "Overseer:$([ -n "$no_oversee" ] && echo off || echo on)")
-  almanac_loop_ui_confirm "Launch this run?" || { _info "Cancelled."; return 0; }
+  [ -n "$yes" ] || almanac_loop_ui_confirm "Launch this run?" || { _info "Cancelled."; return 0; }
 
   # Export role config + exec the runner (no re-launch through `almanac ralph`).
   export RALPH_PROVIDER="$provider"
@@ -155,17 +168,17 @@ _almanac_launch_ralph() {
   [ -n "$effort" ] && export RALPH_EFFORT="$effort" || unset RALPH_EFFORT
   [ -n "$no_oversee" ] && export RALPH_NO_OVERSEE=1
 
-  local scripts="$ALMANAC_HOME/skills/loop/ralph-loop/scripts"
-  case "$mode" in
-    once) exec bash "$scripts/once.sh" "$prd" ;;
-    afk)  exec bash "$scripts/afk.sh" "$prd" "$iterations" ;;
-  esac
+  # Exec the runner via the ralph adapter (no hard-coded …/ralph-loop/scripts/…
+  # path lives here any more — the adapter owns it).
+  almanac_loop_adapter_call ralph exec_argv "$mode" "$prd" "$iterations" \
+    || _die "ralph adapter could not build a runner for mode: $mode"
+  exec "${_ALMANAC_LOOP_ARGV[@]}"
 }
 
 # --- harden --------------------------------------------------------------------
 
 _almanac_launch_harden() {
-  local target="" lenses="" provider="" model="" effort="" rounds=""
+  local target="" lenses="" provider="" model="" effort="" rounds="" yes=""
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --lenses)   shift; lenses="${1:-}";   [ -n "$lenses" ] || _die "--lenses requires a value" ;;
@@ -173,6 +186,7 @@ _almanac_launch_harden() {
       --model)    shift; model="${1:-}";    [ -n "$model" ] || _die "--model requires a value" ;;
       --effort|--thinking) shift; effort="${1:-}"; [ -n "$effort" ] || _die "$1 requires a value" ;;
       --rounds)   shift; rounds="${1:-}";   [ -n "$rounds" ] || _die "--rounds requires a value" ;;
+      --yes|-y) yes=1 ;;
       --help|-h) almanac_loop_launch_usage harden; return 0 ;;
       -*) _die "Unknown harden launch option: $1" ;;
       *)  [ -z "$target" ] && target="$1" || _die "Unexpected harden argument: $1" ;;
@@ -196,16 +210,18 @@ _almanac_launch_harden() {
     "Target:$target" "Lenses:${lenses:-default set}" "Provider:$provider" \
     "Model:${model:-provider default}" "Thinking:${effort:-provider default}" \
     "Rounds:${rounds:-default budget}"
-  almanac_loop_ui_confirm "Launch this run?" || { _info "Cancelled."; return 0; }
+  [ -n "$yes" ] || almanac_loop_ui_confirm "Launch this run?" || { _info "Cancelled."; return 0; }
 
   [ -n "$lenses" ]   && export HARDEN_LENSES="$lenses"
   export HARDEN_PROVIDER="$provider"
   [ -n "$model" ]    && export HARDEN_MODEL="$model"   || unset HARDEN_MODEL
   [ -n "$effort" ]   && export HARDEN_EFFORT="$effort" || unset HARDEN_EFFORT
 
-  local argv=(harden "$target" --loop)
-  [ -n "$rounds" ] && argv+=(--rounds "$rounds")
-  exec bash "$ALMANAC_HOME/bin/almanac" "${argv[@]}"
+  # Exec the runner via the harden adapter (its convergence loop runs through
+  # `almanac harden <target> --loop` — the adapter owns that invocation).
+  almanac_loop_adapter_call harden exec_argv "$target" "$rounds" \
+    || _die "harden adapter could not build a runner for target: $target"
+  exec "${_ALMANAC_LOOP_ARGV[@]}"
 }
 
 # --- summary + dispatch --------------------------------------------------------
