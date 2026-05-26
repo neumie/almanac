@@ -146,8 +146,10 @@ test_worker_watch_streams_event_log() {
   mkdir -p "$wdir"
   events="$wdir/events.jsonl"
   printf '%s\n' '{"e":"started"}' '{"e":"thinking"}' > "$events"
-  almanac_loop_write_worker_status "$wdir/status.tsv" "reviewer-security" "$run_id" \
-    "111" "codex" "" "" "read-only" "p" "$events" "r" "s" "2026-05-25T12:00:00Z" "running" "" ""
+  almanac_loop_worker_record_set "$wdir/status.tsv" \
+    "id=reviewer-security" "run_id=$run_id" "pid=111" "provider=codex" \
+    "sandbox=read-only" "prompt_file=p" "events_file=$events" \
+    "result_file=r" "stderr_file=s" "started_at=2026-05-25T12:00:00Z" "status=running"
 
   out="$(almanac_loop_worker_watch "$tmp" "$run_id" "reviewer-security")"
   assert_contains "$out" '{"e":"started"}' "watch should stream the worker's event log"
@@ -157,8 +159,10 @@ test_worker_watch_streams_event_log() {
   # of hanging or erroring.
   perfdir="$tmp/.almanac/runs/$run_id/workers/reviewer-perf"
   mkdir -p "$perfdir"
-  almanac_loop_write_worker_status "$perfdir/status.tsv" "reviewer-perf" "$run_id" \
-    "112" "codex" "" "" "read-only" "p" "$perfdir/events.jsonl" "r" "s" "2026-05-25T12:00:00Z" "running" "" ""
+  almanac_loop_worker_record_set "$perfdir/status.tsv" \
+    "id=reviewer-perf" "run_id=$run_id" "pid=112" "provider=codex" \
+    "sandbox=read-only" "prompt_file=p" "events_file=$perfdir/events.jsonl" \
+    "result_file=r" "stderr_file=s" "started_at=2026-05-25T12:00:00Z" "status=running"
   rc=0
   almanac_loop_worker_watch "$tmp" "$run_id" "reviewer-perf" >/dev/null 2>&1 || rc=$?
   [ "$rc" -eq 1 ] || fail "watch should return non-zero when the worker has no event log yet (got $rc)"

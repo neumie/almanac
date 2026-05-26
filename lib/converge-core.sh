@@ -30,20 +30,7 @@ if ! declare -F almanac_loop_role_config >/dev/null 2>&1; then
   unset __converge_core_dir
 fi
 
-almanac_converge_slug() {
-  almanac_loop_slug "$1"
-}
-
 almanac_converge_plan_dir() {
-  local root="$1"
-  local goal="$2"
-  local slug
-
-  slug="$(almanac_converge_slug "$goal")"
-  printf '%s/docs/plans/converge/%s\n' "$root" "$slug"
-}
-
-almanac_converge_plan_dir_for_slug() {
   local root="$1"
   local slug="$2"
 
@@ -70,7 +57,7 @@ almanac_converge_scaffold() {
   local goal="$2"
   local plan_dir
 
-  plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")")"
 
   if ! mkdir -p "$plan_dir"; then
     _die "Could not create converge plan dir: ${plan_dir#"$root"/}"
@@ -109,7 +96,7 @@ almanac_converge_ensure_prompt_template() {
   local goal="$2"
   local plan_dir prompt_file
 
-  plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")")"
   prompt_file="$plan_dir/prompt.md"
   [ -f "$prompt_file" ] && return 0
 
@@ -133,8 +120,8 @@ almanac_converge_worker_prompt() {
   local round="$4"
   local slug plan_dir rel_plan steer_file
 
-  slug="$(almanac_converge_slug "$goal")"
-  plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
+  slug="$(almanac_loop_slug "$goal")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
   rel_plan="${plan_dir#"$root"/}"
   steer_file="$(almanac_converge_control_file "$root" steer)"
 
@@ -214,8 +201,8 @@ almanac_converge_overseer_prompt() {
   local round="$3"
   local slug plan_dir rel_plan reports_file reports commits
 
-  slug="$(almanac_converge_slug "$goal")"
-  plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
+  slug="$(almanac_loop_slug "$goal")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
   rel_plan="${plan_dir#"$root"/}"
   reports_file="$plan_dir/agent-reports.log"
 
@@ -376,7 +363,7 @@ almanac_converge_write_convergence() {
   local reason="${6:-}"
   local plan_dir now_epoch elapsed
 
-  plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")")"
   now_epoch="$(date +%s)"
   elapsed=""
   case "$started_epoch" in
@@ -472,7 +459,7 @@ almanac_converge_dashboard_frame() {
   local verdict="none" reason="none" verdict_line report_header goal_text goal_summary mutations
   local tab=$'\t'
 
-  plan_dir="$(almanac_converge_plan_dir_for_slug "$root" "$slug")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
   [ -d "$plan_dir" ] || return 1
 
   goal_file="$plan_dir/goal.md"
@@ -556,7 +543,7 @@ almanac_converge_stop() {
   local slug="$2"
   local plan_dir root_stop plan_stop
 
-  plan_dir="$(almanac_converge_plan_dir_for_slug "$root" "$slug")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
   [ -d "$plan_dir" ] || return 1
   root_stop="$(almanac_converge_control_file "$root" stop)"
   plan_stop="$(almanac_converge_control_file "$plan_dir" stop)"
@@ -573,7 +560,7 @@ almanac_converge_apply_goal_update() {
   local new_goal="$6"
   local plan_dir goal_file history_file log_file ts old_goal old_file new_file diff_output diff_status summary
 
-  plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")")"
   goal_file="$plan_dir/goal.md"
   history_file="$plan_dir/goal.history.log"
   log_file="$plan_dir/overseer.log"
@@ -651,8 +638,8 @@ almanac_converge_run_worker() {
   provider="$(almanac_converge_role_field "agent" "provider")"
   model="$(almanac_converge_role_field "agent" "model")"
   effort="$(almanac_converge_role_field "agent" "effort")"
-  slug="$(almanac_converge_slug "$goal")"
-  plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
+  slug="$(almanac_loop_slug "$goal")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
 
   prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-worker-prompt.XXXXXX")"
   result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-worker-result.XXXXXX")"
@@ -757,8 +744,8 @@ almanac_converge_run_worker_prompt() {
   provider="$(almanac_converge_role_field "agent" "provider")"
   model="$(almanac_converge_role_field "agent" "model")"
   effort="$(almanac_converge_role_field "agent" "effort")"
-  slug="$(almanac_converge_slug "$goal")"
-  plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
+  slug="$(almanac_loop_slug "$goal")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
   log_file="$plan_dir/agent-reports.log"
   steer_path="$(almanac_converge_control_file "$root" steer)"
 
@@ -837,7 +824,7 @@ almanac_converge_run_overseer() {
   provider="$(almanac_converge_role_field "overseer" "provider")"
   model="$(almanac_converge_role_field "overseer" "model")"
   effort="$(almanac_converge_role_field "overseer" "effort")"
-  plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")")"
   log_file="$plan_dir/overseer.log"
 
   prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-overseer-prompt.XXXXXX")"
@@ -918,7 +905,7 @@ almanac_converge_run() {
     *) no_oversee=0 ;;
   esac
 
-  slug="$(almanac_converge_slug "$goal")"
+  slug="$(almanac_loop_slug "$goal")"
   pid="${BASHPID:-$$}"
   started_epoch="$(date +%s)"
   run_id="$(almanac_loop_register_run "$root" "converge" "$slug" "$pid")" \
@@ -935,7 +922,7 @@ almanac_converge_run() {
     >/dev/null 2>&1 || true
 
   almanac_converge_scaffold "$root" "$goal"
-  plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
 
   final_status="done"
   if [ "$no_oversee" -eq 1 ]; then

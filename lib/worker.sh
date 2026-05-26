@@ -34,41 +34,23 @@ if ! declare -F _warn >/dev/null 2>&1; then
   unset __worker_dir
 fi
 
-almanac_loop_write_worker_status() {
-  local status_file="$1"
-  local worker_id="$2"
-  local run_id="$3"
-  local pid="$4"
-  local provider="$5"
-  local model="$6"
-  local effort="$7"
-  local sandbox="$8"
-  local prompt_file="$9"
-  local events_file="${10}"
-  local result_file="${11}"
-  local stderr_file="${12}"
-  local started_at="${13}"
-  local status="${14}"
-  local finished_at="${15}"
-  local exit_code="${16}"
+# THE single source of truth for the worker-status schema: the canonical field
+# list in write order. Mirrors run.sh's almanac_loop_record_fields; the generic
+# almanac_loop_tsv_record_set engine iterates this list so every worker record
+# carries the same keys regardless of which subset a caller supplies.
+almanac_loop_worker_record_fields() {
+  printf '%s\n' \
+    id run_id pid provider model effort sandbox \
+    prompt_file events_file result_file stderr_file \
+    started_at status finished_at exit_code
+}
 
-  {
-    printf 'id\t%s\n' "$worker_id"
-    printf 'run_id\t%s\n' "$run_id"
-    printf 'pid\t%s\n' "$pid"
-    printf 'provider\t%s\n' "$provider"
-    printf 'model\t%s\n' "$model"
-    printf 'effort\t%s\n' "$effort"
-    printf 'sandbox\t%s\n' "$sandbox"
-    printf 'prompt_file\t%s\n' "$prompt_file"
-    printf 'events_file\t%s\n' "$events_file"
-    printf 'result_file\t%s\n' "$result_file"
-    printf 'stderr_file\t%s\n' "$stderr_file"
-    printf 'started_at\t%s\n' "$started_at"
-    printf 'status\t%s\n' "$status"
-    printf 'finished_at\t%s\n' "$finished_at"
-    printf 'exit_code\t%s\n' "$exit_code"
-  } > "$status_file"
+# Set one or more worker-status fields by name, round-tripping the rest. Thin
+# wrapper over the shared tsv-record engine — callers name only the fields they
+# have values for; the rest are preserved (or seeded blank on first write). No
+# caller enumerates the worker schema.
+almanac_loop_worker_record_set() {
+  almanac_loop_tsv_record_set "$(almanac_loop_worker_record_fields)" "$@"
 }
 
 almanac_loop_mark_worker_status() {
@@ -80,7 +62,7 @@ almanac_loop_mark_worker_status() {
   local status="$4"
   local exit_code="$5"
   local finished_at="${6:-}"
-  local status_file pid provider model effort sandbox prompt_file events_file result_file stderr_file started_at
+  local status_file
 
   case "$status" in
     done|failed) ;;
@@ -94,34 +76,10 @@ almanac_loop_mark_worker_status() {
     finished_at="$(almanac_loop_now_utc)"
   fi
 
-  pid="$(almanac_loop_status_field "$status_file" "pid")"
-  provider="$(almanac_loop_status_field "$status_file" "provider")"
-  model="$(almanac_loop_status_field "$status_file" "model")"
-  effort="$(almanac_loop_status_field "$status_file" "effort")"
-  sandbox="$(almanac_loop_status_field "$status_file" "sandbox")"
-  prompt_file="$(almanac_loop_status_field "$status_file" "prompt_file")"
-  events_file="$(almanac_loop_status_field "$status_file" "events_file")"
-  result_file="$(almanac_loop_status_field "$status_file" "result_file")"
-  stderr_file="$(almanac_loop_status_field "$status_file" "stderr_file")"
-  started_at="$(almanac_loop_status_field "$status_file" "started_at")"
-
-  almanac_loop_write_worker_status \
-    "$status_file" \
-    "$worker_id" \
-    "$run_id" \
-    "$pid" \
-    "$provider" \
-    "$model" \
-    "$effort" \
-    "$sandbox" \
-    "$prompt_file" \
-    "$events_file" \
-    "$result_file" \
-    "$stderr_file" \
-    "$started_at" \
-    "$status" \
-    "$finished_at" \
-    "$exit_code"
+  almanac_loop_worker_record_set "$status_file" \
+    "status=$status" \
+    "finished_at=$finished_at" \
+    "exit_code=$exit_code"
 }
 
 almanac_loop_worker_start() {
@@ -180,23 +138,20 @@ almanac_loop_worker_start() {
   ) &
   worker_pid="$!"
 
-  almanac_loop_write_worker_status \
-    "$status_file" \
-    "$worker_id" \
-    "$run_id" \
-    "$worker_pid" \
-    "$provider" \
-    "$model" \
-    "$effort" \
-    "${sandbox:-danger-full-access}" \
-    "$prompt_file" \
-    "$events_file" \
-    "$result_file" \
-    "$stderr_file" \
-    "$started_at" \
-    "running" \
-    "" \
-    ""
+  almanac_loop_worker_record_set "$status_file" \
+    "id=$worker_id" \
+    "run_id=$run_id" \
+    "pid=$worker_pid" \
+    "provider=$provider" \
+    "model=$model" \
+    "effort=$effort" \
+    "sandbox=${sandbox:-danger-full-access}" \
+    "prompt_file=$prompt_file" \
+    "events_file=$events_file" \
+    "result_file=$result_file" \
+    "stderr_file=$stderr_file" \
+    "started_at=$started_at" \
+    "status=running"
 
   printf '%s\n' "$worker_pid"
 }

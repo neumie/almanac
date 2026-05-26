@@ -727,7 +727,7 @@ test_overseer_prompt_embeds_goal_reports_commits_and_contract() {
   setup_git_repo "$tmp"
 
   almanac_converge_scaffold "$tmp" "Overseer Goal"
-  plan="$(almanac_converge_plan_dir "$tmp" "Overseer Goal")"
+  plan="$(almanac_converge_plan_dir "$tmp" "$(almanac_loop_slug "Overseer Goal")")"
   reports="$plan/agent-reports.log"
   printf '%s\n' "old-report-sentinel" > "$reports"
   awk 'BEGIN { for (i = 0; i < 9000; i++) printf "x" }' >> "$reports"

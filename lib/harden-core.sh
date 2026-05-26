@@ -118,27 +118,12 @@ almanac_harden_role_field() {
   almanac_harden_role "$role" "$lens" | awk -F'\t' -v k="$field" '$1 == k { v = $2 } END { print v }'
 }
 
-almanac_harden_slug() {
-  local raw="$1"
-  local slug
-
-  slug="$(printf '%s' "$raw" \
-    | tr '[:upper:]' '[:lower:]' \
-    | sed 's/[^a-z0-9][^a-z0-9]*/-/g; s/^-//; s/-$//')"
-
-  if [ -z "$slug" ]; then
-    slug="target"
-  fi
-
-  printf '%s\n' "$slug"
-}
-
 almanac_harden_rubric_path() {
   local root="$1"
   local target="$2"
   local slug
 
-  slug="$(almanac_harden_slug "$target")"
+  slug="$(almanac_loop_slug "$target")"
   printf '%s/docs/plans/harden/%s/rubric.md\n' "$root" "$slug"
 }
 
@@ -540,7 +525,7 @@ almanac_harden_ledger_path() {
   local target="$2"
   local slug
 
-  slug="$(almanac_harden_slug "$target")"
+  slug="$(almanac_loop_slug "$target")"
   printf '%s/docs/plans/harden/%s/findings.md\n' "$root" "$slug"
 }
 

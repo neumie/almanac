@@ -44,16 +44,6 @@ almanac_loop_record_fields() {
     provider model effort iterations oversee lenses rounds queue_progress
 }
 
-# True when NAME is a canonical run-status field. Lets record_set reject a typo
-# rather than silently writing a key no reader ever looks for.
-almanac_loop_record_has_field() {
-  local wanted="$1" field
-  while IFS= read -r field; do
-    [ "$field" = "$wanted" ] && return 0
-  done <<< "$(almanac_loop_record_fields)"
-  return 1
-}
-
 # Get one field from a record FILE by name. Prints the value (which may itself
 # contain tabs — reassembled from the trailing columns) and returns 0; returns 1
 # when the field is absent. This is the generic tab-field reader for the run
@@ -75,17 +65,15 @@ almanac_loop_record_get() {
   return 1
 }
 
-# Set one or more fields by name, round-tripping the rest. Each argument is a
-# `field=value` pair (the value may itself contain `=`). The record is rewritten
-# with the FULL canonical key set in canonical order: every canonical field
-# already in the file is preserved unless overridden, and a not-yet-existing file
-# is initialised with every key (blank where unset). So `register` seeds the
-# record by naming only its known fields, while `mark`/`update` change only
-# theirs and leave the rest intact — no caller enumerates the schema. Returns 2
-# on a missing file argument or a `field=value` whose field is not canonical.
-almanac_loop_record_set() {
-  local file="$1"
-  shift
+# Generic TSV record engine: rewrite FILE with the schema in FIELDS_TEXT, in
+# canonical order, with each (existing) field preserved unless overridden by a
+# `field=value` PAIR. This is the deep module that owns the round-trip algorithm
+# — schema-specific wrappers (record_set for run-status, worker_record_set for
+# worker-status) just supply their own field list. Returns 2 on a missing file
+# argument or a pair whose field isn't in FIELDS_TEXT.
+almanac_loop_tsv_record_set() {
+  local fields_text="$1" file="$2"
+  shift 2 || return 2
   [ -n "$file" ] || return 2
 
   local pair pfield field cur val out=""
@@ -94,10 +82,9 @@ almanac_loop_record_set() {
     have_file=1
   fi
 
-  # Reject any override outside the canonical schema before writing anything.
   for pair in "$@"; do
     pfield="${pair%%=*}"
-    almanac_loop_record_has_field "$pfield" || return 2
+    almanac_loop_tsv_has_field "$fields_text" "$pfield" || return 2
   done
 
   while IFS= read -r field; do
@@ -114,9 +101,37 @@ almanac_loop_record_set() {
       fi
     done
     out="${out}${field}"$'\t'"${val}"$'\n'
-  done <<< "$(almanac_loop_record_fields)"
+  done <<< "$fields_text"
 
   printf '%s' "$out" > "$file"
+}
+
+# True when NAME appears as a field in FIELDS_TEXT (newline-separated schema).
+almanac_loop_tsv_has_field() {
+  local fields_text="$1" wanted="$2" field
+  while IFS= read -r field; do
+    [ "$field" = "$wanted" ] && return 0
+  done <<< "$fields_text"
+  return 1
+}
+
+# True when NAME is a canonical run-status field. Lets record_set reject a typo
+# rather than silently writing a key no reader ever looks for.
+almanac_loop_record_has_field() {
+  almanac_loop_tsv_has_field "$(almanac_loop_record_fields)" "$1"
+}
+
+# Set one or more run-status fields by name, round-tripping the rest. Each
+# argument is a `field=value` pair (the value may itself contain `=`). The record
+# is rewritten with the FULL canonical key set in canonical order: every
+# canonical field already in the file is preserved unless overridden, and a
+# not-yet-existing file is initialised with every key (blank where unset). So
+# `register` seeds the record by naming only its known fields, while
+# `mark`/`update` change only theirs and leave the rest intact — no caller
+# enumerates the schema. Returns 2 on a missing file argument or a `field=value`
+# whose field is not canonical.
+almanac_loop_record_set() {
+  almanac_loop_tsv_record_set "$(almanac_loop_record_fields)" "$@"
 }
 
 almanac_loop_slug() {

@@ -1996,8 +1996,10 @@ test_render_dashboard_reads_run_state_and_degrades() {
   wdir="$tmp/.almanac/runs/$run_id/workers/reviewer-correctness"
   mkdir -p "$wdir"
   printf '%s\n' '{"e":1}' > "$wdir/events.jsonl"
-  almanac_loop_write_worker_status "$wdir/status.tsv" "reviewer-correctness" "$run_id" \
-    "111" "codex" "" "" "read-only" "p" "$wdir/events.jsonl" "r" "s" "2026-05-25T12:00:00Z" "running" "" ""
+  almanac_loop_worker_record_set "$wdir/status.tsv" \
+    "id=reviewer-correctness" "run_id=$run_id" "pid=111" "provider=codex" \
+    "sandbox=read-only" "prompt_file=p" "events_file=$wdir/events.jsonl" \
+    "result_file=r" "stderr_file=s" "started_at=2026-05-25T12:00:00Z" "status=running"
 
   ledger="$(almanac_harden_ledger_path "$tmp" "src/app.js")"
   almanac_harden_ledger_init "$ledger"
@@ -2038,8 +2040,10 @@ seed_live_run_state() {
   wdir="$tmp/.almanac/runs/$run_id/workers/reviewer-correctness"
   mkdir -p "$wdir"
   printf '%s\n' '{"e":1}' > "$wdir/events.jsonl"
-  almanac_loop_write_worker_status "$wdir/status.tsv" "reviewer-correctness" "$run_id" \
-    "111" "codex" "" "" "read-only" "p" "$wdir/events.jsonl" "r" "s" "2026-05-25T12:00:00Z" "running" "" ""
+  almanac_loop_worker_record_set "$wdir/status.tsv" \
+    "id=reviewer-correctness" "run_id=$run_id" "pid=111" "provider=codex" \
+    "sandbox=read-only" "prompt_file=p" "events_file=$wdir/events.jsonl" \
+    "result_file=r" "stderr_file=s" "started_at=2026-05-25T12:00:00Z" "status=running"
 
   ledger="$(almanac_harden_ledger_path "$tmp" "src/app.js")"
   almanac_harden_ledger_init "$ledger"
@@ -2111,8 +2115,10 @@ test_watch_worker_streams_latest_run() {
   wdir="$tmp/.almanac/runs/$run_id/workers/reviewer-security"
   mkdir -p "$wdir"
   printf '%s\n' '{"e":"review started"}' '{"e":"finding emitted"}' > "$wdir/events.jsonl"
-  almanac_loop_write_worker_status "$wdir/status.tsv" "reviewer-security" "$run_id" \
-    "111" "codex" "" "" "read-only" "p" "$wdir/events.jsonl" "r" "s" "2026-05-25T12:00:00Z" "running" "" ""
+  almanac_loop_worker_record_set "$wdir/status.tsv" \
+    "id=reviewer-security" "run_id=$run_id" "pid=111" "provider=codex" \
+    "sandbox=read-only" "prompt_file=p" "events_file=$wdir/events.jsonl" \
+    "result_file=r" "stderr_file=s" "started_at=2026-05-25T12:00:00Z" "status=running"
 
   # A bare lens ("security") resolves to its reviewer-security worker.
   out="$(almanac_harden_watch_worker "$tmp" "src/app.js" "security")"

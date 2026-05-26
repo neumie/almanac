@@ -4,11 +4,12 @@ Shared vocabulary for the loop engine. These nouns name the seams; use them exac
 
 ## Core nouns
 
-- **Loop** — an autonomous agent run pattern that consumes the shared engine. Two today: **ralph** (works a PRD/issue queue task-by-task) and **harden** (review→ratify→fix convergence loop over a target). Adding a loop = adding an adapter, not editing the core.
+- **Loop** — an autonomous agent run pattern that consumes the shared engine. Three today: **ralph** (works a PRD/issue queue task-by-task), **harden** (review→ratify→fix convergence loop over a target), and **converge** (overseer-judged convergence loop over a free-form goal). Adding a loop = adding an adapter, not editing the core.
 - **Runner** — the per-loop script that actually executes iterations: ralph's `once.sh` (one) / `afk.sh` (autonomous N); harden's convergence loop.
 - **Provider** — an agent backend the runner invokes: `codex` or `claude`. The facts about a provider (availability, default-selection signals, model list, effort list, display name, how to invoke it, how a sandbox maps to its permission flag, its event-stream filter) are a single concern.
 - **Agent run** — one invocation of a provider on a prompt, producing a result + an event stream. The provider adapter supplies the argv + filter; the run owns only execution mechanics, expressed as three intention-revealing shapes (not one mode-parametric function): **`agent_capture`** (stdout → events file, silent), **`agent_stream`** (tee events + filtered live text to the terminal), **`agent_raw`** (native passthrough, no filter/events). Each takes only what its shape needs, so there are no invalid mode combinations to guard.
-- **Run** — a launched loop, tracked in the **run registry** under `.almanac/runs/` (id, type, target, pid, status, round, summary). A run-status **record** module owns the canonical field list — the **run-status contract**, identical across loops, enforced *by construction*: callers `set`/`get` fields by name and never enumerate the schema.
+- **Run** — a launched loop, tracked in the **run registry** under `.almanac/runs/` (id, type, target, pid, status, round, summary). A run-status **record** module owns the canonical field list — the **run-status contract**, identical across loops, enforced *by construction*: callers `set`/`get` fields by name and never enumerate the schema. The same shape covers **worker-status** (per-reviewer/fixer record under `.almanac/runs/<id>/workers/<wid>/status.tsv`): one generic TSV record engine (`almanac_loop_tsv_record_set`) iterates a per-schema field list, so adding a worker field is a one-line addition to `almanac_loop_worker_record_fields` — no callsite churn, no 16-positional-arg writer to keep in sync.
+- **Slug** — the file-safe handle a loop's artifacts are keyed on (run id suffix, plan dir, registry index column). Built by ONE function (`almanac_loop_slug`); both ralph and harden+converge use it directly with no per-loop wrapper. Latent bug it forecloses: registration and lookup using divergent fallbacks (e.g. `harden-target-…` written but `harden-run-…` searched).
 - **Launcher** — the unified interactive config front-end (`almanac_loop_launch`): one loop-agnostic place that gathers a loop's config and execs its runner.
 - **Hub** — bare `almanac`: the front door that lists/watches/stops/steers runs from the registry.
 - **Overseer** — ralph's parallel process: pushes commits, waits on CI, reviews drift, emits steer directives.
@@ -56,7 +57,8 @@ The engine is split into cohesive modules — each file's interface is its test 
 | `lib/loops.sh` | loop-adapter discovery + dispatch |
 | `lib/loops/<name>.sh` | loop adapters (auto-discovered) |
 | `lib/feedback.sh` | feedback detection + runner |
-| `lib/run.sh` | run registry + run-status record + control (stop/steer/watch) + worker health + hub read-views |
-| `lib/worker.sh` | worker orchestration (background fan-out) |
+| `lib/run.sh` | run registry + run-status record + generic TSV record engine + control (stop/steer/watch) + worker health + hub read-views |
+| `lib/worker.sh` | worker orchestration (background fan-out) + worker-status record schema (uses run.sh's engine) |
 | `lib/loop-launcher.sh` | the launcher |
 | `lib/harden-core.sh` | harden loop (declares its real deps) |
+| `lib/converge-core.sh` | converge loop (declares its real deps) |
