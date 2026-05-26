@@ -50,6 +50,21 @@ almanac_converge_plan_dir_for_slug() {
   printf '%s/docs/plans/converge/%s\n' "$root" "$slug"
 }
 
+# Per-loop control-file path: returns the absolute path to converge's stop or
+# steer file under BASE (typically the repo root, sometimes the plan dir for the
+# user-facing stop helper). Routes the basename through the loop adapter
+# (lib/loops/converge.sh) via almanac_loop_run_signal_file, so the `.converge-…`
+# literal is owned in one place — converge-core never embeds it. Returns 1 when
+# the adapter doesn't recognise the kind, matching almanac_harden_control_file.
+almanac_converge_control_file() {
+  local base="$1"
+  local kind="$2"
+  local name
+
+  name="$(almanac_loop_run_signal_file converge "$kind")" || return 1
+  printf '%s/%s\n' "$base" "$name"
+}
+
 almanac_converge_scaffold() {
   local root="$1"
   local goal="$2"
@@ -121,7 +136,7 @@ almanac_converge_worker_prompt() {
   slug="$(almanac_converge_slug "$goal")"
   plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
   rel_plan="${plan_dir#"$root"/}"
-  steer_file="$root/.converge-steer"
+  steer_file="$(almanac_converge_control_file "$root" steer)"
 
   almanac_converge_ensure_prompt_template "$root" "$goal"
 
@@ -505,12 +520,14 @@ almanac_converge_watch() {
 almanac_converge_stop() {
   local root="$1"
   local slug="$2"
-  local plan_dir
+  local plan_dir root_stop plan_stop
 
   plan_dir="$(almanac_converge_plan_dir_for_slug "$root" "$slug")"
   [ -d "$plan_dir" ] || return 1
-  printf 'stop requested via almanac converge: %s\n' "$slug" > "$root/.converge-stop"
-  printf 'stop requested via almanac converge: %s\n' "$slug" > "$plan_dir/.converge-stop"
+  root_stop="$(almanac_converge_control_file "$root" stop)"
+  plan_stop="$(almanac_converge_control_file "$plan_dir" stop)"
+  printf 'stop requested via almanac converge: %s\n' "$slug" > "$root_stop"
+  printf 'stop requested via almanac converge: %s\n' "$slug" > "$plan_stop"
 }
 
 almanac_converge_apply_goal_update() {
@@ -632,6 +649,69 @@ almanac_converge_run_worker() {
 #
 # Returns the agent's exit code; commit and report writes are best-effort and
 # never alter the return.
+# List every currently-dirty path in $root, one per line, sorted+deduped.
+# Output is the union of:
+#   - tracked-modified paths (`git diff --name-only HEAD`)
+#   - untracked-not-ignored paths (`git ls-files --others --exclude-standard`)
+# Used by the prompt-mode auto-commit to distinguish PRE-EXISTING dirty work
+# (untouched by the agent) from AGENT-TOUCHED paths (commit candidates). Empty
+# string on git failure or non-repo. Pure read-only — safe to call multiple
+# times per round.
+almanac_converge_dirty_paths() {
+  local root="$1"
+  ( cd "$root" \
+      && { git diff --name-only HEAD 2>/dev/null; \
+           git ls-files --others --exclude-standard 2>/dev/null; } \
+      | sort -u
+  )
+}
+
+# Auto-commit ONLY the paths the agent newly touched this round, computed as
+# (dirty-after) - (dirty-before). Pre-existing dirty paths are left alone so a
+# concurrent unrelated edit never gets swept into a CONVERGE commit (the bug
+# that caused commit 4526a58 to misattribute the developer's in-flight edits
+# to the agent). Files that were pre-existing dirty AND also touched by the
+# agent stay dirty — conservative; the agent's change in that file isn't
+# committed by this round, but no false attribution happens. Best-effort:
+# commit failure logs a warn and never alters the caller's return code.
+#
+# Args: ROOT SLUG ROUND PRE_DIRTY (newline-separated pre-existing dirty paths)
+almanac_converge_commit_agent_paths() {
+  local root="$1" slug="$2" round="$3" pre_dirty="$4"
+  local post_dirty agent_paths
+
+  post_dirty="$(almanac_converge_dirty_paths "$root")"
+  # comm needs sorted inputs; both producers (almanac_converge_dirty_paths +
+  # the snapshot taken before the agent ran) emit sorted-unique.
+  agent_paths="$(comm -23 <(printf '%s\n' "$post_dirty") <(printf '%s\n' "$pre_dirty") | sed '/^$/d')"
+
+  if [ -z "$agent_paths" ]; then
+    # Either the agent didn't change anything OR every change was on a path
+    # that was already dirty (so the change stays uncommitted on purpose).
+    return 0
+  fi
+
+  # Stage each agent-touched path individually (handles deletions, new files,
+  # and modifications — `git add` accepts paths to files that no longer exist
+  # by recording the deletion).
+  local path failed=0
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    (cd "$root" && git add -- "$path" >/dev/null 2>&1) || failed=1
+  done <<< "$agent_paths"
+
+  if [ "$failed" -eq 1 ]; then
+    _warn "Converge round $round: staging one or more agent-touched paths failed (changes left in worktree)"
+    return 0
+  fi
+
+  if ! (cd "$root" \
+          && git -c user.email=converge@almanac -c user.name=converge \
+                 commit -m "CONVERGE($slug): round $round" --no-verify >/dev/null 2>&1); then
+    _warn "Converge round $round: auto-commit failed (changes left in worktree)"
+  fi
+}
+
 almanac_converge_run_worker_prompt() {
   local root="$1"
   local goal="$2"
@@ -646,7 +726,7 @@ almanac_converge_run_worker_prompt() {
   slug="$(almanac_converge_slug "$goal")"
   plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
   log_file="$plan_dir/agent-reports.log"
-  steer_path="$root/.converge-steer"
+  steer_path="$(almanac_converge_control_file "$root" steer)"
 
   prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-prompt.XXXXXX")"
   result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-result.XXXXXX")"
@@ -671,23 +751,24 @@ almanac_converge_run_worker_prompt() {
 
   _info "Converge round $round — prompt-mode worker (provider=$provider, log: ${events_file#"$root"/})"
 
+  # Snapshot the dirty worktree BEFORE the agent runs so the auto-commit below
+  # can stage only the paths the agent newly touches — not whatever unrelated
+  # work the operator had in-flight. (Without this snapshot, an earlier `git
+  # add -A` swept up the developer's uncommitted edits and committed them
+  # under the agent's name — bug observed in commit 4526a58.)
+  local pre_dirty
+  pre_dirty="$(almanac_converge_dirty_paths "$root")"
+
   rc=0
   (cd "$root" && almanac_loop_agent_stream "$provider" "$model" "$effort" "workspace-write" \
     "$prompt_file" "$result_file" "$events_file" merge-stderr) || rc=$?
 
-  # Auto-commit any worktree changes the agent left behind. A smart prompt may
-  # have committed itself (worktree clean, nothing to do); a slash command like
+  # Auto-commit only the agent-touched paths. A smart prompt may have committed
+  # itself (worktree clean, nothing to do); a slash command like
   # /almanac:codebase-improve typically doesn't commit, so the driver does it.
   # Best-effort: a failed commit logs a warn but never alters the return code —
   # the agent's work itself succeeded or failed, the commit is bookkeeping.
-  if [ -n "$(cd "$root" && git status --porcelain 2>/dev/null || true)" ]; then
-    if ! (cd "$root" \
-            && git add -A >/dev/null 2>&1 \
-            && git -c user.email=converge@almanac -c user.name=converge \
-                   commit -m "CONVERGE($slug): round $round" --no-verify >/dev/null 2>&1); then
-      _warn "Converge round $round: auto-commit failed (changes left in worktree)"
-    fi
-  fi
+  almanac_converge_commit_agent_paths "$root" "$slug" "$round" "$pre_dirty"
 
   # Auto-write a minimal self-report. Format mirrors slice-03's worker block
   # (===== tick=N ts=ISO mode=prompt exit=N =====) so the overseer's parser
@@ -758,11 +839,11 @@ almanac_converge_run_overseer() {
 
   case "$ALMANAC_CONVERGE_VERDICT" in
     CONVERGED|STOP)
-      : > "$root/.converge-stop"
+      : > "$(almanac_converge_control_file "$root" stop)"
       ;;
     STEER)
       if [ "$ALMANAC_CONVERGE_STEER" != "none" ]; then
-        printf '%s\n' "$ALMANAC_CONVERGE_STEER" > "$root/.converge-steer"
+        printf '%s\n' "$ALMANAC_CONVERGE_STEER" > "$(almanac_converge_control_file "$root" steer)"
       fi
       ;;
     CONTINUE) ;;
@@ -831,9 +912,12 @@ almanac_converge_run() {
     final_reason="round budget exhausted"
   fi
 
+  local _converge_stop_file
+  _converge_stop_file="$(almanac_converge_control_file "$root" stop)"
+
   round=0
   while [ "$round" -lt "$rounds" ]; do
-    if [ -f "$root/.converge-stop" ]; then
+    if [ -f "$_converge_stop_file" ]; then
       final_status="aborted"
       final_verdict="STOP"
       final_reason="stop signal present before round $((round + 1))"

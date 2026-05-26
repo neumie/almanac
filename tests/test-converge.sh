@@ -350,6 +350,82 @@ EOF
   echo "  PASS: prompt-mode invokes agent verbatim and driver auto-commits"
 }
 
+# Regression: pre-existing dirty paths must NOT be swept into the CONVERGE
+# auto-commit. Bug observed: `git add -A` greedily staged whatever was dirty in
+# the worktree when the agent finished, including the developer's in-flight
+# edits to unrelated files. The fix snapshots dirty paths before the agent
+# runs and only stages paths the agent newly touched.
+test_prompt_mode_auto_commit_skips_pre_existing_dirty() {
+  local tmp plan reports
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  setup_git_repo "$tmp"
+
+  # Seed an unrelated tracked file in HEAD, then mark it dirty BEFORE the
+  # converge run starts. This is the "developer was editing something else"
+  # scenario.
+  printf 'baseline\n' > "$tmp/unrelated.txt"
+  git -C "$tmp" add unrelated.txt
+  git -C "$tmp" -c user.email=t@t -c user.name=t commit -q -m "seed unrelated"
+  printf 'developer in-flight edit\n' > "$tmp/unrelated.txt"
+
+  # Fake codex that writes only to a SEPARATE file (agent-touched). Sandbox:
+  # the agent's path must NOT overlap with unrelated.txt.
+  local fakebin="$tmp/.almanac/fakebin"
+  mkdir -p "$fakebin"
+  cat > "$fakebin/codex" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+result_file=""
+while [ "\$#" -gt 0 ]; do
+  case "\$1" in
+    --output-last-message) shift; result_file="\${1:-}" ;;
+    --sandbox) shift ;;
+    *) : ;;
+  esac
+  shift || true
+done
+printf 'agent wrote this\n' > "$tmp/agent-output.txt"
+[ -n "\$result_file" ] && printf 'fake agent finished\n' > "\$result_file"
+printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"fake"}}'
+EOF
+  chmod +x "$fakebin/codex"
+
+  ( cd "$tmp" && \
+      PATH="$fakebin:$PATH" \
+      CONVERGE_AGENT_PROVIDER=codex \
+      CONVERGE_OVERSEER_PROVIDER=codex \
+      ALMANAC_HOME="$ROOT" \
+      HOME="$tmp" \
+      "$ALMANAC" converge \
+        --goal "dirty-isolation smoke" \
+        --prompt "/almanac:codebase-improve" \
+        --rounds 1 \
+        --no-oversee \
+  ) >/dev/null 2>&1 || fail "converge run with pre-existing dirty worktree should exit 0"
+
+  # The auto-commit should ONLY contain the agent's file, not unrelated.txt.
+  local files_in_commit
+  files_in_commit="$(git -C "$tmp" show --name-only --format= HEAD)"
+  if printf '%s\n' "$files_in_commit" | grep -Fxq 'unrelated.txt'; then
+    fail "pre-existing dirty unrelated.txt must NOT be staged into the CONVERGE commit (got files: $files_in_commit)"
+  fi
+  if ! printf '%s\n' "$files_in_commit" | grep -Fxq 'agent-output.txt'; then
+    fail "agent-output.txt should be in the CONVERGE commit (got files: $files_in_commit)"
+  fi
+
+  # unrelated.txt should STILL be dirty in the worktree (the developer's
+  # in-flight edit is preserved, not lost).
+  local porcelain
+  porcelain="$(git -C "$tmp" status --porcelain unrelated.txt)"
+  case "$porcelain" in
+    " M unrelated.txt"|"M  unrelated.txt") : ;;
+    *) fail "unrelated.txt must remain dirty after the round (got: '$porcelain')" ;;
+  esac
+
+  echo "  PASS: prompt-mode auto-commit isolates pre-existing dirty paths"
+}
+
 test_registry_records_converge_run_done() {
   local tmp row run_id status_file status_blob
   new_tmpdir
@@ -1105,6 +1181,7 @@ test_hub_stop_writes_converge_signal() {
 test_cli_requires_goal_and_action
 test_plan_dir_scaffold_and_exec_smoke
 test_prompt_mode_invokes_agent_and_commits
+test_prompt_mode_auto_commit_skips_pre_existing_dirty
 test_registry_records_converge_run_done
 test_run_aborts_cleanly_when_plan_dir_unwritable
 test_converge_adapter_exposes_stop_and_steer
