@@ -16,6 +16,20 @@ if ! declare -F almanac_loop_register_run >/dev/null 2>&1; then
   unset __converge_core_dir
 fi
 
+if ! declare -F almanac_loop_agent_capture >/dev/null 2>&1; then
+  __converge_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/agent.sh
+  source "$__converge_core_dir/agent.sh"
+  unset __converge_core_dir
+fi
+
+if ! declare -F almanac_loop_role_config >/dev/null 2>&1; then
+  __converge_core_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=lib/role.sh
+  source "$__converge_core_dir/role.sh"
+  unset __converge_core_dir
+fi
+
 almanac_converge_slug() {
   almanac_loop_slug "$1"
 }
@@ -50,6 +64,124 @@ almanac_converge_scaffold() {
   fi
 }
 
+almanac_converge_role() {
+  local role="$1"
+
+  case "$role" in
+    agent) ;;
+    *) return 2 ;;
+  esac
+
+  almanac_loop_role_config "converge" "$role" "" "$(almanac_provider_default)" "" ""
+}
+
+almanac_converge_role_field() {
+  local role="$1"
+  local field="$2"
+
+  almanac_converge_role "$role" | awk -F'\t' -v k="$field" '$1 == k { v = $2 } END { print v }'
+}
+
+almanac_converge_ensure_prompt_template() {
+  local root="$1"
+  local goal="$2"
+  local plan_dir prompt_file
+
+  plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
+  prompt_file="$plan_dir/prompt.md"
+  [ -f "$prompt_file" ] && return 0
+
+  cat > "$prompt_file" <<'EOF'
+# Converge Worker
+
+You are one worker round in a generic convergence loop.
+
+Read current goal, follow one-shot steer directive if present, run exact exec
+command, then leave clear evidence in git history and agent-reports.log.
+
+Do not edit the goal unless explicitly asked by the exec command. Do not commit
+.almanac or converge state files under docs/plans/converge/.
+EOF
+}
+
+almanac_converge_worker_prompt() {
+  local root="$1"
+  local goal="$2"
+  local exec_cmd="$3"
+  local round="$4"
+  local slug plan_dir rel_plan steer_file
+
+  slug="$(almanac_converge_slug "$goal")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
+  rel_plan="${plan_dir#"$root"/}"
+  steer_file="$root/.converge-steer"
+
+  almanac_converge_ensure_prompt_template "$root" "$goal"
+
+  cat "$plan_dir/prompt.md"
+  cat <<EOF
+
+CONVERGE_TICK=$round
+CONVERGE_SLUG=$slug
+CONVERGE_PLAN_DIR=$rel_plan
+CONVERGE_REPORT_LOG=$rel_plan/agent-reports.log
+
+Commit user-visible worktree changes, excluding .almanac and $rel_plan, with:
+CONVERGE($slug): <one-line summary>
+
+Append one structured self-report to $rel_plan/agent-reports.log. Use this exact
+header shape and these exact section labels:
+
+===== tick=<N> ts=<ISO> =====
+summary:
+concerns:
+next:
+
+For this round, N is $round.
+
+===== GOAL.md =====
+EOF
+  cat "$plan_dir/goal.md"
+  cat <<EOF
+===== END GOAL.md =====
+
+===== EXEC COMMAND =====
+$exec_cmd
+===== END EXEC COMMAND =====
+EOF
+
+  if [ -f "$steer_file" ]; then
+    cat <<'EOF'
+
+===== STEER =====
+EOF
+    cat "$steer_file"
+    cat <<'EOF'
+===== END STEER =====
+EOF
+    rm -f "$steer_file"
+  fi
+}
+
+almanac_converge_report_log_has_structured_block() {
+  local file="$1"
+
+  [ -f "$file" ] || return 1
+  awk '
+    /^===== tick=[0-9][0-9]* ts=.* =====$/ {
+      seen = 1
+      summary = 0
+      concerns = 0
+      next_seen = 0
+      next
+    }
+    seen && /^summary:$/ { summary = 1; next }
+    seen && /^concerns:$/ { concerns = 1; next }
+    seen && /^next:$/ { next_seen = 1; ok = summary && concerns && next_seen; next }
+    END { exit ok ? 0 : 1 }
+  ' "$file"
+}
+
 almanac_converge_run_finalize() {
   local root="$1"
   local run_id="$2"
@@ -76,36 +208,29 @@ almanac_converge_git_user_status() {
   fi
 }
 
-almanac_converge_commit_round() {
+almanac_converge_run_worker() {
   local root="$1"
-  local plan_dir="$2"
-  local slug="$3"
+  local goal="$2"
+  local exec_cmd="$3"
   local round="$4"
-  local rel_plan status
+  local provider model effort prompt_file result_file events_file rc
 
-  status="$(almanac_converge_git_user_status "$root" "$plan_dir" 2>/dev/null || true)"
-  [ -n "$status" ] || return 0
+  provider="$(almanac_converge_role_field "agent" "provider")"
+  model="$(almanac_converge_role_field "agent" "model")"
+  effort="$(almanac_converge_role_field "agent" "effort")"
 
-  rel_plan="${plan_dir#"$root"/}"
-  if [ "$rel_plan" = "$plan_dir" ]; then
-    if ! git -C "$root" add -A -- . ':!.almanac' >/dev/null 2>&1; then
-      _warn "Converge round $round: git add failed; continuing without commit"
-      return 0
-    fi
-  else
-    if ! git -C "$root" add -A -- . ':!.almanac' ":!$rel_plan" >/dev/null 2>&1; then
-      _warn "Converge round $round: git add failed; continuing without commit"
-      return 0
-    fi
-  fi
+  prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-worker-prompt.XXXXXX")"
+  result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-worker-result.XXXXXX")"
+  events_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-worker-events.XXXXXX")"
 
-  if git -C "$root" diff --cached --quiet --exit-code >/dev/null 2>&1; then
-    return 0
-  fi
+  almanac_converge_worker_prompt "$root" "$goal" "$exec_cmd" "$round" > "$prompt_file"
 
-  if ! git -C "$root" commit -m "CONVERGE($slug): round $round" --no-verify >/dev/null 2>&1; then
-    _warn "Converge round $round: git commit failed; continuing"
-  fi
+  rc=0
+  almanac_loop_agent_capture "$provider" "$model" "$effort" "workspace-write" \
+    "$prompt_file" "$result_file" "$events_file" >/dev/null || rc=$?
+
+  rm -f "$prompt_file" "$result_file" "$events_file"
+  return "$rc"
 }
 
 almanac_converge_run() {
@@ -113,7 +238,7 @@ almanac_converge_run() {
   local goal="$2"
   local exec_cmd="$3"
   local rounds="${4:-${CONVERGE_ROUND_BUDGET:-10}}"
-  local slug plan_dir reports run_id pid exec_rc ts round
+  local slug plan_dir run_id pid exec_rc round
 
   case "$rounds" in
     ''|*[!0-9]*) _die "--rounds must be a positive integer: $rounds" ;;
@@ -134,18 +259,19 @@ almanac_converge_run() {
 
   almanac_converge_scaffold "$root" "$goal"
   plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
-  reports="$plan_dir/agent-reports.log"
 
   round=0
   while [ "$round" -lt "$rounds" ]; do
     round=$((round + 1))
-    if (cd "$root" && bash -c "$exec_cmd"); then
+    if (cd "$root" && almanac_converge_run_worker "$root" "$goal" "$exec_cmd" "$round"); then
       exec_rc=0
     else
       exec_rc=$?
     fi
 
-    almanac_converge_commit_round "$root" "$plan_dir" "$slug" "$round"
+    if [ -n "$(almanac_converge_git_user_status "$root" "$plan_dir" 2>/dev/null || true)" ]; then
+      _warn "Converge round $round: worker left uncommitted changes; driver will not commit"
+    fi
 
     if [ "$exec_rc" -ne 0 ]; then
       if [ "${CONVERGE_FAIL_ON_EXEC_ERROR:-0}" = "1" ]; then
@@ -154,10 +280,6 @@ almanac_converge_run() {
         _warn "Converge round $round exec exited $exec_rc; continuing"
       fi
     fi
-
-    ts="$(almanac_loop_now_utc)"
-    printf '===== tick=%s ts=%s exit=%s =====\n' "$round" "$ts" "$exec_rc" >> "$reports" \
-      || _die "Could not append converge report: ${reports#"$root"/}"
 
     almanac_loop_update_run_progress "$root" "$run_id" "$round" "goal=$slug" >/dev/null 2>&1 || true
 

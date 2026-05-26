@@ -63,7 +63,113 @@ new_tmpdir() {
 run_converge() {
   local tmp="$1"
   shift
-  (cd "$tmp" && "$ALMANAC" converge "$@")
+
+  ensure_fake_converge_worker "$tmp"
+
+  (
+    cd "$tmp"
+    PATH="$tmp/.almanac/fakebin:$PATH" \
+      CONVERGE_AGENT_PROVIDER="${CONVERGE_AGENT_PROVIDER:-codex}" \
+      CONVERGE_AGENT_MODEL="${CONVERGE_AGENT_MODEL-}" \
+      CONVERGE_AGENT_EFFORT="${CONVERGE_AGENT_EFFORT-}" \
+      CONVERGE_ROUND_BUDGET="${CONVERGE_ROUND_BUDGET-}" \
+      CONVERGE_FAIL_ON_EXEC_ERROR="${CONVERGE_FAIL_ON_EXEC_ERROR-}" \
+      FAKE_CONVERGE_WORKER_MODE="${FAKE_CONVERGE_WORKER_MODE:-exec-commit}" \
+      FAKE_CONVERGE_ARGS_LOG="$tmp/.almanac/test-worker-args.log" \
+      FAKE_CONVERGE_PROMPT_LOG_DIR="$tmp/.almanac/test-worker-prompts" \
+      "$ALMANAC" converge "$@"
+  )
+}
+
+ensure_fake_converge_worker() {
+  local tmp="$1"
+  local fakebin="$tmp/.almanac/fakebin"
+
+  [ -x "$fakebin/codex" ] && return 0
+
+  mkdir -p "$fakebin"
+  cat > "$fakebin/codex" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+args_log="${FAKE_CONVERGE_ARGS_LOG:?}"
+prompt_log_dir="${FAKE_CONVERGE_PROMPT_LOG_DIR:?}"
+mode="${FAKE_CONVERGE_WORKER_MODE:-exec-commit}"
+result_file=""
+prompt=""
+
+printf '%s\n' "$*" > "$args_log"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output-last-message)
+      shift
+      result_file="${1:-}"
+      ;;
+    *)
+      prompt="$1"
+      ;;
+  esac
+  shift || true
+done
+
+mkdir -p "$prompt_log_dir"
+tick="$(printf '%s\n' "$prompt" | awk -F= '$1 == "CONVERGE_TICK" { print $2; exit }')"
+slug="$(printf '%s\n' "$prompt" | awk -F= '$1 == "CONVERGE_SLUG" { print $2; exit }')"
+plan_rel="$(printf '%s\n' "$prompt" | awk -F= '$1 == "CONVERGE_PLAN_DIR" { print $2; exit }')"
+report_rel="$(printf '%s\n' "$prompt" | awk -F= '$1 == "CONVERGE_REPORT_LOG" { print $2; exit }')"
+tick="${tick:-0}"
+slug="${slug:-unknown}"
+plan_rel="${plan_rel:-docs/plans/converge/$slug}"
+report_rel="${report_rel:-$plan_rel/agent-reports.log}"
+printf '%s\n' "$prompt" > "$prompt_log_dir/tick-$tick.md"
+
+exec_cmd="$(
+  printf '%s\n' "$prompt" | awk '
+    $0 == "===== EXEC COMMAND =====" { capture = 1; next }
+    $0 == "===== END EXEC COMMAND =====" { capture = 0 }
+    capture { print }
+  '
+)"
+
+rc=0
+case "$mode" in
+  fail-agent)
+    rc=7
+    ;;
+  *)
+    if [ -n "$exec_cmd" ]; then
+      bash -c "$exec_cmd" || rc=$?
+    fi
+    ;;
+esac
+
+mkdir -p "$(dirname "$report_rel")"
+{
+  printf '===== tick=%s ts=%s =====\n' "$tick" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  printf 'summary:\n'
+  printf -- '- fake worker exit=%s\n' "$rc"
+  printf 'concerns:\n'
+  printf -- '- (none)\n'
+  printf 'next:\n'
+  printf -- '- continue\n'
+} >> "$report_rel"
+
+if [ "$mode" != "leave-diff" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  status="$(git status --porcelain -- . ':!.almanac' ":!$plan_rel" 2>/dev/null || true)"
+  if [ -n "$status" ]; then
+    git add -A -- . ':!.almanac' ":!$plan_rel" >/dev/null 2>&1 || true
+    if ! git diff --cached --quiet --exit-code >/dev/null 2>&1; then
+      git commit -m "CONVERGE($slug): fake worker round $tick" --no-verify >/dev/null 2>&1 || true
+    fi
+  fi
+fi
+
+[ -n "$result_file" ] && printf '%s\n' "fake converge worker exit=$rc" > "$result_file"
+printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"fake converge worker"}}'
+exit "$rc"
+EOF
+  chmod +x "$fakebin/codex"
 }
 
 count_commits() {
@@ -114,12 +220,15 @@ test_plan_dir_scaffold_and_exec_smoke() {
   [ -f "$marker" ] || fail "exec command should run through bash"
   assert_file_contains "$plan/goal.md" "Say Hello!" "goal.md should contain the goal text"
   [ ! -s "$plan/goal.history.log" ] || fail "goal.history.log should start empty"
+  [ -f "$plan/prompt.md" ] || fail "prompt.md should be created on first round"
   assert_file_contains "$reports" "===== tick=1 ts=" "agent report should include tick 1 header"
-  assert_file_contains "$reports" " exit=0 =====" "agent report should record exec exit code"
-  assert_eq "1" "$(grep -c '^===== tick=1 ts=.* exit=0 =====$' "$reports")" \
-    "one report header should be appended for one round"
+  assert_file_contains "$reports" "summary:" "agent report should include summary section"
+  assert_file_contains "$reports" "concerns:" "agent report should include concerns section"
+  assert_file_contains "$reports" "next:" "agent report should include next section"
+  assert_eq "1" "$(grep -c '^===== tick=1 ts=.* =====$' "$reports")" \
+    "one structured report header should be appended for one round"
 
-  echo "  PASS: converge scaffolds plan files and runs exec once"
+  echo "  PASS: converge scaffolds plan files and worker runs exec once"
 }
 
 test_registry_records_converge_run_done() {
@@ -188,7 +297,7 @@ test_round_count_exactness() {
   assert_eq "3" "$(cat "$counter")" "--rounds 3 should execute exactly three rounds"
   plan="$tmp/docs/plans/converge/round-count"
   reports="$plan/agent-reports.log"
-  assert_eq "3" "$(grep -c '^===== tick=[0-9][0-9]* ts=.* exit=0 =====$' "$reports")" \
+  assert_eq "3" "$(grep -c '^===== tick=[0-9][0-9]* ts=.* =====$' "$reports")" \
     "--rounds 3 should append exactly three report headers"
   assert_file_contains "$reports" "===== tick=3 ts=" "reports should include tick 3"
 
@@ -211,8 +320,8 @@ test_default_round_budget_and_env_override() {
   tmp="$NEW_TMPDIR"
   counter="$tmp/env-count"
 
-  (cd "$tmp" && CONVERGE_ROUND_BUDGET=2 "$ALMANAC" converge --goal "Env Budget" \
-    --exec "n=\$(cat '$counter' 2>/dev/null || printf 0); n=\$((n + 1)); printf '%s\n' \"\$n\" > '$counter'") \
+  CONVERGE_ROUND_BUDGET=2 run_converge "$tmp" --goal "Env Budget" \
+    --exec "n=\$(cat '$counter' 2>/dev/null || printf 0); n=\$((n + 1)); printf '%s\n' \"\$n\" > '$counter'" \
     >/dev/null
 
   assert_eq "2" "$(cat "$counter")" "CONVERGE_ROUND_BUDGET should override default rounds"
@@ -233,10 +342,10 @@ test_diff_rounds_commit_with_converge_prefix() {
 
   assert_eq "2" "$(count_commits "$tmp")" "diff-producing rounds should create one commit per round"
   subjects="$(git -C "$tmp" log --reverse --format=%s)"
-  assert_contains "$subjects" "CONVERGE(commit-goal): round 1" "first commit should use CONVERGE prefix"
-  assert_contains "$subjects" "CONVERGE(commit-goal): round 2" "second commit should use CONVERGE prefix"
+  assert_contains "$subjects" "CONVERGE(commit-goal): fake worker round 1" "first worker commit should use CONVERGE prefix"
+  assert_contains "$subjects" "CONVERGE(commit-goal): fake worker round 2" "second worker commit should use CONVERGE prefix"
 
-  echo "  PASS: converge commits diff-producing rounds"
+  echo "  PASS: converge worker commits diff-producing rounds"
 }
 
 test_zero_diff_rounds_skip_commit() {
@@ -252,25 +361,22 @@ test_zero_diff_rounds_skip_commit() {
   echo "  PASS: converge skips commits for zero-diff rounds"
 }
 
-test_commit_failure_warns_without_aborting() {
+test_worker_left_diff_warns_without_driver_commit() {
   local tmp output rc
   new_tmpdir
   tmp="$NEW_TMPDIR"
-  git -C "$tmp" init -q
-  git -C "$tmp" config user.useConfigOnly true
-  git -C "$tmp" config user.name ""
-  git -C "$tmp" config user.email ""
-  git -C "$tmp" config commit.gpgsign false
+  setup_git_repo "$tmp"
 
-  output="$(run_converge "$tmp" --goal "Commit Failure" --exec "printf x > '$tmp/change.txt'" --rounds 1 2>&1)" \
+  output="$(FAKE_CONVERGE_WORKER_MODE=leave-diff run_converge "$tmp" \
+    --goal "Worker Left Diff" --exec "printf x > '$tmp/change.txt'" --rounds 1 2>&1)" \
     && rc=0 || rc=$?
 
-  assert_eq "0" "$rc" "commit failure should not abort converge loop"
-  assert_contains "$output" "Converge round 1: git commit failed; continuing" \
-    "commit failure should be logged as a warning"
-  assert_eq "0" "$(count_commits "$tmp")" "failed commit should not create a commit"
+  assert_eq "0" "$rc" "worker leaving a diff should not abort converge loop"
+  assert_contains "$output" "Converge round 1: worker left uncommitted changes; driver will not commit" \
+    "driver should warn but not retry the worker commit"
+  assert_eq "0" "$(count_commits "$tmp")" "driver should not create a fallback commit"
 
-  echo "  PASS: converge warns and continues when git commit fails"
+  echo "  PASS: converge warns without driver fallback commit"
 }
 
 test_registry_progress_updates_each_round() {
@@ -304,18 +410,18 @@ test_exec_failure_policy() {
   assert_eq "0" "$rc" "default exec failure mode should continue and exit 0"
   assert_eq "2" "$(cat "$counter")" "default exec failure mode should continue to next round"
   assert_contains "$output" "Converge round 1 exec exited 7; continuing" \
-    "default exec failure should warn"
+    "default worker failure should warn"
   reports="$tmp/docs/plans/converge/exec-failure/agent-reports.log"
   assert_file_contains "$reports" "===== tick=1 ts=" "failed exec should still append tick 1 report"
-  assert_file_contains "$reports" " exit=7 =====" "failed exec report should record non-zero exit"
+  assert_file_contains "$reports" "fake worker exit=7" "failed exec report should record non-zero exit"
   assert_file_contains "$reports" "===== tick=2 ts=" "default mode should append tick 2 report"
-  assert_file_contains "$reports" " exit=0 =====" "second exec report should record success"
+  assert_file_contains "$reports" "fake worker exit=0" "second exec report should record success"
 
   new_tmpdir
   tmp="$NEW_TMPDIR"
   counter="$tmp/fail-fast-count"
 
-  output="$(cd "$tmp" && CONVERGE_FAIL_ON_EXEC_ERROR=1 "$ALMANAC" converge --goal "Fail Fast" \
+  output="$(CONVERGE_FAIL_ON_EXEC_ERROR=1 run_converge "$tmp" --goal "Fail Fast" \
     --exec "n=\$(cat '$counter' 2>/dev/null || printf 0); n=\$((n + 1)); printf '%s\n' \"\$n\" > '$counter'; exit 7" \
     --rounds 2 2>&1)" && rc=0 || rc=$?
 
@@ -329,15 +435,110 @@ test_exec_failure_policy() {
   echo "  PASS: converge handles exec failure policy"
 }
 
+test_worker_prompt_embeds_goal_exec_and_report_contract() {
+  local tmp prompt
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_converge_scaffold "$tmp" $'Fresh Goal\nsecond line'
+  prompt="$(almanac_converge_worker_prompt "$tmp" $'Fresh Goal\nsecond line' "printf hi" 3)"
+
+  assert_contains "$prompt" "===== GOAL.md =====" "worker prompt should mark goal block"
+  assert_contains "$prompt" $'Fresh Goal\nsecond line' "worker prompt should embed goal.md verbatim"
+  assert_contains "$prompt" "===== EXEC COMMAND =====" "worker prompt should mark exec block"
+  assert_contains "$prompt" "printf hi" "worker prompt should include exec command"
+  assert_contains "$prompt" "CONVERGE(" \
+    "worker prompt should include CONVERGE commit prefix"
+  assert_contains "$prompt" "<one-line summary>" \
+    "worker prompt should instruct worker commit message format"
+  assert_contains "$prompt" "===== tick=<N> ts=<ISO> =====" \
+    "worker prompt should specify structured report header"
+  assert_contains "$prompt" "summary:" "worker prompt should specify summary section"
+  assert_contains "$prompt" "concerns:" "worker prompt should specify concerns section"
+  assert_contains "$prompt" "next:" "worker prompt should specify next section"
+
+  echo "  PASS: worker prompt embeds goal, exec, commit, report contract"
+}
+
+test_prompt_template_created_and_reread() {
+  local tmp plan prompt
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_converge_scaffold "$tmp" "Editable Template"
+  plan="$tmp/docs/plans/converge/editable-template"
+
+  almanac_converge_ensure_prompt_template "$tmp" "Editable Template"
+  [ -f "$plan/prompt.md" ] || fail "prompt.md should be created when absent"
+  printf '%s\n' "CUSTOM TEMPLATE EDIT" >> "$plan/prompt.md"
+
+  prompt="$(almanac_converge_worker_prompt "$tmp" "Editable Template" "true" 2)"
+  assert_contains "$prompt" "CUSTOM TEMPLATE EDIT" "worker prompt should re-read edited prompt.md"
+
+  echo "  PASS: prompt template is created once and re-read"
+}
+
+test_worker_prompt_consumes_steer_once() {
+  local tmp prompt
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_converge_scaffold "$tmp" "Steered Goal"
+  printf '%s\n' "focus the parser" > "$tmp/.converge-steer"
+
+  prompt="$(almanac_converge_worker_prompt "$tmp" "Steered Goal" "true" 1)"
+
+  assert_contains "$prompt" "===== STEER =====" "worker prompt should include steer block"
+  assert_contains "$prompt" "focus the parser" "worker prompt should embed steer directive"
+  [ ! -f "$tmp/.converge-steer" ] || fail ".converge-steer should be consumed after prompt render"
+
+  echo "  PASS: worker prompt consumes one-shot steer"
+}
+
+test_worker_agent_invoked_with_role_config() {
+  local tmp args
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  CONVERGE_AGENT_PROVIDER=codex CONVERGE_AGENT_MODEL=gpt-test CONVERGE_AGENT_EFFORT=high \
+    run_converge "$tmp" --goal "Role Config" --exec "true" --rounds 1 >/dev/null
+
+  args="$(cat "$tmp/.almanac/test-worker-args.log")"
+  assert_contains "$args" "--sandbox workspace-write" "worker agent should run write-capable"
+  assert_contains "$args" "--model gpt-test" "worker agent should receive CONVERGE_AGENT_MODEL"
+  assert_contains "$args" "model_reasoning_effort=\"high\"" "worker agent should receive CONVERGE_AGENT_EFFORT"
+
+  echo "  PASS: worker agent uses converge role config and workspace-write sandbox"
+}
+
+test_structured_report_parser_accepts_worker_block() {
+  local tmp reports
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  run_converge "$tmp" --goal "Report Parser" --exec "true" --rounds 1 >/dev/null
+
+  reports="$tmp/docs/plans/converge/report-parser/agent-reports.log"
+  almanac_converge_report_log_has_structured_block "$reports" \
+    || fail "structured worker report should be parseable"
+
+  echo "  PASS: structured worker report is parseable"
+}
+
 test_cli_requires_goal_and_exec
 test_plan_dir_scaffold_and_exec_smoke
 test_registry_records_converge_run_done
 test_run_aborts_cleanly_when_plan_dir_unwritable
+test_worker_prompt_embeds_goal_exec_and_report_contract
+test_prompt_template_created_and_reread
+test_worker_prompt_consumes_steer_once
+test_worker_agent_invoked_with_role_config
+test_structured_report_parser_accepts_worker_block
 test_round_count_exactness
 test_default_round_budget_and_env_override
 test_diff_rounds_commit_with_converge_prefix
 test_zero_diff_rounds_skip_commit
-test_commit_failure_warns_without_aborting
+test_worker_left_diff_warns_without_driver_commit
 test_registry_progress_updates_each_round
 test_exec_failure_policy
 
