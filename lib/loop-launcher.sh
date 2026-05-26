@@ -227,11 +227,12 @@ _almanac_launch_harden() {
 # --- converge ------------------------------------------------------------------
 
 _almanac_launch_converge() {
-  local goal="" exec_cmd="" rounds="" provider="" model="" effort="" no_oversee="" oversee_every="" yes=""
+  local goal="" exec_cmd="" prompt="" rounds="" provider="" model="" effort="" no_oversee="" oversee_every="" yes=""
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --goal)       shift; goal="${1:-}";       [ -n "$goal" ] || _die "--goal requires a value" ;;
       --exec)       shift; exec_cmd="${1:-}";   [ -n "$exec_cmd" ] || _die "--exec requires a value" ;;
+      --prompt)     shift; prompt="${1:-}";     [ -n "$prompt" ] || _die "--prompt requires a value" ;;
       --rounds)     shift; rounds="${1:-}";     [ -n "$rounds" ] || _die "--rounds requires a value" ;;
       --provider)   shift; provider="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"; [ -n "$provider" ] || _die "--provider requires a value" ;;
       --model)      shift; model="${1:-}";      [ -n "$model" ] || _die "--model requires a value" ;;
@@ -245,13 +246,43 @@ _almanac_launch_converge() {
     shift
   done
 
-  # Goal + exec are the two required inputs — prompt for whatever the operator
-  # didn't pass on the command line. Both are free-form strings (one paragraph
-  # goal, one shell-pipeline exec), so they go through ui_input not ui_choose.
-  [ -n "$goal" ]     || goal="$(almanac_loop_ui_input "Goal (one-line description of convergence target)")" || return 1
-  [ -n "$goal" ]     || _die "A converge goal is required."
-  [ -n "$exec_cmd" ] || exec_cmd="$(almanac_loop_ui_input "Exec (shell command to run each round)")" || return 1
-  [ -n "$exec_cmd" ] || _die "A converge exec command is required."
+  # Goal is always required. Action is either --prompt (agent invocation —
+  # dominant mode, takes slash commands / chains / free-form text) or --exec
+  # (shell command run by a wrapping worker agent — escape hatch). Mutex
+  # enforced; the runner enforces it again so direct invocations stay safe.
+  if [ -n "$prompt" ] && [ -n "$exec_cmd" ]; then
+    _die "--prompt and --exec are mutually exclusive — pick one"
+  fi
+
+  [ -n "$goal" ] || goal="$(almanac_loop_ui_input "Goal (one-line description of convergence target)")" || return 1
+  [ -n "$goal" ] || _die "A converge goal is required."
+
+  # If neither --prompt nor --exec was passed, ask which mode the operator
+  # wants and prompt for the value. Default to prompt-mode because slash-command
+  # convergence is the canonical use case.
+  if [ -z "$prompt" ] && [ -z "$exec_cmd" ]; then
+    local action_mode
+    action_mode="$(almanac_loop_ui_choose "Action mode" "prompt (agent invocation — recommended)" "exec (shell command)")" || return 1
+    case "$action_mode" in
+      prompt*)
+        prompt="$(almanac_loop_ui_input "Prompt (slash command, chain, or free-form — sent to agent each round)")" || return 1
+        [ -n "$prompt" ] || _die "A converge --prompt or --exec is required."
+        ;;
+      exec*)
+        exec_cmd="$(almanac_loop_ui_input "Exec (shell command run by wrapping worker agent each round)")" || return 1
+        [ -n "$exec_cmd" ] || _die "A converge --prompt or --exec is required."
+        ;;
+    esac
+  fi
+
+  local action_mode action_text
+  if [ -n "$prompt" ]; then
+    action_mode="prompt"
+    action_text="$prompt"
+  else
+    action_mode="exec"
+    action_text="$exec_cmd"
+  fi
 
   # Provider / model / effort — same resolution as ralph + harden. Single
   # provider drives both the worker and overseer roles by default; the user can
@@ -274,7 +305,9 @@ _almanac_launch_converge() {
   fi
 
   almanac_loop_launch_summary "converge" \
-    "Goal:$goal" "Exec:$exec_cmd" "Provider:$provider" \
+    "Goal:$goal" \
+    "$([ "$action_mode" = "prompt" ] && printf 'Prompt:%s' "$action_text" || printf 'Exec:%s' "$action_text")" \
+    "Provider:$provider" \
     "Model:${model:-provider default}" "Thinking:${effort:-provider default}" \
     "Rounds:${rounds:-default budget}" \
     "Overseer:$([ -n "$no_oversee" ] && echo off || echo on)" \
@@ -291,8 +324,9 @@ _almanac_launch_converge() {
 
   # Build the runner argv via the adapter (the path to bin/almanac and the flag
   # composition both live in lib/loops/converge.sh — the launcher doesn't know
-  # them).
-  almanac_loop_adapter_call converge exec_argv "$goal" "$exec_cmd" "$rounds" "$no_oversee" "$oversee_every" \
+  # them). The adapter takes mode + action so the same call shape works for
+  # both --prompt and --exec.
+  almanac_loop_adapter_call converge exec_argv "$goal" "$action_mode" "$action_text" "$rounds" "$no_oversee" "$oversee_every" \
     || _die "converge adapter could not build a runner for goal: $goal"
   exec "${_ALMANAC_LOOP_ARGV[@]}"
 }
@@ -342,7 +376,11 @@ EOF
     converge) cat >&2 <<'EOF'
 Usage (loop launch): converge [options]
   --goal <text>       one-line convergence goal (overseer can mutate it)
-  --exec <cmd>        shell command to run each round
+  --prompt <text>     prompt sent to the configured agent each round (slash
+                      command, chain, or free-form). The dominant mode.
+  --exec <cmd>        shell command run by a wrapping worker agent each round
+                      (escape hatch for non-agent workflows).
+                      Exactly one of --prompt / --exec is required.
   --provider <p>      codex | claude
   --model <m>         worker / overseer model
   --effort <l>        thinking level

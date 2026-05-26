@@ -615,6 +615,89 @@ almanac_converge_run_worker() {
   return "$rc"
 }
 
+# Prompt-mode round: the user's --prompt text IS the agent invocation. No worker
+# template wrapper — the agent receives the prompt verbatim, prefixed only with
+# a one-shot .converge-steer directive if one is queued. This is the dominant
+# mode for "run skill X in a convergence loop" workflows; the loop driver
+# handles the bookkeeping (auto-commit + agent-reports.log entry) after the
+# agent exits, instead of asking the agent to know about CONVERGE conventions.
+#
+# Returns the agent's exit code; commit and report writes are best-effort and
+# never alter the return.
+almanac_converge_run_worker_prompt() {
+  local root="$1"
+  local goal="$2"
+  local prompt="$3"
+  local round="$4"
+  local provider model effort prompt_file result_file events_file rc
+  local slug plan_dir log_file steer_path ts result_summary
+
+  provider="$(almanac_converge_role_field "agent" "provider")"
+  model="$(almanac_converge_role_field "agent" "model")"
+  effort="$(almanac_converge_role_field "agent" "effort")"
+  slug="$(almanac_converge_slug "$goal")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$goal")"
+  log_file="$plan_dir/agent-reports.log"
+  steer_path="$root/.converge-steer"
+
+  prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-prompt.XXXXXX")"
+  result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-result.XXXXXX")"
+  events_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-events.XXXXXX")"
+
+  # Steer (one-shot): emitted by the overseer in the prior round, consumed and
+  # removed here so the next overseer tick can re-emit if the issue persists.
+  # Steer prefix comes BEFORE the user prompt so a slash command sees the
+  # directive as context before its own work.
+  {
+    if [ -f "$steer_path" ]; then
+      printf '# Steer directive (from previous overseer tick):\n'
+      cat "$steer_path"
+      printf '\n\n'
+      rm -f "$steer_path"
+    fi
+    printf '%s\n' "$prompt"
+  } > "$prompt_file"
+
+  rc=0
+  (cd "$root" && almanac_loop_agent_capture "$provider" "$model" "$effort" "workspace-write" \
+    "$prompt_file" "$result_file" "$events_file") >/dev/null || rc=$?
+
+  # Auto-commit any worktree changes the agent left behind. A smart prompt may
+  # have committed itself (worktree clean, nothing to do); a slash command like
+  # /almanac:codebase-improve typically doesn't commit, so the driver does it.
+  # Best-effort: a failed commit logs a warn but never alters the return code —
+  # the agent's work itself succeeded or failed, the commit is bookkeeping.
+  if [ -n "$(cd "$root" && git status --porcelain 2>/dev/null || true)" ]; then
+    if ! (cd "$root" \
+            && git add -A >/dev/null 2>&1 \
+            && git -c user.email=converge@almanac -c user.name=converge \
+                   commit -m "CONVERGE($slug): round $round" --no-verify >/dev/null 2>&1); then
+      _warn "Converge round $round: auto-commit failed (changes left in worktree)"
+    fi
+  fi
+
+  # Auto-write a minimal self-report. Format mirrors slice-03's worker block
+  # (===== tick=N ts=ISO mode=prompt exit=N =====) so the overseer's parser
+  # treats it the same. result_summary is the first 500 bytes of the agent's
+  # final message — enough for the overseer to see "what the agent said it
+  # did" without dragging the full transcript through the prompt budget.
+  ts="$(almanac_loop_now_utc)"
+  result_summary="(no agent output)"
+  if [ -s "$result_file" ]; then
+    result_summary="$(head -c 500 "$result_file")"
+  fi
+  {
+    printf '\n===== tick=%s ts=%s mode=prompt exit=%s =====\n' "$round" "$ts" "$rc"
+    printf 'summary:\n'
+    printf '%s\n' "$result_summary"
+    printf 'concerns:\n(none captured — prompt mode does not enforce structured self-report)\n'
+    printf 'next:\n(driven by overseer / next-round prompt)\n'
+  } >> "$log_file"
+
+  rm -f "$prompt_file" "$result_file" "$events_file"
+  return "$rc"
+}
+
 almanac_converge_run_overseer() {
   local root="$1"
   local goal="$2"
@@ -678,7 +761,17 @@ almanac_converge_run() {
   local rounds="${4:-${CONVERGE_ROUND_BUDGET:-10}}"
   local no_oversee="${5:-0}"
   local oversee_every="${6:-1}"
-  local slug plan_dir run_id pid exec_rc round started_epoch final_status final_verdict final_reason
+  local prompt="${7:-}"
+  local slug plan_dir run_id pid exec_rc round started_epoch final_status final_verdict final_reason action_mode
+
+  # Mode dispatch: prompt-mode (agent invocation, dominant) vs exec-mode (shell
+  # command in a wrapping worker, escape hatch). cmd/converge.sh enforces the
+  # mutex; here we just pick a label for run-config + dispatch.
+  if [ -n "$prompt" ]; then
+    action_mode="prompt"
+  else
+    action_mode="exec"
+  fi
 
   case "$rounds" in
     ''|*[!0-9]*) _die "--rounds must be a positive integer: $rounds" ;;
@@ -733,13 +826,29 @@ almanac_converge_run() {
     fi
 
     round=$((round + 1))
-    if (cd "$root" && almanac_converge_run_worker "$root" "$goal" "$exec_cmd" "$round"); then
-      exec_rc=0
-    else
-      exec_rc=$?
-    fi
+    case "$action_mode" in
+      prompt)
+        if almanac_converge_run_worker_prompt "$root" "$goal" "$prompt" "$round"; then
+          exec_rc=0
+        else
+          exec_rc=$?
+        fi
+        ;;
+      *)
+        if (cd "$root" && almanac_converge_run_worker "$root" "$goal" "$exec_cmd" "$round"); then
+          exec_rc=0
+        else
+          exec_rc=$?
+        fi
+        ;;
+    esac
 
-    if [ -n "$(almanac_converge_git_user_status "$root" "$plan_dir" 2>/dev/null || true)" ]; then
+    # In exec-mode the worker is authoritative for commits (slice 03 contract).
+    # In prompt-mode the driver already attempted the auto-commit inside the
+    # worker function and will have warned on failure, so the check is skipped
+    # to avoid a duplicate / misleading "driver will not commit" message.
+    if [ "$action_mode" = "exec" ] \
+       && [ -n "$(almanac_converge_git_user_status "$root" "$plan_dir" 2>/dev/null || true)" ]; then
       _warn "Converge round $round: worker left uncommitted changes; driver will not commit"
     fi
 

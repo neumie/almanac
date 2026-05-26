@@ -171,8 +171,34 @@ test_hub_new_missing_required_errors() {
   [ "$rc" -ne 0 ] || fail "hub --new converge without --goal must exit non-zero"
   rc=0
   "$ALMANAC_BIN" hub --new converge --goal "ship" --dry-run </dev/null >/dev/null 2>&1 || rc=$?
-  [ "$rc" -ne 0 ] || fail "hub --new converge without --exec must exit non-zero"
+  [ "$rc" -ne 0 ] || fail "hub --new converge without --prompt or --exec must exit non-zero"
+  rc=0
+  "$ALMANAC_BIN" hub --new converge --goal "ship" --prompt "/x" --exec "y" --dry-run </dev/null >/dev/null 2>&1 || rc=$?
+  [ "$rc" -ne 0 ] || fail "hub --new converge with BOTH --prompt and --exec must exit non-zero"
   echo "  PASS: hub --new without required config errors"
+}
+
+# Criterion: `almanac hub --new converge --prompt …` (the dominant slash-command
+# convergence-loop mode) composes the launch — --prompt on argv, CONVERGE_* env
+# the same shape exec-mode uses. No --exec leaks into argv.
+test_hub_new_dry_run_composes_converge_prompt_launch() {
+  local out
+  out="$("$ALMANAC_BIN" hub --new converge \
+    --goal "no major improvements left" \
+    --prompt "/almanac:codebase-improve" \
+    --rounds 5 \
+    --provider claude --model claude-opus-4-7 \
+    --dry-run </dev/null 2>&1)"
+  assert_contains "$out" "converge"                       "prompt-mode dry-run shows the subcommand"
+  assert_contains "$out" "--goal"                         "prompt-mode dry-run carries --goal"
+  assert_contains "$out" "--prompt"                       "prompt-mode dry-run carries --prompt"
+  assert_contains "$out" "/almanac:codebase-improve"      "prompt-mode dry-run carries the prompt text"
+  assert_contains "$out" "--rounds 5"                     "prompt-mode dry-run carries --rounds"
+  assert_contains "$out" "CONVERGE_PROVIDER=claude"       "prompt-mode dry-run shows the provider env"
+  case "$out" in
+    *"--exec"*) fail "prompt-mode argv must NOT carry --exec" ;;
+  esac
+  echo "  PASS: hub --new converge --prompt dry-run composes the launch"
 }
 
 # Criterion 3: `almanac hub --new converge … --dry-run` composes the converge
@@ -235,6 +261,7 @@ test_hub_watch_renders_run_detail
 test_hub_new_dry_run_composes_ralph_launch
 test_hub_new_dry_run_composes_harden_launch
 test_hub_new_dry_run_composes_converge_launch
+test_hub_new_dry_run_composes_converge_prompt_launch
 test_hub_new_missing_required_errors
 test_hub_resume_harden_does_not_append_yes
 echo ""

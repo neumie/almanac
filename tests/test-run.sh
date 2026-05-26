@@ -695,12 +695,14 @@ test_new_run_argv_rejects_unknown_and_missing() {
   rc=0; almanac_loop_new_run_argv converge exec="echo hi" >/dev/null 2>&1 || rc=$?
   assert_eq "2" "$rc" "a converge run without a goal must return 2"
   rc=0; almanac_loop_new_run_argv converge goal="ship it" >/dev/null 2>&1 || rc=$?
-  assert_eq "2" "$rc" "a converge run without an exec must return 2"
+  assert_eq "2" "$rc" "a converge run without a prompt or exec must return 2"
   echo "  PASS: new-run argv rejects unknown type and missing required config"
 }
 
 test_new_run_argv_converge_composes_flags() {
-  local flat
+  local flat rc
+
+  # Exec mode
   flat="$(almanac_loop_new_run_argv converge \
     goal="ship it" exec="echo hi" rounds=5 oversee=off oversee_every=2 | tr '\n' ' ')"
   assert_contains "$flat" "converge " "argv starts with converge subcommand"
@@ -716,8 +718,21 @@ test_new_run_argv_converge_composes_flags() {
     *"--effort"*)   fail "effort must ride on env, not argv" ;;
   esac
 
+  # Prompt mode
+  flat="$(almanac_loop_new_run_argv converge \
+    goal="ship it" prompt="/almanac:codebase-improve" rounds=3 | tr '\n' ' ')"
+  assert_contains "$flat" "--prompt /almanac:codebase-improve" "argv carries --prompt"
+  assert_contains "$flat" "--rounds 3" "prompt-mode argv still carries --rounds"
+  case "$flat" in
+    *"--exec"*) fail "prompt-mode argv must NOT carry --exec" ;;
+  esac
+
+  # Mutex: both prompt and exec → 2
+  rc=0; almanac_loop_new_run_argv converge goal="g" prompt="p" exec="e" >/dev/null 2>&1 || rc=$?
+  assert_eq "2" "$rc" "converge with both prompt and exec must return 2 (mutex)"
+
   # oversee=on (or omitted) must NOT emit --no-oversee
-  flat="$(almanac_loop_new_run_argv converge goal="g" exec="x" | tr '\n' ' ')"
+  flat="$(almanac_loop_new_run_argv converge goal="g" prompt="/x" | tr '\n' ' ')"
   case "$flat" in
     *"--no-oversee"*) fail "default (overseer on) must NOT emit --no-oversee" ;;
   esac

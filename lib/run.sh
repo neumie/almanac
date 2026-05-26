@@ -916,7 +916,7 @@ almanac_loop_run_watch() {
 almanac_loop_new_run_argv() {
   local type="$1"; shift
   local prd="" mode="" provider="" model="" effort="" iterations="" oversee="" target="" rounds=""
-  local goal="" exec_cmd="" oversee_every="" kv key val
+  local goal="" exec_cmd="" prompt="" oversee_every="" kv key val
   for kv in "$@"; do
     key="${kv%%=*}"; val="${kv#*=}"
     case "$key" in
@@ -931,6 +931,7 @@ almanac_loop_new_run_argv() {
       rounds) rounds="$val" ;;
       goal) goal="$val" ;;
       exec) exec_cmd="$val" ;;
+      prompt) prompt="$val" ;;
       oversee_every) oversee_every="$val" ;;
     esac
   done
@@ -954,15 +955,25 @@ almanac_loop_new_run_argv() {
       ;;
     converge)
       [ -n "$goal" ] || return 2
-      [ -n "$exec_cmd" ] || return 2
-      # Same split as harden: state the runner needs goes on argv (goal, exec,
-      # rounds, oversee flags), role config (provider/model/effort) rides on
-      # environment via almanac_loop_new_run_env. The runner is `almanac converge`
-      # — cmd/converge.sh; no launcher hop in this code path. The interactive
-      # menu uses almanac_loop_launch converge (the launcher) instead.
+      # Exactly one of prompt / exec is required. prompt is the dominant mode
+      # (agent invocation); exec is the escape hatch (shell command in a
+      # wrapping worker). Mutex enforced here so the hub never composes a
+      # malformed launch.
+      if [ -n "$prompt" ] && [ -n "$exec_cmd" ]; then return 2; fi
+      [ -n "$prompt" ] || [ -n "$exec_cmd" ] || return 2
+      # Same split as harden: state the runner needs goes on argv (goal, the
+      # action flag, rounds, oversee flags), role config (provider/model/effort)
+      # rides on environment via almanac_loop_new_run_env. The runner is
+      # `almanac converge` — cmd/converge.sh; no launcher hop in this code path.
+      # The interactive menu uses almanac_loop_launch converge (the launcher)
+      # instead.
       printf '%s\n' converge
       printf '%s\n%s\n' --goal "$goal"
-      printf '%s\n%s\n' --exec "$exec_cmd"
+      if [ -n "$prompt" ]; then
+        printf '%s\n%s\n' --prompt "$prompt"
+      else
+        printf '%s\n%s\n' --exec "$exec_cmd"
+      fi
       if [ -n "$rounds" ]; then printf '%s\n%s\n' --rounds "$rounds"; fi
       if [ "$oversee" = "off" ]; then printf '%s\n' --no-oversee; fi
       if [ -n "$oversee_every" ]; then printf '%s\n%s\n' --oversee-every "$oversee_every"; fi

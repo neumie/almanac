@@ -227,7 +227,7 @@ setup_git_repo() {
   git -C "$tmp" config commit.gpgsign false
 }
 
-test_cli_requires_goal_and_exec() {
+test_cli_requires_goal_and_action() {
   local tmp output rc
   new_tmpdir
   tmp="$NEW_TMPDIR"
@@ -238,11 +238,16 @@ test_cli_requires_goal_and_exec() {
   assert_contains "$output" "Missing required --goal" "missing --goal should name the missing arg"
 
   output="$(run_converge "$tmp" --goal "say hello" 2>&1)" && rc=0 || rc=$?
-  [ "$rc" -ne 0 ] || fail "missing --exec should exit non-zero"
-  assert_contains "$output" "Usage: almanac converge" "missing --exec should show usage hint"
-  assert_contains "$output" "Missing required --exec" "missing --exec should name the missing arg"
+  [ "$rc" -ne 0 ] || fail "missing both --prompt and --exec should exit non-zero"
+  assert_contains "$output" "Usage: almanac converge" "missing action should show usage hint"
+  assert_contains "$output" "One of --prompt or --exec is required" \
+    "missing action should name both alternatives"
 
-  echo "  PASS: converge CLI requires --goal and --exec"
+  output="$(run_converge "$tmp" --goal "say hello" --prompt "/x" --exec "echo y" 2>&1)" && rc=0 || rc=$?
+  [ "$rc" -ne 0 ] || fail "BOTH --prompt and --exec should exit non-zero"
+  assert_contains "$output" "mutually exclusive" "both action flags should name the mutex"
+
+  echo "  PASS: converge CLI requires --goal and exactly one of --prompt / --exec"
 }
 
 test_plan_dir_scaffold_and_exec_smoke() {
@@ -271,6 +276,78 @@ test_plan_dir_scaffold_and_exec_smoke() {
     "one structured report header should be appended for one round"
 
   echo "  PASS: converge scaffolds plan files and worker runs exec once"
+}
+
+# Prompt-mode E2E: --prompt sends the verbatim text to the agent each round
+# (no worker template wrapper). The driver auto-commits any worktree changes
+# with CONVERGE(<slug>): prefix and writes a minimal self-report tagged
+# mode=prompt. This is the dominant slash-command convergence use case.
+test_prompt_mode_invokes_agent_and_commits() {
+  local tmp plan reports prompt_log fake_args
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  setup_git_repo "$tmp"
+
+  # Fake codex that writes a file (so we have a diff to auto-commit) and a
+  # short result. The fake echoes its prompt to a log so we can assert the
+  # agent saw the verbatim --prompt text, not a wrapped template.
+  local fakebin="$tmp/.almanac/fakebin"
+  mkdir -p "$fakebin"
+  prompt_log="$tmp/.almanac/prompt-mode-prompts.log"
+  fake_args="$tmp/.almanac/prompt-mode-args.log"
+  cat > "$fakebin/codex" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+prompt=""
+result_file=""
+while [ "\$#" -gt 0 ]; do
+  case "\$1" in
+    --output-last-message) shift; result_file="\${1:-}" ;;
+    --sandbox) shift ;;
+    *) prompt="\$1" ;;
+  esac
+  shift || true
+done
+printf '%s\n' "\$prompt" > "$prompt_log"
+printf '%s\n' "\$*" >> "$fake_args"
+# Produce a diff in the working tree so the driver's auto-commit fires.
+printf 'worker touch round\n' > "$tmp/worker-output.txt"
+[ -n "\$result_file" ] && printf 'fake prompt-mode agent finished\n' > "\$result_file"
+printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"fake"}}'
+EOF
+  chmod +x "$fakebin/codex"
+
+  ( cd "$tmp" && \
+      PATH="$fakebin:$PATH" \
+      CONVERGE_AGENT_PROVIDER=codex \
+      CONVERGE_OVERSEER_PROVIDER=codex \
+      ALMANAC_HOME="$ROOT" \
+      HOME="$tmp" \
+      "$ALMANAC" converge \
+        --goal "prompt-mode smoke" \
+        --prompt "/almanac:codebase-improve" \
+        --rounds 1 \
+        --no-oversee \
+  ) >/dev/null 2>&1 || fail "prompt-mode converge run should exit 0"
+
+  plan="$tmp/docs/plans/converge/prompt-mode-smoke"
+  reports="$plan/agent-reports.log"
+
+  [ -f "$plan/goal.md" ] || fail "prompt-mode should scaffold plan dir"
+  [ -f "$reports" ] || fail "prompt-mode should write agent-reports.log"
+  assert_file_contains "$reports" "mode=prompt" "prompt-mode report header should tag mode=prompt"
+  assert_file_contains "$reports" "===== tick=1 ts=" "prompt-mode report should have a tick header"
+  assert_file_contains "$prompt_log" "/almanac:codebase-improve" \
+    "agent should see the verbatim --prompt text"
+  # The driver auto-committed; assert the CONVERGE prefix and slug appear on HEAD.
+  local commit_msg
+  commit_msg="$(git -C "$tmp" log -1 --format=%s 2>/dev/null || true)"
+  case "$commit_msg" in
+    "CONVERGE(prompt-mode-smoke): round 1") : ;;
+    *) fail "expected auto-commit with CONVERGE(prompt-mode-smoke): round 1 prefix; got: $commit_msg" ;;
+  esac
+
+  echo "  PASS: prompt-mode invokes agent verbatim and driver auto-commits"
 }
 
 test_registry_records_converge_run_done() {
@@ -1025,8 +1102,9 @@ test_hub_stop_writes_converge_signal() {
   echo "  PASS: hub --stop writes converge signal"
 }
 
-test_cli_requires_goal_and_exec
+test_cli_requires_goal_and_action
 test_plan_dir_scaffold_and_exec_smoke
+test_prompt_mode_invokes_agent_and_commits
 test_registry_records_converge_run_done
 test_run_aborts_cleanly_when_plan_dir_unwritable
 test_converge_adapter_exposes_stop_and_steer

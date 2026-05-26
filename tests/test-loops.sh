@@ -89,33 +89,42 @@ test_harden_exec_argv_launch_contract() {
 
 test_converge_exec_argv_launch_contract() {
   local ALMANAC_HOME="/fake/home"
+  local rc
 
-  # Minimum: goal + exec only — no rounds, no oversee flags
-  almanac_loop_adapter_call converge exec_argv "ship it" "echo hi"
+  # Minimum exec-mode: goal + exec
+  almanac_loop_adapter_call converge exec_argv "ship it" "exec" "echo hi"
   assert_eq "bash /fake/home/bin/almanac converge --goal ship it --exec echo hi" \
-    "${_ALMANAC_LOOP_ARGV[*]}" "converge exec argv (goal + exec only)"
+    "${_ALMANAC_LOOP_ARGV[*]}" "converge exec argv (exec-mode goal + action)"
 
-  # With rounds
-  almanac_loop_adapter_call converge exec_argv "ship it" "echo hi" "5"
+  # Minimum prompt-mode: goal + prompt
+  almanac_loop_adapter_call converge exec_argv "ship it" "prompt" "/almanac:codebase-improve"
+  assert_eq "bash /fake/home/bin/almanac converge --goal ship it --prompt /almanac:codebase-improve" \
+    "${_ALMANAC_LOOP_ARGV[*]}" "converge exec argv (prompt-mode goal + action)"
+
+  # With rounds (4th positional)
+  almanac_loop_adapter_call converge exec_argv "ship it" "exec" "echo hi" "5"
   assert_eq "bash /fake/home/bin/almanac converge --goal ship it --exec echo hi --rounds 5" \
     "${_ALMANAC_LOOP_ARGV[*]}" "converge exec argv (with rounds)"
 
-  # With --no-oversee (the no_oversee flag is the 4th positional, non-empty + non-"0" enables)
-  almanac_loop_adapter_call converge exec_argv "ship it" "echo hi" "5" "1"
+  # With --no-oversee (5th positional, non-empty + non-"0" enables)
+  almanac_loop_adapter_call converge exec_argv "ship it" "exec" "echo hi" "5" "1"
   assert_eq "bash /fake/home/bin/almanac converge --goal ship it --exec echo hi --rounds 5 --no-oversee" \
     "${_ALMANAC_LOOP_ARGV[*]}" "converge exec argv (with --no-oversee)"
 
-  # An empty no_oversee or "0" must NOT emit the flag (defensive — the launcher
-  # passes the literal "" when overseer is on)
-  almanac_loop_adapter_call converge exec_argv "ship it" "echo hi" "5" ""
+  # An empty no_oversee or "0" must NOT emit the flag
+  almanac_loop_adapter_call converge exec_argv "ship it" "exec" "echo hi" "5" ""
   case " ${_ALMANAC_LOOP_ARGV[*]} " in
     *" --no-oversee "*) fail "empty no_oversee must NOT emit --no-oversee" ;;
   esac
 
-  # With --oversee-every (5th positional)
-  almanac_loop_adapter_call converge exec_argv "ship it" "echo hi" "" "" "3"
+  # With --oversee-every (6th positional)
+  almanac_loop_adapter_call converge exec_argv "ship it" "exec" "echo hi" "" "" "3"
   assert_eq "bash /fake/home/bin/almanac converge --goal ship it --exec echo hi --oversee-every 3" \
     "${_ALMANAC_LOOP_ARGV[*]}" "converge exec argv (with --oversee-every)"
+
+  # Unknown mode returns 2
+  rc=0; almanac_loop_adapter_call converge exec_argv "ship it" "bogus" "x" >/dev/null 2>&1 || rc=$?
+  assert_eq "2" "$rc" "converge exec_argv must return 2 for an unknown mode"
 
   echo "  PASS: converge exec_argv launch contract"
 }

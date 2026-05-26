@@ -160,7 +160,7 @@ almanac_hub_menu() {
 almanac_hub_resume_or_clone() {
   local mode="$1" run_id="$2"
   local status_file run_type target provider model effort iterations oversee lenses rounds
-  local goal exec_cmd oversee_every
+  local goal exec_cmd prompt oversee_every
   local -a opts
   local argv env_raw prd
 
@@ -177,6 +177,7 @@ almanac_hub_resume_or_clone() {
   rounds="$(almanac_loop_status_field "$status_file" rounds || true)"
   goal="$(almanac_loop_status_field "$status_file" goal || true)"
   exec_cmd="$(almanac_loop_status_field "$status_file" exec || true)"
+  prompt="$(almanac_loop_status_field "$status_file" prompt || true)"
   oversee_every="$(almanac_loop_status_field "$status_file" oversee_every || true)"
 
   case "$run_type" in
@@ -199,6 +200,7 @@ almanac_hub_resume_or_clone() {
       ;;
     converge)
       [ -n "$goal" ]          && opts+=("goal=$goal")
+      [ -n "$prompt" ]        && opts+=("prompt=$prompt")
       [ -n "$exec_cmd" ]      && opts+=("exec=$exec_cmd")
       [ -n "$rounds" ]        && opts+=("rounds=$rounds")
       [ -n "$provider" ]      && opts+=("provider=$provider")
@@ -260,6 +262,7 @@ while [ "$#" -gt 0 ]; do
           --lenses)     shift; [ "$#" -gt 0 ] || _die "Missing value for --lenses";     NEW_OPTS+=("lenses=$1") ;;
           --goal)       shift; [ "$#" -gt 0 ] || _die "Missing value for --goal";       NEW_OPTS+=("goal=$1") ;;
           --exec)       shift; [ "$#" -gt 0 ] || _die "Missing value for --exec";       NEW_OPTS+=("exec=$1") ;;
+          --prompt)     shift; [ "$#" -gt 0 ] || _die "Missing value for --prompt";     NEW_OPTS+=("prompt=$1") ;;
           --oversee-every) shift; [ "$#" -gt 0 ] || _die "Missing value for --oversee-every"; NEW_OPTS+=("oversee_every=$1") ;;
           -*) _die "Unknown hub --new option: $1" ;;
           *)  _die "Unexpected hub --new argument: $1" ;;
