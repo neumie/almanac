@@ -37,6 +37,7 @@ check "cmd/update.sh"
 check "cmd/list.sh"
 check "cmd/ralph.sh"
 check "cmd/harden.sh"
+check "cmd/converge.sh"
 check "cmd/hub.sh"
 check "cmd/doctor.sh"
 check "cmd/help.sh"
@@ -61,6 +62,7 @@ check "lib/worker.sh"
 check "lib/feedback.sh"
 check "lib/loop-launcher.sh"
 check "lib/harden-core.sh"
+check "lib/converge-core.sh"
 
 # Claude Code adapter
 check "providers/claude-code/.claude-plugin/plugin.json"
@@ -87,6 +89,7 @@ check "tests/test-ralph-prompt.sh"
 check "tests/test-ralph-run-registry.sh"
 check "tests/test-ralph-smoke.sh"
 check "tests/test-harden-cli.sh"
+check "tests/test-converge.sh"
 check "tests/test-hub.sh"
 
 # Docs
