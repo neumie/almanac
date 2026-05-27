@@ -31,20 +31,24 @@ _almanac_source_sibling role.sh   almanac_loop_role_resolve
 # goal — no more collisions.
 #
 # Two access patterns:
-#   * Inside a run: almanac_converge_run computes the dir name ONCE at scaffold
-#     time, persists it on the run's status.tsv as `plan_dir`, and passes it
-#     to internal helpers. Everything within the run reads/writes the SAME
-#     dir for its full lifetime.
+#   * Inside a run: almanac_converge_run captures the dir name ONCE at scaffold
+#     time into a non-exported shell var (_almanac_converge_active_plan_dir_name).
+#     Subshells and dynamic-scope helpers within the run see it; spawned
+#     SUBPROCESS agents (claude/codex) do NOT — so a parallel converge whose
+#     worker invokes a fresh agent can't poison that agent's environment with
+#     the parent run's plan-dir. Pre-fix this was an EXPORTED env var, and the
+#     leak silently steered tests/test-converge.sh inside a nested agent into
+#     the wrong dir.
 #   * Outside a run (CLI --watch / --stop / --status): the user types a slug
 #     they remember; we resolve to the latest matching dir via the registry.
 
 # Build the plan dir path. Accepts EITHER a full timestamped dir name (used
 # inside an active run, where the run's scaffolded name is the source of
-# truth — captured at scaffold time, propagated via ALMANAC_CONVERGE_PLAN_DIR_NAME)
+# truth — captured at scaffold time in _almanac_converge_active_plan_dir_name)
 # OR a short slug (used by CLI lookups — `almanac converge <slug> --watch`).
 #
 # Resolution rules:
-#   1. ALMANAC_CONVERGE_PLAN_DIR_NAME is set         → use it (active run)
+#   1. _almanac_converge_active_plan_dir_name is set  → use it (active run)
 #   2. arg matches an existing dir exactly            → use it (already resolved)
 #   3. arg matches an existing dir by suffix `-arg`   → use the latest match
 #   4. nothing matches                                → use arg verbatim (caller
@@ -52,14 +56,15 @@ _almanac_source_sibling role.sh   almanac_loop_role_resolve
 #
 # Rule 1 is the "the active run owns its dir for its full lifetime" guarantee
 # — without it, a concurrent run of the same short-slug could race and steal
-# the lookup.
+# the lookup. The var is NEVER exported — dynamic-scope visibility within the
+# run is enough; subprocess agents must not see it.
 almanac_converge_plan_dir() {
   local root="$1"
   local query="$2"
   local resolved
 
-  if [ -n "${ALMANAC_CONVERGE_PLAN_DIR_NAME:-}" ]; then
-    resolved="$ALMANAC_CONVERGE_PLAN_DIR_NAME"
+  if [ -n "${_almanac_converge_active_plan_dir_name:-}" ]; then
+    resolved="$_almanac_converge_active_plan_dir_name"
   elif resolved="$(almanac_converge_resolve_plan_dir_name "$root" "$query" 2>/dev/null)"; then
     :
   else
@@ -844,10 +849,11 @@ almanac_converge_run_finalize() {
   local reason="${4:-}"
 
   trap - EXIT INT TERM
-  # Clear the active-run plan-dir hint so any CLI command run after the loop
-  # exits doesn't accidentally inherit it from the parent env. The dir name
-  # remains discoverable via the run's status.tsv `plan_dir` field.
-  unset ALMANAC_CONVERGE_PLAN_DIR_NAME
+  # _almanac_converge_active_plan_dir_name is local to almanac_converge_run, so
+  # it goes out of scope when that function returns — no explicit cleanup
+  # needed, and no risk of leaking into a CLI command issued after the loop
+  # exits. The dir name remains discoverable via the run's status.tsv
+  # `plan_dir` field.
   [ -n "$run_id" ] || return 0
   almanac_loop_mark_run_status "$root" "$run_id" "$status" "" "$reason" >/dev/null 2>&1 || true
 }
@@ -1193,11 +1199,14 @@ almanac_converge_run() {
   # Scaffold creates a fresh timestamped plan dir; capture the name so every
   # helper within this run targets THE SAME dir for its full lifetime (no
   # races with concurrent same-goal runs that might scaffold their own dir
-  # mid-loop). Export to subprocesses too — the worker / overseer / commit
-  # auto-helper all run in subshells that need to see the name.
-  local plan_dir_name
+  # mid-loop). Stored as a NON-exported shell var: helpers and `(...)`
+  # subshells inherit it via bash dynamic scope, but exec'd subprocess agents
+  # (claude/codex) do not — so a parent converge can't poison a nested agent's
+  # environment with its plan-dir name. Pre-fix this was `export`ed and the
+  # leak silently steered tests/test-converge.sh inside nested agents.
+  local plan_dir_name _almanac_converge_active_plan_dir_name
   plan_dir_name="$(almanac_converge_scaffold "$root" "$goal")"
-  export ALMANAC_CONVERGE_PLAN_DIR_NAME="$plan_dir_name"
+  _almanac_converge_active_plan_dir_name="$plan_dir_name"
   plan_dir="$(almanac_converge_plan_dir "$root" "$plan_dir_name")"
 
   # Persist the dir name on the run's status.tsv so CLI commands run AFTER
