@@ -773,10 +773,17 @@ GOAL_UPDATE: unchanged"
   assert_eq "none" "$ALMANAC_CONVERGE_STEER" "malformed parser input should not steer"
   assert_eq "unchanged" "$ALMANAC_CONVERGE_GOAL_UPDATE" "malformed parser input should not update goal"
 
+  # Partial input — only VERDICT present. Pre-leniency this reset to
+  # CONTINUE on the theory "any missing field = throw away the verdict
+  # too". New policy: VERDICT is honored when present (it's the LLM's
+  # clearest signal); other fields fall to their conservative defaults.
+  # The parse note records what was missing so the operator can see why.
+  # See: test_overseer_parse_partial_output_keeps_verdict for the
+  # full partial-output coverage.
   almanac_converge_overseer_parse "VERDICT: STOP"
-  assert_eq "CONTINUE" "$ALMANAC_CONVERGE_VERDICT" "partial parser input should continue"
-  assert_eq "none" "$ALMANAC_CONVERGE_STEER" "partial parser input should not steer"
-  assert_eq "unchanged" "$ALMANAC_CONVERGE_GOAL_UPDATE" "partial parser input should not update goal"
+  assert_eq "STOP" "$ALMANAC_CONVERGE_VERDICT" "partial parser input keeps VERDICT (new policy)"
+  assert_eq "none" "$ALMANAC_CONVERGE_STEER" "partial parser input still defaults STEER to none"
+  assert_eq "unchanged" "$ALMANAC_CONVERGE_GOAL_UPDATE" "partial parser input still defaults goal to unchanged"
 
   almanac_converge_overseer_parse "VERDICT: NOPE
 REASON: bogus
@@ -853,6 +860,97 @@ GOAL_UPDATE: unchanged"
   assert_eq "" "$ALMANAC_CONVERGE_REASON" "empty REASON remains empty (not a parse failure)"
 
   echo "  PASS: overseer parser captures multi-line REASON/STEER + value-on-next-line"
+}
+
+# Regression: real LLM responses often decorate KEY: markers with markdown
+# bold (`**VERDICT:**`), markdown headings (`### VERDICT:`), or list-bullet
+# styling (`- VERDICT:`). The pre-leniency parser failed every case because
+# the case-match only accepted the literal `VERDICT:` prefix. Three converge
+# runs in a row produced identical "VERDICT=CONTINUE, REASON='', STEER=none,
+# GOAL_UPDATE=unchanged" overseer logs — the parser's silent fallback to
+# defaults, NOT what the LLM actually said. The fix strips a tight whitelist
+# of decorative prefixes before the case match.
+test_overseer_parse_tolerates_markdown_decorated_keys() {
+  # Markdown bold around the keys (the most common shape — `**VERDICT:** value`)
+  almanac_converge_overseer_parse "**VERDICT:** CONTINUE
+**REASON:** the run is healthy
+**STEER:** focus on the test suite
+**GOAL_UPDATE:** unchanged"
+  assert_eq "CONTINUE" "$ALMANAC_CONVERGE_VERDICT" "**bold** keys: verdict captured"
+  assert_eq "the run is healthy" "$ALMANAC_CONVERGE_REASON" "**bold** keys: reason captured"
+  assert_eq "focus on the test suite" "$ALMANAC_CONVERGE_STEER" "**bold** keys: steer captured"
+
+  # Markdown headings (rarer but seen)
+  almanac_converge_overseer_parse "### VERDICT: CONVERGED
+### REASON: done
+### STEER: none
+### GOAL_UPDATE: unchanged"
+  assert_eq "CONVERGED" "$ALMANAC_CONVERGE_VERDICT" "### heading keys: verdict captured"
+  assert_eq "done" "$ALMANAC_CONVERGE_REASON" "### heading keys: reason captured"
+
+  # List-bullet styling
+  almanac_converge_overseer_parse "- VERDICT: CONTINUE
+- REASON: keep going
+- STEER: none
+- GOAL_UPDATE: unchanged"
+  assert_eq "CONTINUE" "$ALMANAC_CONVERGE_VERDICT" "- bullet keys: verdict captured"
+  assert_eq "keep going" "$ALMANAC_CONVERGE_REASON" "- bullet keys: reason captured"
+
+  # Mix-and-match: some keys decorated, some plain — still captures all
+  almanac_converge_overseer_parse "**VERDICT:** STOP
+REASON: ship it
+**STEER:** none
+GOAL_UPDATE: unchanged"
+  assert_eq "STOP" "$ALMANAC_CONVERGE_VERDICT" "mixed decoration: verdict captured"
+  assert_eq "ship it" "$ALMANAC_CONVERGE_REASON" "mixed decoration: plain key still works"
+
+  echo "  PASS: overseer parser tolerates **bold**, ### heading, and - bullet KEY decoration"
+}
+
+# Regression: partial-output policy. Pre-fix, if the LLM forgot to emit any
+# one of REASON / STEER / GOAL_UPDATE, the parser bailed and reset ALL
+# fields to defaults — including discarding the VERDICT the LLM DID emit
+# clearly. Three converge runs all looked like "the LLM said CONTINUE,
+# nothing else" when really the LLM might have emitted VERDICT + a prose
+# paragraph (no `REASON:` marker). Now: bail only on missing VERDICT;
+# default-fill the other fields and surface the gap in ALMANAC_CONVERGE_PARSE_NOTE
+# so overseer.log records WHY the output was incomplete.
+test_overseer_parse_partial_output_keeps_verdict() {
+  # LLM emits VERDICT + free-form prose (no other KEY: markers). The
+  # verdict should still be honored; the absent fields get defaults; the
+  # parse note tells the operator what was missing.
+  almanac_converge_overseer_parse "VERDICT: CONVERGED
+The codebase has no major issues left. All findings from prior rounds
+have been addressed. Ship it."
+  assert_eq "CONVERGED" "$ALMANAC_CONVERGE_VERDICT" "partial: VERDICT honored even with no other keys"
+  assert_eq "" "$ALMANAC_CONVERGE_REASON" "partial: REASON defaults to empty"
+  assert_eq "none" "$ALMANAC_CONVERGE_STEER" "partial: STEER defaults to none"
+  assert_eq "unchanged" "$ALMANAC_CONVERGE_GOAL_UPDATE" "partial: GOAL_UPDATE defaults to unchanged"
+  case "$ALMANAC_CONVERGE_PARSE_NOTE" in
+    *"missing fields"*"REASON"*"STEER"*"GOAL_UPDATE"*) : ;;
+    *) fail "PARSE_NOTE should list missing fields (got: '$ALMANAC_CONVERGE_PARSE_NOTE')" ;;
+  esac
+
+  # Missing only one field — partial fill, parse note reflects only that one
+  almanac_converge_overseer_parse "VERDICT: CONTINUE
+REASON: keep going
+GOAL_UPDATE: unchanged"
+  assert_eq "CONTINUE" "$ALMANAC_CONVERGE_VERDICT" "one-missing: verdict captured"
+  assert_eq "keep going" "$ALMANAC_CONVERGE_REASON" "one-missing: reason captured"
+  case "$ALMANAC_CONVERGE_PARSE_NOTE" in
+    *"missing fields"*"STEER"*) : ;;
+    *) fail "PARSE_NOTE should call out STEER specifically (got: '$ALMANAC_CONVERGE_PARSE_NOTE')" ;;
+  esac
+
+  # Truly missing VERDICT — only case that still bails completely
+  almanac_converge_overseer_parse "I don't see a problem here, the run looks done."
+  assert_eq "CONTINUE" "$ALMANAC_CONVERGE_VERDICT" "no-verdict: falls to CONTINUE default"
+  case "$ALMANAC_CONVERGE_PARSE_NOTE" in
+    *"no VERDICT marker found"*) : ;;
+    *) fail "PARSE_NOTE should say no VERDICT marker (got: '$ALMANAC_CONVERGE_PARSE_NOTE')" ;;
+  esac
+
+  echo "  PASS: overseer parser keeps the verdict on partial output, surfaces gaps in PARSE_NOTE"
 }
 
 test_overseer_agent_invoked_read_only_with_role_config() {
@@ -1382,6 +1480,8 @@ test_structured_report_parser_accepts_worker_block
 test_overseer_prompt_embeds_goal_reports_commits_and_contract
 test_overseer_parse_verdicts_and_malformed_input
 test_overseer_parse_captures_multi_line_values
+test_overseer_parse_tolerates_markdown_decorated_keys
+test_overseer_parse_partial_output_keeps_verdict
 test_overseer_agent_invoked_read_only_with_role_config
 test_overseer_converged_stops_loop_and_writes_convergence
 test_convergence_md_labels_non_converged_when_budget_exhausted

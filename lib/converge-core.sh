@@ -209,14 +209,22 @@ $reports
 $commits
 ===== END RECENT CONVERGE COMMITS =====
 
-Output these fields in order with no preamble:
+Output these four fields in order, exactly this raw format, no preamble, no
+markdown decoration, no code fences, no bold, no headings:
+
 VERDICT: <CONVERGED|CONTINUE|STEER|STOP>
 REASON: <one paragraph>
 STEER: <one paragraph, or 'none'>
 GOAL_UPDATE: <new goal.md content, or 'unchanged'>
 
-Be conservative. Malformed output is treated as CONTINUE with no steering and no
-goal update. GOAL_UPDATE may span multiple lines because it is the final field.
+You MUST emit all four KEY: lines even when a value is "none" or "unchanged"
+— a missing line tells the parser you did not respond, not that nothing was
+needed. Do NOT prefix the keys with **bold**, ### headings, - bullet points,
+or > quotes; the keys live at column 0 with the literal colon.
+
+Be conservative. Malformed output is treated as CONTINUE with no steering and
+no goal update. GOAL_UPDATE may span multiple lines because it is the final
+field; the parser captures everything from the GOAL_UPDATE: marker to EOF.
 EOF
 }
 
