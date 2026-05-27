@@ -18,7 +18,7 @@ almanac_converge_plan_dir() {
   local root="$1"
   local slug="$2"
 
-  printf '%s/docs/plans/converge/%s\n' "$root" "$slug"
+  almanac_loop_plan_dir converge "$root" "$slug"
 }
 
 almanac_converge_scaffold() {

@@ -74,7 +74,7 @@ almanac_harden_rubric_path() {
   local slug
 
   slug="$(almanac_loop_slug "$target")"
-  printf '%s/docs/plans/harden/%s/rubric.md\n' "$root" "$slug"
+  printf '%s/rubric.md\n' "$(almanac_loop_plan_dir harden "$root" "$slug")"
 }
 
 almanac_harden_write_rubric() {
@@ -476,7 +476,7 @@ almanac_harden_ledger_path() {
   local slug
 
   slug="$(almanac_loop_slug "$target")"
-  printf '%s/docs/plans/harden/%s/findings.md\n' "$root" "$slug"
+  printf '%s/findings.md\n' "$(almanac_loop_plan_dir harden "$root" "$slug")"
 }
 
 # Deterministic finding identity. Two reviewer reports of the same defect

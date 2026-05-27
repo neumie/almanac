@@ -948,6 +948,29 @@ test_worker_file_joins_filename_under_worker_dir() {
   echo "  PASS: worker_file appends a named file under worker_dir"
 }
 
+test_plan_dir_composes_root_docs_plans_type_slug() {
+  local tmp actual
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  actual="$(almanac_loop_plan_dir "harden" "$tmp" "src-app-js")"
+  assert_eq "$tmp/docs/plans/harden/src-app-js" "$actual" \
+    "plan_dir = <root>/docs/plans/<type>/<slug>"
+  actual="$(almanac_loop_plan_dir "converge" "$tmp" "say-hello")"
+  assert_eq "$tmp/docs/plans/converge/say-hello" "$actual" \
+    "plan_dir composes the same path shape for every loop type"
+  echo "  PASS: plan_dir composes <root>/docs/plans/<type>/<slug>"
+}
+
+test_plan_dir_passes_through_caller_slug() {
+  local tmp actual
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  # plan_dir is a pure path joiner — it must NOT re-slugify. Caller-supplied
+  # slugs (raw strings) are emitted verbatim so the helper stays single-purpose.
+  actual="$(almanac_loop_plan_dir "harden" "$tmp" "Already Has Spaces")"
+  assert_eq "$tmp/docs/plans/harden/Already Has Spaces" "$actual" \
+    "plan_dir must not slugify its slug argument (slugification is the caller's job)"
+  echo "  PASS: plan_dir does not re-slugify its slug argument"
+}
+
 test_worker_paths_agree_on_shared_directory() {
   local tmp dir status_file event_file
   new_tmpdir; tmp="$NEW_TMPDIR"
@@ -1019,6 +1042,8 @@ test_worker_dir_composes_registry_run_worker_with_slug
 test_worker_dir_slugifies_the_worker_id
 test_worker_status_file_is_status_tsv_under_worker_dir
 test_worker_file_joins_filename_under_worker_dir
+test_plan_dir_composes_root_docs_plans_type_slug
+test_plan_dir_passes_through_caller_slug
 test_worker_paths_agree_on_shared_directory
 
 echo ""

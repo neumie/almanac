@@ -149,6 +149,19 @@ almanac_loop_slug() {
   printf '%s\n' "$slug"
 }
 
+# A loop's plan dir: <root>/docs/plans/<type>/<slug>. Each loop's plan/rubric/
+# ledger paths compose off this, so the docs/plans/<type>/<slug> prefix lives in
+# exactly one place. Caller supplies an already-slugified key (loops use
+# almanac_loop_slug) so this stays a pure path joiner — no second slug pass
+# muddying the contract.
+almanac_loop_plan_dir() {
+  local type="$1"
+  local root="$2"
+  local slug="$3"
+
+  printf '%s/docs/plans/%s/%s\n' "$root" "$type" "$slug"
+}
+
 almanac_loop_now_utc() {
   date -u '+%Y-%m-%dT%H:%M:%SZ'
 }
