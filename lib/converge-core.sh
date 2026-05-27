@@ -334,42 +334,35 @@ $reports
 $commits
 ===== END RECENT CONVERGE COMMITS =====
 
-Output these four fields in order, exactly this raw format, no preamble, no
-markdown decoration, no code fences, no bold, no headings:
+Notes on GOAL_UPDATE (used below): emit a rewritten goal ONLY if the current
+goal is structurally broken — too vague to judge (no falsifiable criterion),
+too narrow to permit real fixes, phrased as absence-of-problem when the work
+needs presence-of-property, or contradicted by what every recent self-report
+says is the real work. Otherwise emit the literal word 'unchanged'. Goal
+mutation is steering, not editorial polish. GOAL_UPDATE may span multiple
+lines because it is the final field; the parser captures everything from the
+GOAL_UPDATE: marker to EOF.
+
+Now respond — emit EXACTLY these four lines, in this order, no preamble, no
+markdown decoration (no **bold**, no ### headings, no - bullets, no > quotes,
+no code fences). Each KEY lives at column 0 with the literal colon:
 
 VERDICT: <CONVERGED|CONTINUE|STEER|STOP>
-REASON: <one paragraph>
-STEER: <one paragraph, or 'none'>
-GOAL_UPDATE: <new goal.md content, or 'unchanged'>
+REASON: <one paragraph explaining the verdict>
+STEER: <one paragraph of next-round guidance, or the literal word 'none'>
+GOAL_UPDATE: <complete new goal.md text, or the literal word 'unchanged'>
 
-You MUST emit all four KEY: lines even when a value is "none" or "unchanged"
-— a missing line tells the parser you did not respond, not that nothing was
-needed. Do NOT prefix the keys with **bold**, ### headings, - bullet points,
-or > quotes; the keys live at column 0 with the literal colon.
+All four lines are REQUIRED. Skipping any of them is a protocol violation —
+the parser will tag it with PARSE_NOTE and the operator will see the gap in
+overseer.log. If a value is "none" or "unchanged", write that word; don't
+omit the line.
 
-GOAL_UPDATE guidance — when to emit a rewritten goal vs 'unchanged':
+Example response (verbatim shape — copy the structure, fill the values):
 
-  Emit 'unchanged' UNLESS the current goal is structurally broken:
-    - Too vague to judge against (no falsifiable criterion — "make it good")
-    - Too narrow to permit real fixes (locks out a needed direction)
-    - Phrased as the absence of a problem ("no X left") when the work
-      actually requires presence of a property ("X under control")
-    - Contradicted by what every recent self-report says is the real work
-      (the workers keep doing Y, but the goal asks for Z that Y doesn't
-      reach)
-
-  Do NOT mutate the goal just to:
-    - Add detail that makes you feel productive
-    - Narrow it to whatever the current round happened to focus on
-    - Phrase it more elegantly without changing meaning
-
-  A goal mutation is a controlled steering act, not editorial polish. If
-  the current goal would let you correctly answer the question "is this
-  done?", emit 'unchanged'.
-
-Be conservative. Malformed output is treated as CONTINUE with no steering and
-no goal update. GOAL_UPDATE may span multiple lines because it is the final
-field; the parser captures everything from the GOAL_UPDATE: marker to EOF.
+VERDICT: CONTINUE
+REASON: Round 4 surveyed 8 candidates and round 5 implemented finding #3 (extract role-env emitter). Three candidates remain unaddressed; the run hasn't yet converged because the worker is still finding work.
+STEER: Implement finding #2 from round 4 (control-file wrapper deduplication) — the seam shows up in two adapters so the extraction will pay.
+GOAL_UPDATE: unchanged
 EOF
 }
 

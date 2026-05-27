@@ -848,7 +848,7 @@ test_overseer_prompt_embeds_goal_reports_commits_and_contract() {
   assert_contains "$prompt" "CONVERGE(overseer-goal): fake progress" "overseer prompt should include matching commit log"
   assert_contains "$prompt" "VERDICT: <CONVERGED|CONTINUE|STEER|STOP>" \
     "overseer prompt should specify verdict contract"
-  assert_contains "$prompt" "GOAL_UPDATE: <new goal.md content, or 'unchanged'>" \
+  assert_contains "$prompt" "GOAL_UPDATE: <complete new goal.md text, or the literal word 'unchanged'>" \
     "overseer prompt should specify goal update contract"
   # GOAL_UPDATE guidance: discourage editorial polish, demand a structural
   # reason for mutation. Without this, LLMs default to "unchanged" by path-
@@ -859,7 +859,31 @@ test_overseer_prompt_embeds_goal_reports_commits_and_contract() {
   assert_contains "$prompt" "editorial polish" \
     "overseer prompt should explicitly discourage editorial-only mutations"
 
-  echo "  PASS: overseer prompt embeds goal, bounded reports, commits, and contract"
+  # Regression for the "skipped fields" bug: observed 10 consecutive ticks of
+  # raw response = `GOAL_UPDATE: unchanged` only (zero VERDICT / REASON /
+  # STEER lines). The LLM read the prompt's old "Be conservative. Malformed
+  # output is treated as CONTINUE..." disclaimer as license to skip fields.
+  # The fix removes that escape hatch + adds a literal example response so
+  # the LLM has a concrete template to mimic.
+  assert_contains "$prompt" "All four lines are REQUIRED" \
+    "overseer prompt should demand all four lines (no skipping)"
+  assert_contains "$prompt" "Example response" \
+    "overseer prompt should anchor with a literal example response"
+  # The example itself must contain a valid VERDICT-line + REASON-line +
+  # STEER-line + GOAL_UPDATE-line so the LLM sees the full shape.
+  assert_contains "$prompt" $'VERDICT: CONTINUE\nREASON:' \
+    "example response should emit VERDICT then REASON"
+  assert_contains "$prompt" $'STEER:'"$(printf ' ')""Implement" \
+    "example response should emit a concrete STEER paragraph (not just 'none')"
+  # The "Be conservative / malformed output → CONTINUE" disclaimer is gone —
+  # it gave the LLM permission to skip fields.
+  case "$prompt" in
+    *"Be conservative. Malformed output"*)
+      fail "old 'Be conservative. Malformed output...' disclaimer must not appear (gave LLM permission to skip fields)"
+      ;;
+  esac
+
+  echo "  PASS: overseer prompt embeds goal, bounded reports, commits, contract, and anchoring example"
 }
 
 test_overseer_parse_verdicts_and_malformed_input() {
