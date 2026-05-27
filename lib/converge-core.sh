@@ -1113,8 +1113,8 @@ almanac_converge_run_overseer() {
   _info "Converge overseer tick $round (provider=$provider, log: ${events_file#"$root"/})"
 
   rc=0
-  (cd "$root" && almanac_loop_agent_stream "$provider" "$model" "$effort" "read-only" \
-    "$prompt_file" "$result_file" "$events_file" merge-stderr) || rc=$?
+  almanac_converge_agent_in_root stream "$root" "$provider" "$model" "$effort" "read-only" \
+    "$prompt_file" "$result_file" "$events_file" merge-stderr || rc=$?
 
   result=""
   [ -s "$result_file" ] && result="$(cat "$result_file")"
