@@ -1213,7 +1213,7 @@ almanac_converge_run() {
   # goes out of scope when the function returns — no explicit cleanup needed,
   # and no risk of leaking into a CLI command issued after the loop exits.
   # The dir name remains discoverable via the run's status.tsv `plan_dir` field.
-  almanac_loop_install_finalize_trap almanac_loop_run_finalize "$root" "$run_id"
+  almanac_loop_install_finalize_trap "$root" "$run_id"
 
   # Persist enough of the launch config that the hub's resume path can rebuild
   # the same invocation from status.tsv alone — see almanac_loop_converge_status_to_opts.

@@ -498,11 +498,17 @@ almanac_loop_update_run_progress() {
 }
 
 # Install the canonical run-lifecycle trap: on EXIT, INT, or TERM, call
-# FINALIZE_FN with (ROOT, RUN_ID, "aborted"). Every loop's `almanac_*_run`
-# uses this so an unexpected termination (signal, mid-round `_die`) leaves the
-# registry entry in a terminal `aborted` state instead of stuck `running`; the
-# normal exit paths in each loop's finalize call still mark `done`/`failed`
-# first and clear the trap implicitly when they return.
+# `almanac_loop_run_finalize` with (ROOT, RUN_ID, "aborted"). Every loop's
+# `almanac_*_run` uses this so an unexpected termination (signal, mid-round
+# `_die`) leaves the registry entry in a terminal `aborted` state instead of
+# stuck `running`; the normal exit paths in each loop's finalize call still
+# mark `done`/`failed` first and clear the trap implicitly when they return.
+#
+# The finalize callee is baked in: there is one canonical finalize fn in this
+# module, and a finalize_fn parameter was a shallow seam (one adapter ever).
+# Callers passing it threaded a literal in three places — the rename hazard
+# (the literal drifting from the function name) is foreclosed by removing the
+# parameter; both call sites simplify to `<helper> $root $run_id`.
 #
 # The %q bake is the load-bearing detail: bash uses dynamic scoping for trap
 # text expansion, so by the time the trap fires the outer caller's `run_id`
@@ -516,11 +522,10 @@ almanac_loop_update_run_progress() {
 # the two call sites used to be near-identical 4-line copies, only one of
 # which carried the explanatory comment.
 almanac_loop_install_finalize_trap() {
-  local finalize_fn="$1"
-  local root="$2"
-  local run_id="$3"
+  local root="$1"
+  local run_id="$2"
   local cmd
-  printf -v cmd '%s %q %q aborted' "$finalize_fn" "$root" "$run_id"
+  printf -v cmd 'almanac_loop_run_finalize %q %q aborted' "$root" "$run_id"
   trap "${cmd}; exit 130" INT TERM
   trap "${cmd}" EXIT
 }

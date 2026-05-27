@@ -1567,7 +1567,7 @@ almanac_harden_run() {
     # clear this via almanac_loop_run_finalize. The shared helper owns the
     # %q bake that defends against inner-frame `local run_id` shadowing — see
     # `almanac_loop_install_finalize_trap` in lib/run.sh for the full why.
-    almanac_loop_install_finalize_trap almanac_loop_run_finalize "$root" "$run_id"
+    almanac_loop_install_finalize_trap "$root" "$run_id"
   fi
 
   round=0
