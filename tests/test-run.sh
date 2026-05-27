@@ -592,6 +592,83 @@ test_run_signal_file_maps_type_to_dotfile() {
   echo "  PASS: run signal file maps type to dotfile"
 }
 
+test_consume_signal_returns_contents_and_deletes_file() {
+  local tmp file out rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  # Steer-shaped consume: contents flow through, file is removed.
+  file="$tmp/.harden-steer"
+  printf 'redirect: stop adding perf tests\n' > "$file"
+  out="$(almanac_loop_consume_signal harden "$tmp" steer)"
+  rc=$?
+  assert_eq "0" "$rc" "consume must return 0 when the signal file exists"
+  assert_eq "redirect: stop adding perf tests" "$out" \
+    "consume must emit the file's contents on stdout"
+  [ ! -f "$file" ] || fail "consume must delete the signal file after reading"
+
+  # Stop-shaped consume: an empty file is still 'present', returns 0 with empty
+  # stdout. Matches harden's pre-deepening _consume_stop semantics (touch + rm,
+  # no content carried), so a `touch .harden-stop` still trips the loop.
+  file="$tmp/.harden-stop"
+  : > "$file"
+  out="$(almanac_loop_consume_signal harden "$tmp" stop)"
+  rc=$?
+  assert_eq "0" "$rc" "consume must return 0 for an empty signal file"
+  assert_eq "" "$out" "consume must emit nothing for an empty signal file"
+  [ ! -f "$file" ] || fail "consume must delete an empty signal file too"
+
+  echo "  PASS: consume signal returns contents and deletes the file"
+}
+
+test_consume_signal_returns_nonzero_when_absent() {
+  local tmp out rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  # Missing file: nonzero return, no output, no side effects.
+  rc=0
+  out="$(almanac_loop_consume_signal harden "$tmp" steer)" || rc=$?
+  assert_eq "1" "$rc" "consume must return 1 when the signal file is absent"
+  assert_eq "" "$out" "consume must emit nothing when the signal file is absent"
+
+  # Unknown kind/type: nonzero return via almanac_loop_run_control_file.
+  rc=0
+  out="$(almanac_loop_consume_signal bogus "$tmp" stop)" || rc=$?
+  [ "$rc" -ne 0 ] || fail "consume must return non-zero for unknown loop type"
+
+  rc=0
+  out="$(almanac_loop_consume_signal harden "$tmp" bogus)" || rc=$?
+  [ "$rc" -ne 0 ] || fail "consume must return non-zero for unknown signal kind"
+
+  echo "  PASS: consume signal returns nonzero when absent or unknown"
+}
+
+test_consume_signal_routes_through_per_run_base() {
+  local tmp plan_a plan_b out rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  # Converge scopes its signals to a per-run plan_dir (not $root) so a steer
+  # queued for run A does not bleed into run B that happens to share the
+  # workspace. Mirror that scoping by passing distinct bases.
+  plan_a="$tmp/plan-a"
+  plan_b="$tmp/plan-b"
+  mkdir -p "$plan_a" "$plan_b"
+
+  printf 'directive for A\n' > "$plan_a/.converge-steer"
+  printf 'directive for B\n' > "$plan_b/.converge-steer"
+
+  out="$(almanac_loop_consume_signal converge "$plan_a" steer)"
+  rc=$?
+  assert_eq "0" "$rc" "per-base consume must succeed for plan A"
+  assert_eq "directive for A" "$out" "per-base consume must return A's directive"
+  [ ! -f "$plan_a/.converge-steer" ] || fail "consuming A must delete A's signal"
+  [ -f "$plan_b/.converge-steer" ] || fail "consuming A must NOT touch B's signal"
+
+  echo "  PASS: consume signal routes through per-run base"
+}
+
 test_run_stop_writes_stopfile_and_signals() {
   local tmp rc
   new_tmpdir
@@ -1074,6 +1151,9 @@ test_hub_render_recent_newest_first_capped
 test_hub_overview_degrades_without_gum
 test_hub_overview_empty_registry_shows_empty_states
 test_run_signal_file_maps_type_to_dotfile
+test_consume_signal_returns_contents_and_deletes_file
+test_consume_signal_returns_nonzero_when_absent
+test_consume_signal_routes_through_per_run_base
 test_run_stop_writes_stopfile_and_signals
 test_run_stop_does_not_signal_recorded_pid
 test_run_stop_ignores_finished_runs

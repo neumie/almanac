@@ -217,15 +217,11 @@ almanac_converge_worker_prompt() {
   local goal="$2"
   local exec_cmd="$3"
   local round="$4"
-  local slug plan_dir rel_plan steer_file
+  local slug plan_dir rel_plan steer_content
 
   slug="$(almanac_loop_slug "$goal")"
   plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
   rel_plan="${plan_dir#"$root"/}"
-  # Signal files live in the plan dir (per-run scope), not at $root — so a
-  # CONVERGED verdict from one converge run cannot poison another sharing
-  # the same workspace.
-  steer_file="$(almanac_loop_run_control_file converge "$plan_dir" steer)"
 
   almanac_converge_ensure_prompt_template "$root" "$goal"
 
@@ -261,16 +257,11 @@ $exec_cmd
 ===== END EXEC COMMAND =====
 EOF
 
-  if [ -f "$steer_file" ]; then
-    cat <<'EOF'
-
-===== STEER =====
-EOF
-    cat "$steer_file"
-    cat <<'EOF'
-===== END STEER =====
-EOF
-    rm -f "$steer_file"
+  # Signal files live in the plan dir (per-run scope), not at $root — so a
+  # CONVERGED verdict from one converge run cannot poison another sharing
+  # the same workspace.
+  if steer_content="$(almanac_loop_consume_signal converge "$plan_dir" steer)"; then
+    printf '\n===== STEER =====\n%s\n===== END STEER =====\n' "$steer_content"
   fi
 }
 
@@ -993,15 +984,12 @@ almanac_converge_run_worker_prompt() {
   local prompt="$3"
   local round="$4"
   local provider model effort prompt_file result_file events_file rc
-  local slug plan_dir log_file steer_path ts result_summary
+  local slug plan_dir log_file steer_content ts result_summary
 
   IFS=$'\t' read -r provider model effort < <(almanac_converge_role_resolve agent)
   slug="$(almanac_loop_slug "$goal")"
   plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
   log_file="$plan_dir/agent-reports.log"
-  # Steer file lives in the plan dir (per-run scope) — see signal_dir override
-  # in lib/loops/converge.sh.
-  steer_path="$(almanac_loop_run_control_file converge "$plan_dir" steer)"
 
   prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-prompt.XXXXXX")"
   result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-result.XXXXXX")"
@@ -1011,7 +999,8 @@ almanac_converge_run_worker_prompt() {
   events_file="$plan_dir/converge-${provider}-iteration-${round}.log"
 
   # Prompt assembly:
-  #   1. Optional steer directive (one-shot, removed after consumption)
+  #   1. Optional steer directive (one-shot, removed after consumption — the
+  #      steer file is per-plan-dir; see signal_dir override in lib/loops/converge.sh)
   #   2. CONVERGE LOOP ground rules — including commit-message instructions
   #      so the AGENT authors meaningful commit messages instead of the
   #      driver fallback "round N" (which says nothing about what changed)
@@ -1022,11 +1011,8 @@ almanac_converge_run_worker_prompt() {
   # iteration prompt frames the task before listing the rules.
   local rel_plan_for_prompt="${plan_dir#"$root"/}"
   {
-    if [ -f "$steer_path" ]; then
-      printf '# Steer directive (from previous overseer tick):\n'
-      cat "$steer_path"
-      printf '\n\n'
-      rm -f "$steer_path"
+    if steer_content="$(almanac_loop_consume_signal converge "$plan_dir" steer)"; then
+      printf '# Steer directive (from previous overseer tick):\n%s\n\n' "$steer_content"
     fi
     cat <<EOF
 # === CONVERGE LOOP — round $round ===

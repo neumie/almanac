@@ -844,6 +844,27 @@ almanac_loop_run_control_file() {
   printf '%s/%s\n' "$base" "$name"
 }
 
+# One-shot consume of a between-round control signal: if BASE/.${type}-${kind}
+# exists, emit its contents on stdout and delete it; otherwise return 1 with no
+# output. The consume side of the stop/steer contract — harden's
+# almanac_harden_consume_stop/steer wrappers and converge's two inline
+# `if [ -f $steer ]; cat; rm` blocks were three copies of this idiom; this is
+# the seam they collapse onto. Empty file is treated as "present but empty" —
+# returns 0 with empty stdout — matching the pre-deepening behaviour each
+# caller already implemented (harden treats empty steer as "no directive" via
+# the `[ -n "$dir" ]` check downstream). Returns 1 when the kind/type is
+# unknown OR when the file is absent — callers that need to distinguish read
+# `almanac_loop_run_control_file` themselves first.
+almanac_loop_consume_signal() {
+  local type="$1" base="$2" kind="$3"
+  local file
+  file="$(almanac_loop_run_control_file "$type" "$base" "$kind")" || return 1
+  [ -f "$file" ] || return 1
+  cat "$file"
+  rm -f "$file"
+  return 0
+}
+
 # Stop a registered running run: write the run type's stop file under root (runs
 # register with root = their working dir, so the loop sees it at its next
 # between-round check). The registry lives in the project and is not trusted for

@@ -1529,27 +1529,6 @@ almanac_harden_run_finalize() {
   almanac_loop_mark_run_status "$root" "$run_id" "$status" >/dev/null 2>&1 || true
 }
 
-almanac_harden_consume_stop() {
-  local root="$1"
-  local file
-
-  file="$(almanac_loop_run_control_file harden "$root" stop)" || return 1
-  [ -f "$file" ] || return 1
-  rm -f "$file"
-  return 0
-}
-
-almanac_harden_consume_steer() {
-  local root="$1"
-  local file
-
-  file="$(almanac_loop_run_control_file harden "$root" steer)" || return 1
-  [ -f "$file" ] || return 1
-  cat "$file"
-  rm -f "$file"
-  return 0
-}
-
 # Drive the convergence loop: repeat almanac_harden_round under the gate until
 # the target converges, the round budget is exhausted, or the human ships.
 # Budget is configurable (3rd arg, else HARDEN_ROUND_BUDGET, else 5). Each round
@@ -1622,13 +1601,13 @@ almanac_harden_run() {
 
   round=0
   while :; do
-    if almanac_harden_consume_stop "$root"; then
+    if almanac_loop_consume_signal harden "$root" stop >/dev/null; then
       _success "Stop signal detected (.harden-stop); exiting before next round."
       almanac_harden_run_finalize "$root" "$run_id" "done"
       return 0
     fi
 
-    steer_directive="$(almanac_harden_consume_steer "$root" || true)"
+    steer_directive="$(almanac_loop_consume_signal harden "$root" steer || true)"
     if [ -n "$steer_directive" ]; then
       directive="$steer_directive"
       _info "Steering applied for the next round: $directive"
