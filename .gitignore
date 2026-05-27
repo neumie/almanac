@@ -21,6 +21,7 @@ docs/plans/*/overseer.log
 # tracked; the per-round event streams and overseer/agent appendix logs get
 # regenerated each run and are pure noise in `git status`.
 docs/plans/converge/*/converge-*-iteration-*.log
+docs/plans/converge/*/converge-*-overseer-tick-*.log
 docs/plans/converge/*/agent-reports.log
 docs/plans/converge/*/overseer.log
 # Per-run control signals (stop / steer) live in the plan dir now (see

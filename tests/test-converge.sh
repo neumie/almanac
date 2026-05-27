@@ -1086,7 +1086,7 @@ GOAL_UPDATE: unchanged"
 }
 
 test_overseer_agent_invoked_read_only_with_role_config() {
-  local tmp args
+  local tmp args plan events_file
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
@@ -1098,7 +1098,16 @@ test_overseer_agent_invoked_read_only_with_role_config() {
   assert_contains "$args" "--model gpt-overseer" "overseer agent should receive CONVERGE_OVERSEER_MODEL"
   assert_contains "$args" "model_reasoning_effort=\"medium\"" "overseer agent should receive CONVERGE_OVERSEER_EFFORT"
 
-  echo "  PASS: overseer agent uses role config and read-only sandbox"
+  # The overseer's events stream is now persistent (mirroring worker iteration
+  # logs) so the operator can inspect what the overseer LLM did each tick.
+  # Pre-fix the events file was a tempfile, rm'd post-parse — when the
+  # overseer emitted weird/terse output the operator had no forensic trail.
+  plan="$(plan_dir_for_slug "$tmp" "overseer-role")"
+  events_file="$plan/converge-codex-overseer-tick-1.log"
+  [ -f "$events_file" ] || \
+    fail "overseer events file should persist at \$plan_dir/converge-<provider>-overseer-tick-N.log (looked for: $events_file)"
+
+  echo "  PASS: overseer agent uses role config and read-only sandbox + persists events"
 }
 
 test_overseer_converged_stops_loop_and_writes_convergence() {

@@ -1089,21 +1089,37 @@ almanac_converge_run_overseer() {
   local goal="$2"
   local round="$3"
   local provider model effort result rc plan_dir log_file ts
+  local prompt_file result_file events_file
 
   IFS=$'\t' read -r provider model effort < <(almanac_converge_role_resolve overseer)
   plan_dir="$(almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")")"
   log_file="$plan_dir/overseer.log"
 
-  # The overseer is a one-shot capture: prompt in, verdict text out, events
-  # discarded. `capture_text` owns the full tmpfile lifecycle inside a
-  # subshell with an EXIT trap, so cleanup runs on every exit path (the
-  # 3-mktemp manual dance this replaced leaked partial tmpfiles if any of
-  # the three mktemps failed). The in_root wrapper keeps the cwd anchor at
-  # $root, identical to the worker callsites.
+  # Persist the overseer's events stream alongside the worker's iteration
+  # logs. Pre-fix the overseer used `capture_text`, which silently discarded
+  # the events.jsonl after extracting the final message — so when the LLM
+  # emitted weird/terse output (observed: 10 consecutive ticks emitting just
+  # "GOAL_UPDATE: unchanged") the operator had no way to inspect WHAT the
+  # LLM did during the tick. Now: stream to terminal AND persist the events
+  # to $plan_dir/converge-<provider>-overseer-tick-N.log — mirroring the
+  # worker iteration logs, so `tail -f` works live and the file stays for
+  # forensics post-run.
+  prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-overseer-prompt.XXXXXX")"
+  result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-overseer-result.XXXXXX")"
+  events_file="$plan_dir/converge-${provider}-overseer-tick-${round}.log"
+
+  almanac_converge_overseer_prompt "$root" "$goal" "$round" > "$prompt_file"
+
+  _info "Converge overseer tick $round (provider=$provider, log: ${events_file#"$root"/})"
+
   rc=0
-  result="$(almanac_converge_agent_in_root capture_text "$root" \
-    "$provider" "$model" "$effort" "read-only" \
-    "$(almanac_converge_overseer_prompt "$root" "$goal" "$round")")" || rc=$?
+  (cd "$root" && almanac_loop_agent_stream "$provider" "$model" "$effort" "read-only" \
+    "$prompt_file" "$result_file" "$events_file" merge-stderr) || rc=$?
+
+  result=""
+  [ -s "$result_file" ] && result="$(cat "$result_file")"
+  # events_file is persistent — NOT removed here. prompt/result are scratch.
+  rm -f "$prompt_file" "$result_file"
 
   [ "$rc" -eq 0 ] || _warn "Converge overseer tick $round exited $rc; continuing"
   almanac_converge_overseer_parse "$result"
