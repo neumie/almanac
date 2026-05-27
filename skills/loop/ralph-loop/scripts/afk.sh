@@ -360,25 +360,20 @@ STEER: <one paragraph of concrete steering for next iteration, OR the literal wo
 
 Be conservative on DRIFT_LEVEL — only 'high' with clear evidence (the loop stops via .ralph-stop). Be conservative on STEER too — emit 'none' when agents are progressing fine."
 
-  # The overseer's read-only judge call now routes through the shared agent_run
-  # seam (#66 crit 6 — no inline provider exec remains in ralph scripts). The
+  # The overseer's read-only judge call routes through the shared agent_run seam
+  # (#66 crit 6 — no inline provider exec remains in ralph scripts). The
   # `read-only` sandbox maps to claude --permission-mode plan / codex --sandbox
-  # read-only — exactly the read-only modes the overseer used inline. This is a
-  # non-stream seam call: the overseer parses the verdict (it never prints it
-  # live), so the seam captures the model's response to a result file we read
-  # back rather than streaming it. The overseer reuses the iteration agent's
-  # role-resolved AGENT_MODEL/AGENT_EFFORT — its model/effort today. The seam
-  # call is guarded with `|| true` so a flaky/missing provider can never kill the
-  # overseer subshell, matching the old inline `|| true`.
-  local result="" overseer_prompt_file overseer_result_file overseer_events_file overseer_full_prompt
-  overseer_prompt_file=$(mktemp)
-  overseer_result_file=$(mktemp)
-  overseer_events_file=$(mktemp)
-
+  # read-only — exactly the read-only modes the overseer used inline. The
+  # overseer parses the verdict (it never prints it live), so we use the
+  # capture_text variant: prompt-string in, result-string out, with tmpfile
+  # lifecycle owned by an EXIT-trapped subshell so a signal mid-call can't leak
+  # them. The call is guarded with `|| true` so a flaky/missing provider can
+  # never kill the overseer subshell, matching the old inline `|| true`.
+  local result="" overseer_full_prompt
   case "$PROVIDER" in
     claude)
       # claude resolves the @${PROMPT} reference in the prompt itself.
-      printf '%s' "$overseer_prompt" > "$overseer_prompt_file"
+      overseer_full_prompt="$overseer_prompt"
       ;;
     codex)
       # codex exec does not resolve @-references, so inline the PRD/iteration
@@ -387,18 +382,12 @@ Be conservative on DRIFT_LEVEL — only 'high' with clear evidence (the loop sto
 $(cat "$PROMPT")
 
 ${overseer_prompt}"
-      printf '%s' "$overseer_full_prompt" > "$overseer_prompt_file"
       ;;
   esac
 
-  almanac_loop_agent_capture \
+  result="$(almanac_loop_agent_capture_text \
     "$PROVIDER" "$AGENT_MODEL" "$AGENT_EFFORT" read-only \
-    "$overseer_prompt_file" "$overseer_result_file" "$overseer_events_file" \
-    >/dev/null 2>&1 || true
-  if [ -s "$overseer_result_file" ]; then
-    result=$(cat "$overseer_result_file")
-  fi
-  rm -f "$overseer_prompt_file" "$overseer_result_file" "$overseer_events_file"
+    "$overseer_full_prompt" 2>/dev/null || true)"
 
   {
     echo ""

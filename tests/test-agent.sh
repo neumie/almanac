@@ -374,6 +374,88 @@ test_raw_degrades_to_capture_for_non_raw_provider() {
   echo "  PASS: raw degrades to capture for a non-raw provider"
 }
 
+# The raw fallback used to allocate an events tmpfile without ever cleaning it
+# up — a leak per invocation. The RETURN-trapped cleanup must remove the throw-
+# away log on every exit path, including provider failure.
+test_raw_fallback_does_not_leak_events_tmpfile() {
+  local tmp fakebin prompt result tmproot before after rc
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"; prompt="$tmp/prompt.md"; result="$tmp/result.txt"
+  tmproot="$tmp/scratch"; mkdir -p "$tmproot"
+  printf '%s\n' "iterate" > "$prompt"
+  write_fake_claude_agent "$fakebin" "$tmp/claude-args.txt"
+
+  before="$(find "$tmproot" -maxdepth 1 -name 'almanac-loop-events.*' | wc -l | tr -d ' ')"
+  TMPDIR="$tmproot" PATH="$fakebin:$PATH" almanac_loop_agent_raw "claude" "" "" "workspace-write" "$prompt" "$result" >/dev/null
+  after="$(find "$tmproot" -maxdepth 1 -name 'almanac-loop-events.*' | wc -l | tr -d ' ')"
+  assert_eq "$before" "$after" "raw fallback must clean its throwaway events tmpfile (was leaking before)"
+
+  # And on a failing provider (the cleanup must still fire).
+  write_fake_failing_agent "$fakebin" "claude"
+  rc=0
+  TMPDIR="$tmproot" PATH="$fakebin:$PATH" almanac_loop_agent_raw "claude" "" "" "workspace-write" "$prompt" "$result" >/dev/null || rc=$?
+  after="$(find "$tmproot" -maxdepth 1 -name 'almanac-loop-events.*' | wc -l | tr -d ' ')"
+  assert_eq "7" "$rc" "raw fallback should still propagate the provider failure"
+  assert_eq "$before" "$after" "raw fallback must clean its throwaway events tmpfile on failure too"
+  echo "  PASS: raw fallback does not leak events tmpfile"
+}
+
+# --- capture_text --------------------------------------------------------------
+
+# capture_text takes a prompt STRING and returns the provider's result text on
+# stdout. It owns the tmpfile lifecycle inside an EXIT-trapped subshell so
+# callers no longer need to allocate/clean prompt+result+events tmpfiles.
+test_capture_text_returns_result_string() {
+  local tmp fakebin out
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  write_fake_codex_agent "$fakebin" "$tmp/codex-args.txt"
+
+  out="$(PATH="$fakebin:$PATH" almanac_loop_agent_capture_text "codex" "gpt-test" "high" "read-only" "review me")"
+
+  assert_contains "$out" "codex final: review me" "capture_text should return the provider's result on stdout"
+  echo "  PASS: capture_text returns the result string"
+}
+
+# capture_text must propagate the provider's non-zero exit (not mask it behind
+# the subshell), so callers can branch on rc like the file-based capture.
+test_capture_text_propagates_failure() {
+  local tmp fakebin rc
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  write_fake_failing_agent "$fakebin" "codex"
+
+  rc=0
+  PATH="$fakebin:$PATH" almanac_loop_agent_capture_text "codex" "" "" "read-only" "x" >/dev/null 2>&1 || rc=$?
+  assert_eq "7" "$rc" "capture_text should propagate the provider's non-zero exit through the subshell"
+  echo "  PASS: capture_text propagates provider failure"
+}
+
+# capture_text owns its tmpfile lifecycle: the subshell's EXIT trap must clean
+# the workdir regardless of exit path. Without the trap, every invocation
+# leaked one tmpdir under $TMPDIR (the pattern the 3-tmpfile call sites were
+# all rolling by hand).
+test_capture_text_cleans_workdir_on_success_and_failure() {
+  local tmp fakebin tmproot before after rc
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  fakebin="$tmp/bin"
+  tmproot="$tmp/scratch"; mkdir -p "$tmproot"
+
+  write_fake_codex_agent "$fakebin" "$tmp/codex-args.txt"
+  before="$(find "$tmproot" -maxdepth 1 -name 'almanac-capture-text.*' | wc -l | tr -d ' ')"
+  TMPDIR="$tmproot" PATH="$fakebin:$PATH" almanac_loop_agent_capture_text "codex" "" "" "read-only" "x" >/dev/null
+  after="$(find "$tmproot" -maxdepth 1 -name 'almanac-capture-text.*' | wc -l | tr -d ' ')"
+  assert_eq "$before" "$after" "capture_text must clean its workdir on success"
+
+  write_fake_failing_agent "$fakebin" "codex"
+  rc=0
+  TMPDIR="$tmproot" PATH="$fakebin:$PATH" almanac_loop_agent_capture_text "codex" "" "" "read-only" "x" >/dev/null 2>&1 || rc=$?
+  after="$(find "$tmproot" -maxdepth 1 -name 'almanac-capture-text.*' | wc -l | tr -d ' ')"
+  assert_eq "7" "$rc" "capture_text must still propagate failure when cleaning"
+  assert_eq "$before" "$after" "capture_text must clean its workdir on failure"
+  echo "  PASS: capture_text cleans workdir on success and failure"
+}
+
 echo "=== Agent Run-Shape Tests ==="
 test_capture_invokes_codex_with_common_config
 test_capture_invokes_claude_with_common_config
@@ -387,5 +469,9 @@ test_stream_propagates_failure
 test_stream_merge_stderr_is_opt_in
 test_raw_codex_passes_native_output_through
 test_raw_degrades_to_capture_for_non_raw_provider
+test_raw_fallback_does_not_leak_events_tmpfile
+test_capture_text_returns_result_string
+test_capture_text_propagates_failure
+test_capture_text_cleans_workdir_on_success_and_failure
 
 echo "All agent run-shape tests passed."

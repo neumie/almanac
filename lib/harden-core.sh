@@ -826,12 +826,18 @@ EOF
 # (the negative "HARDEN_VERDICT=not-reproduces" cannot match it — the char after
 # `=` is `n`, not `r`). Anything else (no token, garbled, only the negative) reads
 # as "not", so an un-parseable verdict is conservatively a non-blocking note.
+# Two arities so callers can pass either a result FILE or the result TEXT (the
+# string variant lets agent_capture_text callers avoid materialising a tmpfile
+# just to grep it).
 almanac_harden_ratify_verdict() {
   local result_file="$1"
-
   [ -f "$result_file" ] || { printf '%s\n' "not"; return 0; }
+  almanac_harden_ratify_verdict_text "$(cat "$result_file")"
+}
 
-  if grep -Fxq 'HARDEN_VERDICT=reproduces' "$result_file" 2>/dev/null; then
+almanac_harden_ratify_verdict_text() {
+  local result_text="$1"
+  if printf '%s\n' "$result_text" | grep -Fxq 'HARDEN_VERDICT=reproduces' 2>/dev/null; then
     printf '%s\n' "reproduces"
   else
     printf '%s\n' "not"
@@ -858,35 +864,25 @@ almanac_harden_demo_reproduces() {
   local conductor_provider="${3:-}"
   local conductor_model="${4:-}"
   local conductor_effort="${5:-}"
-  local prompt_file result_file events_file verdict rc
+  local result_text rc=0
 
   # Nothing to execute / no provider to execute it through -> conservative note.
   [ -n "$demonstration" ] || return 1
   [ -n "$conductor_provider" ] || return 1
 
-  prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-ratify-prompt.XXXXXX")" || return 1
-  result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-ratify-result.XXXXXX")" || { rm -f "$prompt_file"; return 1; }
-  events_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-ratify-events.XXXXXX")" || { rm -f "$prompt_file" "$result_file"; return 1; }
-
-  almanac_harden_ratify_prompt "$demonstration" "$target_path" > "$prompt_file"
-
   # Reviewer text is untrusted. Ratification may inspect/run existing repro
-  # commands, but it must not write to the repo before the single fixer phase.
-  rc=0
-  almanac_loop_agent_capture "$conductor_provider" "$conductor_model" "$conductor_effort" \
-    "read-only" "$prompt_file" "$result_file" "$events_file" >/dev/null 2>&1 || rc=$?
+  # commands, but it must not write to the repo before the single fixer phase
+  # (read-only sandbox). capture_text owns the prompt/result/events tmpfiles via
+  # an EXIT-trapped subshell, so a signal mid-call can't leak them.
+  result_text="$(almanac_loop_agent_capture_text \
+    "$conductor_provider" "$conductor_model" "$conductor_effort" "read-only" \
+    "$(almanac_harden_ratify_prompt "$demonstration" "$target_path")" 2>/dev/null)" || rc=$?
 
-  if [ "$rc" -ne 0 ]; then
-    # Provider missing/crashed or the demonstration was un-runnable: cannot
-    # confirm reproduction -> non-blocking note, never a hang or a hard failure.
-    rm -f "$prompt_file" "$result_file" "$events_file"
-    return 1
-  fi
+  # Provider missing/crashed or the demonstration was un-runnable: cannot
+  # confirm reproduction -> non-blocking note, never a hang or a hard failure.
+  [ "$rc" -eq 0 ] || return 1
 
-  verdict="$(almanac_harden_ratify_verdict "$result_file")"
-  rm -f "$prompt_file" "$result_file" "$events_file"
-
-  [ "$verdict" = "reproduces" ] && return 0
+  [ "$(almanac_harden_ratify_verdict_text "$result_text")" = "reproduces" ] && return 0
   return 1
 }
 
@@ -1214,7 +1210,7 @@ almanac_harden_fix() {
   local round="${3:-1}"
   local directive="${4:-}"
   local target_path ledger_path rubric_path open findings_text count
-  local provider model effort prompt_file result_file events_file rubric_snapshot rc
+  local provider model effort rubric_snapshot rc
   local id lens severity location claim demonstration
 
   target_path="$(almanac_harden_target_path "$root" "$target")"
@@ -1247,11 +1243,6 @@ INNER
 
   IFS=$'\t' read -r provider model effort < <(almanac_harden_role_resolve fixer)
 
-  prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-fixer-prompt.XXXXXX")"
-  result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-fixer-result.XXXXXX")"
-  events_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-fixer-events.XXXXXX")"
-  almanac_harden_fixer_prompt "$target" "$findings_text" "$rubric_path" "$directive" > "$prompt_file"
-
   # The rubric is immutable to agents during a run. The fixer is write-capable,
   # so bracket its agent call: snapshot before, verify (revert + warn) after.
   rubric_snapshot=""
@@ -1261,11 +1252,13 @@ INNER
 
   _info "Fixing $count open blocking finding(s) with one sequential fixer (provider=$provider, write-capable)"
 
+  # Fire-and-forget: the fixer writes to the workspace; we only care about its
+  # exit code. capture_text owns the tmpfile lifecycle so a signal mid-call
+  # can't leak prompt/result/events files.
   rc=0
-  almanac_loop_agent_capture "$provider" "$model" "$effort" "workspace-write" \
-    "$prompt_file" "$result_file" "$events_file" >/dev/null || rc=$?
-
-  rm -f "$prompt_file" "$result_file" "$events_file"
+  almanac_loop_agent_capture_text "$provider" "$model" "$effort" "workspace-write" \
+    "$(almanac_harden_fixer_prompt "$target" "$findings_text" "$rubric_path" "$directive")" \
+    >/dev/null || rc=$?
 
   if [ -n "$rubric_snapshot" ]; then
     almanac_harden_rubric_verify "$rubric_path" "$rubric_snapshot" || true

@@ -242,6 +242,39 @@ almanac_loop_agent_stream() {
   return 0
 }
 
+# capture_text: capture variant that takes the prompt as a STRING and returns the
+# provider's result text on stdout. Owns the full tmpfile lifecycle (prompt,
+# result, events) inside a subshell with an EXIT trap, so cleanup runs on every
+# exit path — normal return, error, signal — without leaking the parent's traps.
+# Provider stderr is NOT silenced (callers that want quiet add `2>/dev/null`).
+# The provider's exit code propagates as the function's exit. Use this when the
+# caller only needs the result text (overseer judgments, ratification verdicts,
+# fire-and-forget fixer dispatches); use almanac_loop_agent_capture directly
+# when you need the events.jsonl to persist beyond the call.
+# Usage: almanac_loop_agent_capture_text <provider> <model> <effort> <sandbox> <prompt_text>
+almanac_loop_agent_capture_text() {
+  [ "$#" -ge 5 ] || return 2
+  local provider="$1" model="$2" effort="$3" sandbox="$4" prompt_text="$5"
+  [ -n "$provider" ] || return 2
+
+  (
+    local workdir="" rc=0
+    # Trap installed BEFORE mktemp so any failure path (mktemp itself, the
+    # capture call, an early `exit "$?"`) still hits cleanup; the guard makes
+    # the trap a no-op if workdir was never populated. Subshell-scoped trap, so
+    # the parent's traps are unaffected.
+    trap '[ -n "${workdir:-}" ] && rm -rf "$workdir"' EXIT
+    workdir="$(mktemp -d "${TMPDIR:-/tmp}/almanac-capture-text.XXXXXX")" || exit 1
+
+    printf '%s' "$prompt_text" > "$workdir/prompt"
+    almanac_loop_agent_capture "$provider" "$model" "$effort" "$sandbox" \
+      "$workdir/prompt" "$workdir/result" "$workdir/events" || exit "$?"
+
+    [ -s "$workdir/result" ] && cat "$workdir/result"
+    exit 0
+  )
+}
+
 # raw: native passthrough for adapters that declare *_supports_raw (codex omits
 # --json so its native output streams straight to the terminal — no jq filter, no
 # events capture). The direct exec keeps $? as the provider's exit. A provider
@@ -253,16 +286,22 @@ almanac_loop_agent_raw() {
   [ "$#" -ge 6 ] || return 2
   local provider="$1" model="$2" effort="$3" sandbox="$4"
   local prompt_file="$5" result_file="$6"
-  local key prompt events_file
+  local key prompt events_file rc=0
   [ -n "$provider" ] || return 2
   [ -f "$prompt_file" ] || return 2
 
   key="$(almanac_provider_key "$provider")"
   if ! declare -F "almanac_provider_${key}_supports_raw" >/dev/null 2>&1; then
-    events_file="$(mktemp "${TMPDIR:-/tmp}/almanac-loop-events.XXXXXX")"
+    # The raw fallback's events log is throwaway (the shape doesn't persist
+    # events for the caller, unlike capture). Explicit cleanup after capture
+    # closes the leak the original return-and-go shape introduced. A bash
+    # RETURN trap is not used: trap scope is global, so a function-scoped
+    # cleanup that referenced a local would fire on every subsequent return.
+    events_file="$(mktemp "${TMPDIR:-/tmp}/almanac-loop-events.XXXXXX")" || return 1
     almanac_loop_agent_capture "$provider" "$model" "$effort" "$sandbox" \
-      "$prompt_file" "$result_file" "$events_file"
-    return "$?"
+      "$prompt_file" "$result_file" "$events_file" || rc=$?
+    rm -f "$events_file"
+    return "$rc"
   fi
 
   _almanac_agent_build "$provider" "$model" "$effort" "$sandbox" "$result_file" "raw" || return
