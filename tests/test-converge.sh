@@ -892,14 +892,126 @@ GOAL_UPDATE: unchanged" \
 
   convergence="$tmp/docs/plans/converge/converged-goal/convergence.md"
   [ -f "$convergence" ] || fail "convergence.md should be written on terminal exit"
-  assert_file_contains "$convergence" "## Final verdict" "convergence.md should include final verdict section"
-  assert_file_contains "$convergence" "CONVERGED" "convergence.md should include verdict value"
+  assert_file_contains "$convergence" "## Outcome" "convergence.md should include outcome section"
+  assert_file_contains "$convergence" "CONVERGED" "convergence.md should label the outcome"
+  assert_file_contains "$convergence" "## Last overseer verdict" "convergence.md should include the raw last verdict"
   assert_file_contains "$convergence" "## Tick count" "convergence.md should include tick count section"
   assert_file_contains "$convergence" "## Time elapsed" "convergence.md should include elapsed section"
   assert_file_contains "$convergence" "## Final goal" "convergence.md should include final goal section"
-  assert_file_contains "$convergence" "## Final reason" "convergence.md should include final reason section"
+  assert_file_contains "$convergence" "## Termination reason" "convergence.md should include termination reason section"
 
   echo "  PASS: CONVERGED verdict stops loop, marks done, writes convergence.md"
+}
+
+# Regression for the misleading-format bug observed in run-the-prompt-…
+# convergence.md: when the loop hit its 10-round budget without the overseer
+# saying CONVERGED, the file wrote "Final verdict: CONTINUE" — which the next
+# converge run's agent misread as "the system decided this is done; don't
+# duplicate that work". Fix: the convergence.md now writes a distinct
+# `## Outcome` field saying NON_CONVERGED explicitly, with a one-line summary
+# noting the budget was exhausted. The raw last overseer verdict moves to a
+# separate informational section.
+test_convergence_md_labels_non_converged_when_budget_exhausted() {
+  local tmp convergence
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  ensure_fake_converge_worker "$tmp"
+
+  # Drive 3 rounds where the overseer never says CONVERGED. The loop exits via
+  # round budget; convergence.md must label that NON_CONVERGED, not echo back
+  # the raw "CONTINUE" as if it were the outcome.
+  FAKE_CONVERGE_OVERSEER_RESPONSE="VERDICT: CONTINUE
+REASON: keep going
+STEER: none
+GOAL_UPDATE: unchanged" \
+    run_converge "$tmp" --goal "Budget Goal" --exec "true" --rounds 3 >/dev/null
+
+  convergence="$tmp/docs/plans/converge/budget-goal/convergence.md"
+  [ -f "$convergence" ] || fail "convergence.md should be written when budget hits"
+  assert_file_contains "$convergence" "NON_CONVERGED" \
+    "budget-exhausted runs must label the Outcome NON_CONVERGED"
+  assert_file_contains "$convergence" "round budget exhausted" \
+    "Outcome line should explain why the loop stopped"
+  assert_file_contains "$convergence" "3/3" \
+    "Tick count section should show consumed-of-budget"
+
+  # The raw last overseer verdict still shows up — but in a SEPARATE section,
+  # so an agent reading convergence.md can't confuse "Last overseer verdict:
+  # CONTINUE" with "the system decided we're done".
+  assert_file_contains "$convergence" "## Last overseer verdict" \
+    "convergence.md must keep the raw last verdict (informational)"
+  assert_file_contains "$convergence" "CONTINUE" \
+    "Last overseer verdict should show what the overseer last said"
+
+  echo "  PASS: convergence.md labels NON_CONVERGED on budget exhaustion (no CONTINUE-misread)"
+}
+
+# Same shape for the --no-oversee path: outcome must still be NON_CONVERGED on
+# budget exhaustion (the loop ran out of attempts), with last-verdict "n/a"
+# because no overseer ever ran. Regression for the case the labels-non-converged
+# test doesn't exercise: the conditional branch that sets final_verdict=n/a.
+test_convergence_md_labels_non_converged_when_no_oversee_budget_exhausted() {
+  local tmp convergence
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  run_converge "$tmp" --goal "Headless Goal" --exec "true" --rounds 2 --no-oversee >/dev/null
+
+  convergence="$tmp/docs/plans/converge/headless-goal/convergence.md"
+  [ -f "$convergence" ] || fail "convergence.md should be written when --no-oversee budget hits"
+  assert_file_contains "$convergence" "NON_CONVERGED" \
+    "--no-oversee budget-exhausted runs must label the Outcome NON_CONVERGED"
+  assert_file_contains "$convergence" "overseer disabled" \
+    "Termination reason should record that the overseer was disabled"
+  assert_file_contains "$convergence" "n/a" \
+    "Last overseer verdict should be n/a when --no-oversee was passed"
+
+  echo "  PASS: convergence.md labels NON_CONVERGED on --no-oversee budget exhaustion"
+}
+
+# Outcome=FAILED on a hard exec failure under CONVERGE_FAIL_ON_EXEC_ERROR=1. The
+# loop tears down mid-round, so the convergence.md must reflect that — not echo
+# the last (possibly CONTINUE) overseer verdict as if it were the outcome.
+test_convergence_md_labels_failed_on_hard_exec_failure() {
+  local tmp convergence
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  CONVERGE_FAIL_ON_EXEC_ERROR=1 \
+    run_converge "$tmp" --goal "Hard Fail Goal" --exec "exit 7" --rounds 3 >/dev/null 2>&1 || true
+
+  convergence="$tmp/docs/plans/converge/hard-fail-goal/convergence.md"
+  [ -f "$convergence" ] || fail "convergence.md should be written on hard exec failure"
+  assert_file_contains "$convergence" "FAILED" \
+    "hard exec failure must label the Outcome FAILED"
+  assert_file_contains "$convergence" "exec exit=7" \
+    "Termination reason should record the exec exit code"
+
+  echo "  PASS: convergence.md labels FAILED on hard exec failure"
+}
+
+# Same shape for stop signal: outcome=STOPPED, with the raw STOP verdict kept
+# in the informational section. Confirms the outcome / last-verdict split.
+test_convergence_md_labels_stopped_on_overseer_stop() {
+  local tmp convergence
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  ensure_fake_converge_worker "$tmp"
+
+  FAKE_CONVERGE_OVERSEER_RESPONSE="VERDICT: STOP
+REASON: ship it
+STEER: none
+GOAL_UPDATE: unchanged" \
+    run_converge "$tmp" --goal "Stop Goal" --exec "true" --rounds 5 >/dev/null
+
+  convergence="$tmp/docs/plans/converge/stop-goal/convergence.md"
+  [ -f "$convergence" ] || fail "convergence.md should be written on STOP verdict"
+  assert_file_contains "$convergence" "STOPPED" \
+    "STOP verdict runs must label the Outcome STOPPED"
+  assert_file_contains "$convergence" "## Last overseer verdict" \
+    "Last overseer verdict section is present"
+
+  echo "  PASS: convergence.md labels STOPPED on overseer STOP verdict"
 }
 
 test_overseer_stop_marks_aborted() {
@@ -1150,9 +1262,9 @@ seed_converge_dashboard_fixture() {
 }
 
 test_converge_adapter_exposes_stop_and_steer() {
-  assert_eq ".converge-stop" "$(almanac_loop_run_signal_file converge stop)" \
+  assert_eq ".converge-stop" "$(almanac_loop_signal_file converge stop)" \
     "converge stop file basename"
-  assert_eq ".converge-steer" "$(almanac_loop_run_signal_file converge steer)" \
+  assert_eq ".converge-steer" "$(almanac_loop_signal_file converge steer)" \
     "converge steer file basename"
 
   echo "  PASS: converge adapter exposes stop and steer signals"
@@ -1272,6 +1384,8 @@ test_overseer_parse_verdicts_and_malformed_input
 test_overseer_parse_captures_multi_line_values
 test_overseer_agent_invoked_read_only_with_role_config
 test_overseer_converged_stops_loop_and_writes_convergence
+test_convergence_md_labels_non_converged_when_budget_exhausted
+test_convergence_md_labels_stopped_on_overseer_stop
 test_overseer_stop_marks_aborted
 test_overseer_steer_writes_directive
 test_overseer_continue_writes_no_signal
