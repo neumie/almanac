@@ -1514,21 +1514,6 @@ almanac_harden_round() {
   return "$rc"
 }
 
-# Mark a registered harden run terminal (done|failed|aborted) and clear the
-# lifecycle trap. Best-effort and idempotent: a run that never registered (empty
-# id) or a registry write that fails never aborts the loop. Routed from every
-# normal exit path of almanac_harden_run so the run leaves "running", and reused
-# by the abort trap for unexpected exits (signal, mid-round _die).
-almanac_harden_run_finalize() {
-  local root="$1"
-  local run_id="$2"
-  local status="$3"
-
-  trap - EXIT INT TERM
-  [ -n "$run_id" ] || return 0
-  almanac_loop_mark_run_status "$root" "$run_id" "$status" >/dev/null 2>&1 || true
-}
-
 # Drive the convergence loop: repeat almanac_harden_round under the gate until
 # the target converges, the round budget is exhausted, or the human ships.
 # Budget is configurable (3rd arg, else HARDEN_ROUND_BUDGET, else 5). Each round
@@ -1586,17 +1571,17 @@ almanac_harden_run() {
       "rounds=$budget" >/dev/null 2>&1 || true
     # Mark the run aborted on any unexpected exit (signal, mid-round _die) that
     # leaves it still running; the normal exit paths below mark done/failed and
-    # clear this via almanac_harden_run_finalize. The shared helper owns the
+    # clear this via almanac_loop_run_finalize. The shared helper owns the
     # %q bake that defends against inner-frame `local run_id` shadowing — see
     # `almanac_loop_install_finalize_trap` in lib/run.sh for the full why.
-    almanac_loop_install_finalize_trap almanac_harden_run_finalize "$root" "$run_id"
+    almanac_loop_install_finalize_trap almanac_loop_run_finalize "$root" "$run_id"
   fi
 
   round=0
   while :; do
     if almanac_loop_consume_signal harden "$root" stop >/dev/null; then
       _success "Stop signal detected (.harden-stop); exiting before next round."
-      almanac_harden_run_finalize "$root" "$run_id" "done"
+      almanac_loop_run_finalize "$root" "$run_id" "done"
       return 0
     fi
 
@@ -1643,12 +1628,12 @@ almanac_harden_run() {
     case "$rc" in
       0)
         _success "Converged after $round round(s): acceptance met and no open blocking findings remain."
-        almanac_harden_run_finalize "$root" "$run_id" "done"
+        almanac_loop_run_finalize "$root" "$run_id" "done"
         return 0
         ;;
       2)
         _warn "Round budget ($budget) reached — $open_count open blocking finding(s) remain. Status: NON-CONVERGED."
-        almanac_harden_run_finalize "$root" "$run_id" "failed"
+        almanac_loop_run_finalize "$root" "$run_id" "failed"
         return 1
         ;;
       *)
@@ -1670,7 +1655,7 @@ almanac_harden_run() {
             ;;
           *)
             _success "Shipping at round $round by request — $open_count open blocking finding(s) left unaddressed."
-            almanac_harden_run_finalize "$root" "$run_id" "done"
+            almanac_loop_run_finalize "$root" "$run_id" "done"
             return 0
             ;;
         esac

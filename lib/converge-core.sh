@@ -817,22 +817,6 @@ almanac_converge_apply_goal_update() {
   printf '[tick=%s] goal updated: %s\n' "$round" "$summary" >> "$log_file"
 }
 
-almanac_converge_run_finalize() {
-  local root="$1"
-  local run_id="$2"
-  local status="$3"
-  local reason="${4:-}"
-
-  trap - EXIT INT TERM
-  # _almanac_converge_active_plan_dir_name is local to almanac_converge_run, so
-  # it goes out of scope when that function returns — no explicit cleanup
-  # needed, and no risk of leaking into a CLI command issued after the loop
-  # exits. The dir name remains discoverable via the run's status.tsv
-  # `plan_dir` field.
-  [ -n "$run_id" ] || return 0
-  almanac_loop_mark_run_status "$root" "$run_id" "$status" "" "$reason" >/dev/null 2>&1 || true
-}
-
 almanac_converge_git_user_status() {
   local root="$1"
   local plan_dir="$2"
@@ -1214,7 +1198,11 @@ almanac_converge_run() {
   # leaves it still running; the normal exit paths below mark done/failed and
   # clear this. The shared helper owns the %q bake — see
   # `almanac_loop_install_finalize_trap` in lib/run.sh for why that matters.
-  almanac_loop_install_finalize_trap almanac_converge_run_finalize "$root" "$run_id"
+  # _almanac_converge_active_plan_dir_name is a local to THIS function, so it
+  # goes out of scope when the function returns — no explicit cleanup needed,
+  # and no risk of leaking into a CLI command issued after the loop exits.
+  # The dir name remains discoverable via the run's status.tsv `plan_dir` field.
+  almanac_loop_install_finalize_trap almanac_loop_run_finalize "$root" "$run_id"
 
   # Persist enough of the launch config that the hub's resume path can rebuild
   # the same invocation from status.tsv alone — see almanac_loop_converge_status_to_opts.
@@ -1332,7 +1320,7 @@ almanac_converge_run() {
       almanac_converge_write_convergence "$root" "$goal" \
         "FAILED" "${final_verdict:-n/a}" "$round" "$rounds" "$started_epoch" \
         "exec exit=$exec_rc round=$round"
-      almanac_converge_run_finalize "$root" "$run_id" "failed" "exec exit=$exec_rc round=$round"
+      almanac_loop_run_finalize "$root" "$run_id" "failed" "exec exit=$exec_rc round=$round"
       return "$exec_rc"
     fi
 
@@ -1359,5 +1347,5 @@ almanac_converge_run() {
 
   almanac_converge_write_convergence "$root" "$goal" \
     "$final_outcome" "$final_verdict" "$round" "$rounds" "$started_epoch" "$final_reason"
-  almanac_converge_run_finalize "$root" "$run_id" "$final_status"
+  almanac_loop_run_finalize "$root" "$run_id" "$final_status"
 }

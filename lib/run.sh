@@ -510,6 +510,29 @@ almanac_loop_install_finalize_trap() {
   trap "${cmd}" EXIT
 }
 
+# Canonical run-lifecycle finalize: clear the EXIT/INT/TERM trap (so a normal
+# exit path doesn't double-fire it) and mark the run terminal via
+# `almanac_loop_mark_run_status`. No-op on an empty run_id so a registry-failed
+# loop (best-effort `register_run` returned blank) still exits cleanly. The
+# optional REASON rides through to `mark_run_status`'s failure_reason field —
+# converge uses it ("exec exit=N round=K"); harden omits.
+#
+# Harden and converge each used to keep their own near-identical 6-line
+# finalize wrappers (the only difference: converge threaded REASON). Both
+# pass straight to `mark_run_status` — pure pass-through. This is the seam
+# they collapse onto, called both from `almanac_loop_install_finalize_trap`'s
+# baked trap text and from the loops' normal exit paths.
+almanac_loop_run_finalize() {
+  local root="$1"
+  local run_id="$2"
+  local status="$3"
+  local reason="${4:-}"
+
+  trap - EXIT INT TERM
+  [ -n "$run_id" ] || return 0
+  almanac_loop_mark_run_status "$root" "$run_id" "$status" "" "$reason" >/dev/null 2>&1 || true
+}
+
 # Detect a stale registry entry: a run whose recorded status is still `running`
 # but whose process is gone (crashed/killed without marking itself), so the hub
 # can surface or reap it. Returns 0 (stale) only when status is running AND the
