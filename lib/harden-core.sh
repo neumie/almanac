@@ -70,6 +70,19 @@ almanac_harden_rubric_path() {
   printf '%s/rubric.md\n' "$(almanac_loop_plan_dir harden "$root" "$slug")"
 }
 
+# Resolve a target argument to its absolute filesystem path: absolute targets
+# pass through, relative targets are interpreted under $root. Path resolution
+# only — callers do their own existence check (some sites operate on the
+# ledger and don't need the target to still exist on disk).
+almanac_harden_target_path() {
+  local root="$1"
+  local target="$2"
+  case "$target" in
+    /*) printf '%s\n' "$target" ;;
+    *)  printf '%s/%s\n' "$root" "$target" ;;
+  esac
+}
+
 almanac_harden_write_rubric() {
   local root="$1"
   local target="$2"
@@ -980,10 +993,7 @@ almanac_harden_fanout() {
   local added total_added i max_reviewers succeeded_count suffix
   local -a lenses=() worker_ids=() worker_pids=() prompt_files=()
 
-  case "$target" in
-    /*) target_path="$target" ;;
-    *)  target_path="$root/$target" ;;
-  esac
+  target_path="$(almanac_harden_target_path "$root" "$target")"
 
   if [ ! -e "$target_path" ]; then
     _die "Harden target not found: $target"
@@ -1205,10 +1215,7 @@ almanac_harden_fix() {
   local provider model effort prompt_file result_file events_file rubric_snapshot rc
   local id lens severity location claim demonstration
 
-  case "$target" in
-    /*) target_path="$target" ;;
-    *)  target_path="$root/$target" ;;
-  esac
+  target_path="$(almanac_harden_target_path "$root" "$target")"
 
   if [ ! -e "$target_path" ]; then
     _die "Harden target not found: $target"
@@ -1387,10 +1394,7 @@ almanac_harden_ratify_open() {
   local cond_provider cond_model cond_effort
   local id lens severity location claim demonstration
 
-  case "$target" in
-    /*) target_path="$target" ;;
-    *)  target_path="$root/$target" ;;
-  esac
+  target_path="$(almanac_harden_target_path "$root" "$target")"
 
   ledger_path="$(almanac_harden_ledger_path "$root" "$target")"
   rubric_path="$(almanac_harden_rubric_path "$root" "$target")"
