@@ -876,9 +876,13 @@ almanac_converge_run_worker() {
   # less than full access dies on every un-allowlisted Bash call ("This
   # command requires approval"). For codex this drops the sandbox; for claude
   # it maps to --permission-mode bypassPermissions (per the provider adapter).
+  #
+  # cwd into $root for the agent invocation — exec_cmd in the worker prompt
+  # is shell text the agent runs against the project, and matches the
+  # _run_worker_prompt sibling which also (cd "$root" && agent_stream).
   rc=0
-  almanac_loop_agent_stream "$provider" "$model" "$effort" "danger-full-access" \
-    "$prompt_file" "$result_file" "$events_file" merge-stderr || rc=$?
+  (cd "$root" && almanac_loop_agent_stream "$provider" "$model" "$effort" "danger-full-access" \
+    "$prompt_file" "$result_file" "$events_file" merge-stderr) || rc=$?
 
   rm -f "$prompt_file" "$result_file"
   return "$rc"
@@ -1293,21 +1297,12 @@ almanac_converge_run() {
     fi
 
     round=$((round + 1))
+    # Both worker fns own their own (cd "$root" && agent_stream …) — the
+    # dispatcher just selects which fn + which action arg (prompt vs exec_cmd).
+    exec_rc=0
     case "$action_mode" in
-      prompt)
-        if almanac_converge_run_worker_prompt "$root" "$goal" "$prompt" "$round"; then
-          exec_rc=0
-        else
-          exec_rc=$?
-        fi
-        ;;
-      *)
-        if (cd "$root" && almanac_converge_run_worker "$root" "$goal" "$exec_cmd" "$round"); then
-          exec_rc=0
-        else
-          exec_rc=$?
-        fi
-        ;;
+      prompt) almanac_converge_run_worker_prompt "$root" "$goal" "$prompt"   "$round" || exec_rc=$? ;;
+      *)      almanac_converge_run_worker        "$root" "$goal" "$exec_cmd" "$round" || exec_rc=$? ;;
     esac
 
     # In exec-mode the worker is authoritative for commits (slice 03 contract).
