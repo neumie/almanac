@@ -14,19 +14,143 @@ _almanac_source_sibling run.sh    almanac_loop_register_run
 _almanac_source_sibling agent.sh  almanac_loop_agent_capture
 _almanac_source_sibling role.sh   almanac_loop_role_config
 
+# Plan-dir name discipline:
+#
+# Each converge run gets its own directory under docs/plans/converge/. Pre-fix
+# the dir name was just the kebab'd goal text — so re-running with the same
+# goal collided into the same directory, mixing agent-reports.log entries,
+# overwriting convergence.md, and hiding which iteration log belonged to which
+# run. The slugs also rendered as 60-90-char near-duplicates ("the-skill-
+# codebase-improve-gives-no-real-improvements" vs "the-skill-almanac-codebase-
+# improve-doesn-t-give-any-substantial-improvements-to-do") that were
+# impossible to distinguish at a glance in `ls`.
+#
+# New format: `YYYY-MM-DD-HHMMSS-<short-slug>` where short-slug is the goal
+# truncated to ~30 chars. Sortable chronologically by name, recognizable by
+# the slug tail, and a fresh timestamp means a fresh dir even for the same
+# goal — no more collisions.
+#
+# Two access patterns:
+#   * Inside a run: almanac_converge_run computes the dir name ONCE at scaffold
+#     time, persists it on the run's status.tsv as `plan_dir`, and passes it
+#     to internal helpers. Everything within the run reads/writes the SAME
+#     dir for its full lifetime.
+#   * Outside a run (CLI --watch / --stop / --status): the user types a slug
+#     they remember; we resolve to the latest matching dir via the registry.
+
+# Build the plan dir path. Accepts EITHER a full timestamped dir name (used
+# inside an active run, where the run's scaffolded name is the source of
+# truth — captured at scaffold time, propagated via ALMANAC_CONVERGE_PLAN_DIR_NAME)
+# OR a short slug (used by CLI lookups — `almanac converge <slug> --watch`).
+#
+# Resolution rules:
+#   1. ALMANAC_CONVERGE_PLAN_DIR_NAME is set         → use it (active run)
+#   2. arg matches an existing dir exactly            → use it (already resolved)
+#   3. arg matches an existing dir by suffix `-arg`   → use the latest match
+#   4. nothing matches                                → use arg verbatim (caller
+#                                                       is about to create it)
+#
+# Rule 1 is the "the active run owns its dir for its full lifetime" guarantee
+# — without it, a concurrent run of the same short-slug could race and steal
+# the lookup.
 almanac_converge_plan_dir() {
   local root="$1"
-  local slug="$2"
+  local query="$2"
+  local resolved
 
-  almanac_loop_plan_dir converge "$root" "$slug"
+  if [ -n "${ALMANAC_CONVERGE_PLAN_DIR_NAME:-}" ]; then
+    resolved="$ALMANAC_CONVERGE_PLAN_DIR_NAME"
+  elif resolved="$(almanac_converge_resolve_plan_dir_name "$root" "$query" 2>/dev/null)"; then
+    :
+  else
+    resolved="$query"
+  fi
+  almanac_loop_plan_dir converge "$root" "$resolved"
 }
 
+# Truncate the goal's kebab slug to a length that's comfortable in `ls`.
+# 30 chars is enough to recognize a goal at a glance ("codebase-improve-no-
+# major" vs "fix-the-test-suite") without dominating the directory listing
+# when a 90-char goal text gets passed in.
+#
+# Multi-line goals are normalized to a single line before slugging — almanac_loop_slug
+# uses sed which processes line-by-line, so a `$'first\nsecond'` goal would emit
+# `first\nsecond` (TWO lines) and the resulting dir name would contain an
+# embedded newline. The `tr '\n' ' '` collapses linebreaks before the kebab
+# pass so the slug stays a single token.
+almanac_converge_short_slug() {
+  local goal="$1" normalized full short
+  normalized="$(printf '%s' "$goal" | tr '\n' ' ')"
+  full="$(almanac_loop_slug "$normalized")"
+  short="$(printf '%s' "$full" | cut -c1-30)"
+  # Strip trailing `-` so a truncation that lands mid-word doesn't leave a
+  # dangling separator ("codebase-improve-no-major-" → "codebase-improve-no-major").
+  short="${short%-}"
+  printf '%s\n' "$short"
+}
+
+# Compose a plan-dir name from goal + timestamp. The timestamp is the
+# discriminator that lets multi-run runs of the same goal coexist (each gets
+# its own dir). Format: YYYY-MM-DD-HHMMSS-<short-slug>. The timestamp is UTC
+# so it sorts identically regardless of the operator's local timezone.
+# Second arg lets tests pin a deterministic timestamp.
+almanac_converge_compose_plan_dir_name() {
+  local goal="$1" ts="${2:-}"
+  [ -n "$ts" ] || ts="$(date -u +'%Y-%m-%d-%H%M%S')"
+  printf '%s-%s\n' "$ts" "$(almanac_converge_short_slug "$goal")"
+}
+
+# Resolve the most recent plan-dir name matching a goal-derived slug. Used by
+# CLI commands that take a slug from the user (--watch / --stop / no-flag
+# status). The user types the SHORT slug they remember; we scan plan dirs and
+# return the latest matching one (alphabetical sort = chronological since the
+# timestamp comes first in the dir name).
+#
+# Match rule: a dir name "ENDS WITH -<slug>" matches that slug. So both
+#   "2026-05-27-084312-codebase-improve" matches slug "codebase-improve"
+#   "2026-05-27-084312-codebase-improve" matches slug "improve" (suffix)
+# The suffix match is intentional — users may type just the distinctive
+# tail of a slug to save typing. If ambiguous, the latest wins.
+#
+# Also accepts a full dir name (already-resolved) as input — returns it
+# unchanged if a dir of that name exists. So callers can pass either a
+# user-typed short slug OR an already-resolved full name without branching.
+#
+# Returns 1 when no matching dir exists.
+almanac_converge_resolve_plan_dir_name() {
+  local root="$1" query="$2"
+  local container="$root/docs/plans/converge" match
+  [ -d "$container" ] || return 1
+
+  # Exact match wins (already-resolved full name)
+  if [ -d "$container/$query" ]; then
+    printf '%s\n' "$query"
+    return 0
+  fi
+
+  # Otherwise suffix-match on `-<query>` and return the lexicographically
+  # latest (= chronologically newest because of the timestamp prefix).
+  match="$(ls -1 "$container" 2>/dev/null | grep -E -- "-${query}\$" | sort | tail -1)"
+  [ -n "$match" ] || return 1
+  printf '%s\n' "$match"
+}
+
+# Scaffold a fresh plan dir for a converge run. Generates a NEW timestamped
+# dir name (so concurrent / repeated runs of the same goal never collide on
+# the same dir). Prints the chosen dir name to stdout so the caller can use
+# it as the run's stable handle for subsequent operations.
+#
+# A pre-existing dir name can be passed as the optional third arg to pin the
+# scaffold to that specific name — used by tests for deterministic fixtures,
+# and by any future "resume" path that wants to re-enter an existing dir.
 almanac_converge_scaffold() {
   local root="$1"
   local goal="$2"
+  local dir_name="${3:-}"
   local plan_dir
 
-  plan_dir="$(almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")")"
+  [ -n "$dir_name" ] || dir_name="$(almanac_converge_compose_plan_dir_name "$goal")"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$dir_name")"
 
   if ! mkdir -p "$plan_dir"; then
     _die "Could not create converge plan dir: ${plan_dir#"$root"/}"
@@ -40,6 +164,8 @@ almanac_converge_scaffold() {
   if ! : > "$plan_dir/goal.history.log"; then
     _die "Could not write converge goal history: ${plan_dir#"$root"/}/goal.history.log"
   fi
+
+  printf '%s\n' "$dir_name"
 }
 
 almanac_converge_role() {
@@ -719,6 +845,10 @@ almanac_converge_run_finalize() {
   local reason="${4:-}"
 
   trap - EXIT INT TERM
+  # Clear the active-run plan-dir hint so any CLI command run after the loop
+  # exits doesn't accidentally inherit it from the parent env. The dir name
+  # remains discoverable via the run's status.tsv `plan_dir` field.
+  unset ALMANAC_CONVERGE_PLAN_DIR_NAME
   [ -n "$run_id" ] || return 0
   almanac_loop_mark_run_status "$root" "$run_id" "$status" "" "$reason" >/dev/null 2>&1 || true
 }
@@ -1067,8 +1197,22 @@ almanac_converge_run() {
     "oversee_every=$oversee_every" \
     >/dev/null 2>&1 || true
 
-  almanac_converge_scaffold "$root" "$goal"
-  plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
+  # Scaffold creates a fresh timestamped plan dir; capture the name so every
+  # helper within this run targets THE SAME dir for its full lifetime (no
+  # races with concurrent same-goal runs that might scaffold their own dir
+  # mid-loop). Export to subprocesses too — the worker / overseer / commit
+  # auto-helper all run in subshells that need to see the name.
+  local plan_dir_name
+  plan_dir_name="$(almanac_converge_scaffold "$root" "$goal")"
+  export ALMANAC_CONVERGE_PLAN_DIR_NAME="$plan_dir_name"
+  plan_dir="$(almanac_converge_plan_dir "$root" "$plan_dir_name")"
+
+  # Persist the dir name on the run's status.tsv so CLI commands run AFTER
+  # this run exits (when the env var is gone) can still find the right dir
+  # via almanac_loop_status_field.
+  almanac_loop_set_run_config "$root" "$run_id" \
+    "plan_dir=$plan_dir_name" \
+    >/dev/null 2>&1 || true
 
   # Default state when the loop exits via the round budget. `final_verdict` is
   # the overseer's LAST raw say (informational); `final_outcome` is the

@@ -70,6 +70,24 @@ new_tmpdir() {
   TMPDIRS+=("$NEW_TMPDIR")
 }
 
+# Plan dirs now use timestamped names (YYYY-MM-DD-HHMMSS-<short-slug>) so
+# multiple runs of the same goal can coexist. Tests that pre-date the
+# refactor used hardcoded paths like "$tmp/docs/plans/converge/<slug>/...";
+# this helper resolves a short slug to the LATEST matching plan dir so those
+# assertions keep working without per-test path rewrites.
+plan_dir_for_slug() {
+  local tmp="$1" slug="$2" container="$tmp/docs/plans/converge" match
+  [ -d "$container" ] || { printf '%s/%s' "$container" "$slug"; return 0; }
+  match="$(ls -1 "$container" 2>/dev/null | grep -E -- "-${slug}\$" | sort | tail -1)"
+  if [ -n "$match" ]; then
+    printf '%s/%s' "$container" "$match"
+  else
+    # No timestamped match — return the legacy path so the caller's `[ -f ... ]`
+    # produces a sensible "not found" failure rather than a glob expansion error.
+    printf '%s/%s' "$container" "$slug"
+  fi
+}
+
 run_converge() {
   local tmp="$1"
   shift
@@ -258,7 +276,7 @@ test_plan_dir_scaffold_and_exec_smoke() {
 
   run_converge "$tmp" --goal "Say Hello!" --exec "touch '$marker'" >/dev/null
 
-  plan="$tmp/docs/plans/converge/say-hello"
+  plan="$(plan_dir_for_slug "$tmp" "say-hello")"
   reports="$plan/agent-reports.log"
 
   [ -f "$plan/goal.md" ] || fail "goal.md should be scaffolded"
@@ -330,7 +348,7 @@ EOF
         --no-oversee \
   ) >/dev/null 2>&1 || fail "prompt-mode converge run should exit 0"
 
-  plan="$tmp/docs/plans/converge/prompt-mode-smoke"
+  plan="$(plan_dir_for_slug "$tmp" "prompt-mode-smoke")"
   reports="$plan/agent-reports.log"
 
   [ -f "$plan/goal.md" ] || fail "prompt-mode should scaffold plan dir"
@@ -490,7 +508,7 @@ test_round_count_exactness() {
     --rounds 3 >/dev/null
 
   assert_eq "3" "$(cat "$counter")" "--rounds 3 should execute exactly three rounds"
-  plan="$tmp/docs/plans/converge/round-count"
+  plan="$(plan_dir_for_slug "$tmp" "round-count")"
   reports="$plan/agent-reports.log"
   assert_eq "3" "$(grep -c '^===== tick=[0-9][0-9]* ts=.* =====$' "$reports")" \
     "--rounds 3 should append exactly three report headers"
@@ -606,7 +624,7 @@ test_exec_failure_policy() {
   assert_eq "2" "$(cat "$counter")" "default exec failure mode should continue to next round"
   assert_contains "$output" "Converge round 1 exec exited 7; continuing" \
     "default worker failure should warn"
-  reports="$tmp/docs/plans/converge/exec-failure/agent-reports.log"
+  reports="$(plan_dir_for_slug "$tmp" "exec-failure")/agent-reports.log"
   assert_file_contains "$reports" "===== tick=1 ts=" "failed exec should still append tick 1 report"
   assert_file_contains "$reports" "fake worker exit=7" "failed exec report should record non-zero exit"
   assert_file_contains "$reports" "===== tick=2 ts=" "default mode should append tick 2 report"
@@ -661,7 +679,7 @@ test_prompt_template_created_and_reread() {
   tmp="$NEW_TMPDIR"
 
   almanac_converge_scaffold "$tmp" "Editable Template"
-  plan="$tmp/docs/plans/converge/editable-template"
+  plan="$(plan_dir_for_slug "$tmp" "editable-template")"
 
   almanac_converge_ensure_prompt_template "$tmp" "Editable Template"
   [ -f "$plan/prompt.md" ] || fail "prompt.md should be created when absent"
@@ -681,7 +699,7 @@ test_worker_prompt_consumes_steer_once() {
   almanac_converge_scaffold "$tmp" "Steered Goal"
   # Steer file lives in the run's plan dir now (per-run scope; see
   # lib/loops/converge.sh::almanac_loop_converge_signal_dir).
-  plan_dir="$tmp/docs/plans/converge/steered-goal"
+  plan_dir="$(plan_dir_for_slug "$tmp" "steered-goal")"
   printf '%s\n' "focus the parser" > "$plan_dir/.converge-steer"
 
   prompt="$(almanac_converge_worker_prompt "$tmp" "Steered Goal" "true" 1)"
@@ -721,7 +739,7 @@ test_structured_report_parser_accepts_worker_block() {
 
   run_converge "$tmp" --goal "Report Parser" --exec "true" --rounds 1 >/dev/null
 
-  reports="$tmp/docs/plans/converge/report-parser/agent-reports.log"
+  reports="$(plan_dir_for_slug "$tmp" "report-parser")/agent-reports.log"
   almanac_converge_report_log_has_structured_block "$reports" \
     || fail "structured worker report should be parseable"
 
@@ -994,18 +1012,18 @@ GOAL_UPDATE: unchanged" \
   # CONVERGED writes the stop signal to the run's plan dir, NOT $root (the
   # signal_dir adapter scopes it per-run so unrelated runs sharing the
   # workspace aren't poisoned). See lib/loops/converge.sh.
-  [ -f "$tmp/docs/plans/converge/converged-goal/.converge-stop" ] \
+  [ -f "$(plan_dir_for_slug "$tmp" "converged-goal")/.converge-stop" ] \
     || fail "CONVERGED should write .converge-stop to its plan dir"
   [ ! -f "$tmp/.converge-stop" ] \
     || fail "CONVERGED MUST NOT write .converge-stop to \$root (would poison sibling runs)"
-  reports="$tmp/docs/plans/converge/converged-goal/agent-reports.log"
+  reports="$(plan_dir_for_slug "$tmp" "converged-goal")/agent-reports.log"
   assert_eq "1" "$(grep -c '^===== tick=[0-9][0-9]* ts=.* =====$' "$reports")" \
     "CONVERGED should stop after current round"
   row="$(awk -F'\t' 'NR > 1 && $2 == "converge" { print; exit }' "$tmp/.almanac/runs/index.tsv")"
   status_file="$tmp/.almanac/runs/$(printf '%s' "$row" | cut -f1)/status.tsv"
   assert_file_contains "$status_file" $'status\tdone' "CONVERGED should mark registry done"
 
-  convergence="$tmp/docs/plans/converge/converged-goal/convergence.md"
+  convergence="$(plan_dir_for_slug "$tmp" "converged-goal")/convergence.md"
   [ -f "$convergence" ] || fail "convergence.md should be written on terminal exit"
   assert_file_contains "$convergence" "## Outcome" "convergence.md should include outcome section"
   assert_file_contains "$convergence" "CONVERGED" "convergence.md should label the outcome"
@@ -1041,7 +1059,7 @@ STEER: none
 GOAL_UPDATE: unchanged" \
     run_converge "$tmp" --goal "Budget Goal" --exec "true" --rounds 3 >/dev/null
 
-  convergence="$tmp/docs/plans/converge/budget-goal/convergence.md"
+  convergence="$(plan_dir_for_slug "$tmp" "budget-goal")/convergence.md"
   [ -f "$convergence" ] || fail "convergence.md should be written when budget hits"
   assert_file_contains "$convergence" "NON_CONVERGED" \
     "budget-exhausted runs must label the Outcome NON_CONVERGED"
@@ -1072,7 +1090,7 @@ test_convergence_md_labels_non_converged_when_no_oversee_budget_exhausted() {
 
   run_converge "$tmp" --goal "Headless Goal" --exec "true" --rounds 2 --no-oversee >/dev/null
 
-  convergence="$tmp/docs/plans/converge/headless-goal/convergence.md"
+  convergence="$(plan_dir_for_slug "$tmp" "headless-goal")/convergence.md"
   [ -f "$convergence" ] || fail "convergence.md should be written when --no-oversee budget hits"
   assert_file_contains "$convergence" "NON_CONVERGED" \
     "--no-oversee budget-exhausted runs must label the Outcome NON_CONVERGED"
@@ -1095,7 +1113,7 @@ test_convergence_md_labels_failed_on_hard_exec_failure() {
   CONVERGE_FAIL_ON_EXEC_ERROR=1 \
     run_converge "$tmp" --goal "Hard Fail Goal" --exec "exit 7" --rounds 3 >/dev/null 2>&1 || true
 
-  convergence="$tmp/docs/plans/converge/hard-fail-goal/convergence.md"
+  convergence="$(plan_dir_for_slug "$tmp" "hard-fail-goal")/convergence.md"
   [ -f "$convergence" ] || fail "convergence.md should be written on hard exec failure"
   assert_file_contains "$convergence" "FAILED" \
     "hard exec failure must label the Outcome FAILED"
@@ -1119,7 +1137,7 @@ STEER: none
 GOAL_UPDATE: unchanged" \
     run_converge "$tmp" --goal "Stop Goal" --exec "true" --rounds 5 >/dev/null
 
-  convergence="$tmp/docs/plans/converge/stop-goal/convergence.md"
+  convergence="$(plan_dir_for_slug "$tmp" "stop-goal")/convergence.md"
   [ -f "$convergence" ] || fail "convergence.md should be written on STOP verdict"
   assert_file_contains "$convergence" "STOPPED" \
     "STOP verdict runs must label the Outcome STOPPED"
@@ -1177,12 +1195,15 @@ test_run_clears_leftover_control_signals_at_start() {
   # with the new plan-dir scoping — different goals get different plan dirs,
   # so the test focuses on (1) legacy migration and (2) same-goal re-run.
 
-  # Pre-create plan dir so we can plant a leftover stop signal there (same-goal
-  # re-run scenario)
-  plan_dir="$tmp/docs/plans/converge/resume-goal"
-  mkdir -p "$plan_dir"
-  stop_file="$plan_dir/.converge-stop"
-  steer_file="$plan_dir/.converge-steer"
+  # Pre-create a STALE plan dir simulating an old run that left signal files
+  # behind. The new run scaffolds a FRESH timestamped dir (different from
+  # this stale one) — so by construction the new run can't see the stale
+  # signals. This test pins that structural guarantee.
+  local stale_dir
+  stale_dir="$tmp/docs/plans/converge/resume-goal"
+  mkdir -p "$stale_dir"
+  stop_file="$stale_dir/.converge-stop"
+  steer_file="$stale_dir/.converge-steer"
   : > "$stop_file"
   printf 'stale directive from prior run\n' > "$steer_file"
 
@@ -1196,17 +1217,23 @@ STEER: none
 GOAL_UPDATE: unchanged" \
     run_converge "$tmp" --goal "Resume Goal" --exec "true" --rounds 2 >/dev/null
 
-  # The leftover stop file MUST NOT abort the new run — at least one round
-  # should have executed (worker spawned, exec ran, report written).
-  iter_count="$(grep -c '^===== tick=[0-9]' "$plan_dir/agent-reports.log" 2>/dev/null || printf 0)"
-  [ "$iter_count" -ge 1 ] || fail "leftover .converge-stop must not block round 1 (got 0 ticks)"
+  # The NEW run scaffolded its own fresh timestamped dir; resolve it via the
+  # helper (suffix-matches `-resume-goal` and picks the latest — the just-
+  # created one wins because the stale dir doesn't match the timestamp
+  # prefix pattern).
+  local new_dir
+  new_dir="$(plan_dir_for_slug "$tmp" "resume-goal")"
+  [ "$new_dir" != "$stale_dir" ] || fail "new run should have scaffolded a fresh timestamped dir (got stale: $new_dir)"
 
-  # The leftover steer must not have been visible to the round-1 worker
-  # prompt — it should have been wiped at run start.
-  if [ -f "$plan_dir/converge-codex-iteration-1.log" ]; then
-    case "$(cat "$plan_dir/converge-codex-iteration-1.log")" in
+  iter_count="$(grep -c '^===== tick=[0-9]' "$new_dir/agent-reports.log" 2>/dev/null || printf 0)"
+  [ "$iter_count" -ge 1 ] || fail "new run must execute its rounds (got 0 ticks in $new_dir)"
+
+  # The stale steer file in the OLD dir cannot reach the new run — different
+  # dirs, different signal scopes.
+  if [ -f "$new_dir/converge-codex-iteration-1.log" ]; then
+    case "$(cat "$new_dir/converge-codex-iteration-1.log")" in
       *"stale directive from prior run"*)
-        fail "leftover .converge-steer must not bleed into the new run's round 1 worker prompt"
+        fail "stale .converge-steer from old dir must not bleed into the new run's round 1 prompt"
         ;;
     esac
   fi
@@ -1242,7 +1269,7 @@ STEER: none
 GOAL_UPDATE: unchanged" \
     run_converge "$tmp" --goal "First Goal" --exec "true" --rounds 3 >/dev/null
 
-  first_dir="$tmp/docs/plans/converge/first-goal"
+  first_dir="$(plan_dir_for_slug "$tmp" "first-goal")"
   [ -f "$first_dir/.converge-stop" ] || fail "CONVERGED should write stop signal to its OWN plan dir"
   [ ! -f "$tmp/.converge-stop" ] || \
     fail "CONVERGED MUST NOT write stop signal to \$root (would poison unrelated runs)"
@@ -1256,7 +1283,7 @@ STEER: none
 GOAL_UPDATE: unchanged" \
     run_converge "$tmp" --goal "Second Goal" --exec "true" --rounds 2 >/dev/null
 
-  second_dir="$tmp/docs/plans/converge/second-goal"
+  second_dir="$(plan_dir_for_slug "$tmp" "second-goal")"
   local second_ticks
   second_ticks="$(grep -c '^===== tick=[0-9]' "$second_dir/agent-reports.log" 2>/dev/null || printf 0)"
   [ "$second_ticks" -ge 1 ] || \
@@ -1278,14 +1305,14 @@ GOAL_UPDATE: new goal text for later slice" \
 
   # STEER directive lands in the run's plan dir (per-run scope) so a STEER
   # for one run can't bleed into another sharing the workspace.
-  assert_file_contains "$tmp/docs/plans/converge/steer-goal/.converge-steer" "focus the parser" \
+  assert_file_contains "$(plan_dir_for_slug "$tmp" "steer-goal")/.converge-steer" "focus the parser" \
     "STEER verdict should write plan-dir scoped .converge-steer"
   [ ! -f "$tmp/.converge-steer" ] \
     || fail "STEER MUST NOT write to \$root (would poison sibling runs)"
-  assert_file_contains "$tmp/docs/plans/converge/steer-goal/overseer.log" \
+  assert_file_contains "$(plan_dir_for_slug "$tmp" "steer-goal")/overseer.log" \
     "GOAL_UPDATE: new goal text for later slice" \
     "overseer log should record raw GOAL_UPDATE"
-  assert_file_contains "$tmp/docs/plans/converge/steer-goal/goal.md" "new goal text for later slice" \
+  assert_file_contains "$(plan_dir_for_slug "$tmp" "steer-goal")/goal.md" "new goal text for later slice" \
     "STEER verdict should still apply goal mutation"
 
   echo "  PASS: STEER verdict writes directive (plan-dir scoped) and applies GOAL_UPDATE"
@@ -1303,7 +1330,7 @@ GOAL_UPDATE: unchanged" \
     run_converge "$tmp" --goal "Continue Goal" --exec "true" --rounds 1 >/dev/null
 
   # No signal files anywhere — neither at $root nor in the plan dir.
-  plan_dir="$tmp/docs/plans/converge/continue-goal"
+  plan_dir="$(plan_dir_for_slug "$tmp" "continue-goal")"
   [ ! -f "$plan_dir/.converge-steer" ] || fail "CONTINUE verdict should not write plan-dir .converge-steer"
   [ ! -f "$plan_dir/.converge-stop" ]  || fail "CONTINUE verdict should not write plan-dir .converge-stop"
   [ ! -f "$tmp/.converge-steer" ]      || fail "CONTINUE verdict should not write \$root .converge-steer"
@@ -1350,7 +1377,7 @@ GOAL_UPDATE: New goal line 1
 New goal line 2" \
     run_converge "$tmp" --goal "Mutable Goal" --exec "true" --rounds 1 >/dev/null
 
-  plan="$tmp/docs/plans/converge/mutable-goal"
+  plan="$(plan_dir_for_slug "$tmp" "mutable-goal")"
   history="$plan/goal.history.log"
 
   assert_eq $'New goal line 1\nNew goal line 2' "$(cat "$plan/goal.md")" \
@@ -1378,7 +1405,7 @@ STEER: none
 GOAL_UPDATE: unchanged" \
     run_converge "$tmp" --goal "Stable Goal" --exec "true" --rounds 1 >/dev/null
 
-  plan="$tmp/docs/plans/converge/stable-goal"
+  plan="$(plan_dir_for_slug "$tmp" "stable-goal")"
   assert_eq "Stable Goal" "$(cat "$plan/goal.md")" \
     "GOAL_UPDATE unchanged should leave goal.md untouched"
   [ ! -s "$plan/goal.history.log" ] || fail "GOAL_UPDATE unchanged should not append history"
@@ -1391,7 +1418,7 @@ REASON: missing update stays conservative
 STEER: none" \
     run_converge "$tmp" --goal "Missing Update Goal" --exec "true" --rounds 1 >/dev/null
 
-  plan="$tmp/docs/plans/converge/missing-update-goal"
+  plan="$(plan_dir_for_slug "$tmp" "missing-update-goal")"
   assert_eq "Missing Update Goal" "$(cat "$plan/goal.md")" \
     "missing GOAL_UPDATE should leave goal.md untouched"
   [ ! -s "$plan/goal.history.log" ] || fail "missing GOAL_UPDATE should not append history"
@@ -1408,7 +1435,7 @@ test_goal_history_accumulates_successive_updates() {
   almanac_converge_apply_goal_update "$tmp" "Accumulating Goal" 1 "codex" "first reason" "first evolved goal"
   almanac_converge_apply_goal_update "$tmp" "Accumulating Goal" 2 "codex" "second reason" "second evolved goal"
 
-  plan="$tmp/docs/plans/converge/accumulating-goal"
+  plan="$(plan_dir_for_slug "$tmp" "accumulating-goal")"
   history="$plan/goal.history.log"
 
   assert_eq "2" "$(grep -c '^===== tick=' "$history")" \
@@ -1455,7 +1482,7 @@ EOF
   almanac_converge_scaffold "$tmp" "Fallback Goal"
   PATH="$fakebin:$PATH" almanac_converge_apply_goal_update "$tmp" "Fallback Goal" 1 "codex" "diff unavailable" "fallback evolved goal"
 
-  plan="$tmp/docs/plans/converge/fallback-goal"
+  plan="$(plan_dir_for_slug "$tmp" "fallback-goal")"
   history="$plan/goal.history.log"
 
   assert_not_contains "$(cat "$history")" "--- DIFF ---" "diff fallback should omit diff marker"
@@ -1595,11 +1622,11 @@ test_converge_stop_signal_exits_running_loop() {
 
   # converge --stop writes to the run's plan dir (per-run scope) — NOT to
   # $root any more. The plan-dir signal is what the round loop watches.
-  [ -f "$tmp/docs/plans/converge/self-stop/.converge-stop" ] || \
+  [ -f "$(plan_dir_for_slug "$tmp" "self-stop")/.converge-stop" ] || \
     fail "converge --stop should write stop signal in the plan dir"
   [ ! -f "$tmp/.converge-stop" ] \
     || fail "converge --stop MUST NOT write to \$root (would poison sibling runs)"
-  reports="$tmp/docs/plans/converge/self-stop/agent-reports.log"
+  reports="$(plan_dir_for_slug "$tmp" "self-stop")/agent-reports.log"
   assert_eq "1" "$(grep -c '^===== tick=[0-9][0-9]* ts=.* =====$' "$reports")" \
     "stop signal should halt before round 2"
   row="$(awk -F'\t' 'NR > 1 && $2 == "converge" { print; exit }' "$tmp/.almanac/runs/index.tsv")"
@@ -1622,7 +1649,7 @@ test_hub_stop_writes_converge_signal() {
   # in the run's plan dir, not at $root. This is the per-run scoping that
   # closed the cross-run-contamination bug (CONVERGED writing $root halted
   # unrelated sibling runs).
-  [ -f "$tmp/docs/plans/converge/hub-stop/.converge-stop" ] \
+  [ -f "$(plan_dir_for_slug "$tmp" "hub-stop")/.converge-stop" ] \
     || fail "hub --stop should write converge stop signal to the plan dir"
   [ ! -f "$tmp/.converge-stop" ] \
     || fail "hub --stop MUST NOT write to \$root for converge runs"
