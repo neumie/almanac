@@ -141,8 +141,7 @@ almanac_loop_converge_launch() {
 
   # Rounds: optional; blank accepts the cmd/converge.sh default
   # (CONVERGE_ROUND_BUDGET or 10). Validated when present.
-  [ -n "$rounds" ] || rounds="$(almanac_loop_ui_input "Round budget (blank = default)")" || return 1
-  [ -z "$rounds" ] || rounds="$(_almanac_launch_need_positive_int "Round budget" "$rounds")" || return 1
+  rounds="$(_almanac_launch_need_positive_int_optional "Round budget" "$rounds")" || return 1
 
   # Overseer: on by default; ask the operator only if neither flag was passed.
   if [ -z "$no_oversee" ]; then

@@ -91,6 +91,20 @@ _almanac_launch_need_positive_int() {
   done
 }
 
+# Resolve an OPTIONAL positive integer: a preset flag value is validated; an
+# interactive value is prompted with the "(blank = default)" hint, and a blank
+# reply is accepted (echoed as empty) so the downstream runner picks its own
+# default. Sibling to _almanac_launch_need_positive_int (mandatory); used by
+# harden + converge launches for `--rounds` — two adapters sharing the idiom
+# verbatim, lifted here so the "(blank = default)" wording and validation
+# semantics live in one place. Echoes the resolved value (or empty).
+_almanac_launch_need_positive_int_optional() {
+  local header="$1" current="$2"
+  [ -n "$current" ] || current="$(almanac_loop_ui_input "$header (blank = default)")" || return 1
+  [ -z "$current" ] || current="$(_almanac_launch_need_positive_int "$header" "$current")" || return 1
+  printf '%s\n' "$current"
+}
+
 # Export the consumer-wide role config (PROVIDER always, MODEL/EFFORT conditional)
 # under PREFIX (e.g. RALPH_, HARDEN_, CONVERGE_). Empty model/effort UNSET the
 # var so a stale value inherited from the parent env can't leak into the runner.

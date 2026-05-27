@@ -68,8 +68,7 @@ almanac_loop_harden_launch() {
   provider="$(_almanac_launch_need_provider provider "$provider")" || return 1
   model="$(_almanac_launch_need_choice "Reviewer model" "$model" $(almanac_provider_models "$provider"))" || return 1
   effort="$(_almanac_launch_need_choice "Reviewer thinking effort" "$effort" $(almanac_provider_efforts "$provider"))" || return 1
-  [ -n "$rounds" ] || rounds="$(almanac_loop_ui_input "Round budget (blank = default)")" || return 1
-  [ -z "$rounds" ] || rounds="$(_almanac_launch_need_positive_int "Round budget" "$rounds")" || return 1
+  rounds="$(_almanac_launch_need_positive_int_optional "Round budget" "$rounds")" || return 1
 
   almanac_loop_launch_summary "harden" \
     "Target:$target" "Lenses:${lenses:-default set}" "Provider:$provider" \
