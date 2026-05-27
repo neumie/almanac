@@ -182,6 +182,48 @@ test_records_share_identical_key_set_by_construction() {
   echo "  PASS: records share an identical key set by construction"
 }
 
+test_index_columns_is_a_prefix_of_record_fields() {
+  # The index columns are a strict projection of the canonical schema's leading
+  # block. If this assertion fails, the schema and the index have drifted apart
+  # — register_run's header / mark_run_status's status-column awk will break
+  # silently. Pinning the projection here is the cheaper, louder failure.
+  local cols all prefix
+  cols="$(almanac_loop_index_columns)"
+  all="$(almanac_loop_record_fields)"
+  prefix="$(printf '%s\n' "$all" | awk -v n="$(printf '%s\n' "$cols" | grep -c .)" 'NR<=n')"
+  assert_eq "$cols" "$prefix" \
+    "index_columns must be the leading block of record_fields (no drift)"
+  echo "  PASS: index_columns is a strict prefix of record_fields"
+}
+
+test_index_column_pos_finds_canonical_field() {
+  assert_eq "1" "$(almanac_loop_index_column_pos id)"          "id is column 1"
+  assert_eq "2" "$(almanac_loop_index_column_pos type)"        "type is column 2"
+  assert_eq "7" "$(almanac_loop_index_column_pos status)"      "status is column 7"
+  assert_eq "0" "$(almanac_loop_index_column_pos finished_at)" "non-index field returns 0"
+  assert_eq "0" "$(almanac_loop_index_column_pos bogus)"       "unknown field returns 0"
+  echo "  PASS: index_column_pos returns 1-based position or 0"
+}
+
+test_index_row_projects_status_file_into_tab_row() {
+  # Project a freshly-seeded status.tsv into the index row format and assert
+  # byte-equivalence to what register_run wrote in test_registers_run_in_registry.
+  # If the row format changes, this test fails before the integration test even
+  # runs — locality of the row contract.
+  local tmp file row expected
+  new_tmpdir; tmp="$NEW_TMPDIR"; file="$tmp/status.tsv"
+
+  almanac_loop_record_set "$file" \
+    "id=r1" "type=harden" "target=src/app.js" "pid=4242" \
+    "status_file=.almanac/runs/r1/status.tsv" "started_at=2026-05-25T12:00:00Z" \
+    "status=running"
+
+  row="$(almanac_loop_index_row "$file")"
+  expected=$'r1\tharden\tsrc/app.js\t4242\t.almanac/runs/r1/status.tsv\t2026-05-25T12:00:00Z\trunning'
+  assert_eq "$expected" "$row" "index_row must project the canonical 7 columns, tab-joined"
+  echo "  PASS: index_row projects status file into the canonical row format"
+}
+
 test_registers_run_in_registry() {
   local tmp run_id status_file index_file expected_index
   new_tmpdir
@@ -1006,6 +1048,9 @@ test_record_get_absent_field_returns_nonzero
 test_record_set_rejects_unknown_field
 test_record_set_requires_file_arg
 test_records_share_identical_key_set_by_construction
+test_index_columns_is_a_prefix_of_record_fields
+test_index_column_pos_finds_canonical_field
+test_index_row_projects_status_file_into_tab_row
 
 echo ""
 echo "=== Run Registry / Worker-Health / Hub / Control Tests ==="

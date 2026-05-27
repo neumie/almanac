@@ -35,14 +35,68 @@ fi
 
 # THE single source of truth for the run-status schema: the canonical field list
 # in write order. record_set iterates exactly this list, so every record carries
-# the same keys regardless of which subset a caller supplies. The first seven are
-# also the registry's index.tsv columns (the lightweight list pointer); the rest
-# are per-run detail/config fields the index omits.
+# the same keys regardless of which subset a caller supplies. The leading block
+# (almanac_loop_index_columns) is the registry's index.tsv columns — the
+# lightweight list pointer; the rest are per-run detail/config fields the index
+# omits.
 almanac_loop_record_fields() {
+  almanac_loop_index_columns
   printf '%s\n' \
-    id type target pid status_file started_at status finished_at round summary failure_reason \
+    finished_at round summary failure_reason \
     provider model effort iterations oversee lenses rounds queue_progress \
     goal prompt exec oversee_every
+}
+
+# The registry's lightweight list pointer — index.tsv carries exactly these
+# columns, in this order. Register/mark/header derive their tab layout off this
+# list, so a new index column is a one-line change here (not a sync between the
+# schema, the header printf, the row printf, and the awk column index). Latent
+# bug it forecloses: index header, index row, and the mark-run awk drifting out
+# of sync — e.g. promoting `round` to the index but forgetting one of the three
+# write paths.
+almanac_loop_index_columns() {
+  printf '%s\n' id type target pid status_file started_at status
+}
+
+# Tab-join a newline-list of columns into one line — the byte-exact format used
+# by index.tsv's header and every row. Stays a pure bash join (no paste) so it
+# works on any POSIX-ish host. Used by register_run for the header, and by
+# index_row to project a status record into its row form.
+_almanac_loop_tab_join() {
+  local field out=""
+  while IFS= read -r field; do
+    [ -n "$field" ] || continue
+    out="${out}${field}"$'\t'
+  done
+  printf '%s' "${out%$'\t'}"
+}
+
+# Project a status.tsv into the index.tsv row format — the index columns, in
+# order, tab-joined, terminated with a newline. Reads each column from the
+# canonical record, so the index row is a strict projection of the schema; the
+# 7-positional `printf '%s\t%s\t…'` that used to live in register_run is gone.
+almanac_loop_index_row() {
+  local status_file="$1"
+  local col vals=""
+  while IFS= read -r col; do
+    [ -n "$col" ] || continue
+    vals+="$(almanac_loop_record_get "$status_file" "$col" 2>/dev/null || true)"$'\n'
+  done < <(almanac_loop_index_columns)
+  printf '%s\n' "$(printf '%s' "$vals" | _almanac_loop_tab_join)"
+}
+
+# Column number (1-based) of FIELD in the index — for awk callers that must
+# reach a column by position (e.g. mark_run_status rewriting the status column
+# in-place). Returns 0 (and prints 0) when the field is absent, so an awk caller
+# can guard. Drives the duplication-free `$col = status` replacement; the old
+# hard-coded `$7 = status` is gone.
+almanac_loop_index_column_pos() {
+  local wanted="$1"
+  almanac_loop_index_columns | awk -v w="$wanted" '
+    BEGIN { i = 0; pos = 0 }
+    { i++; if ($0 == w) { pos = i; exit } }
+    END { print pos }
+  '
 }
 
 # Get one field from a record FILE by name. Prints the value (which may itself
@@ -261,15 +315,16 @@ almanac_loop_register_run() {
   mkdir -p "$run_dir"
 
   if [ ! -f "$index_file" ]; then
-    printf 'id\ttype\ttarget\tpid\tstatus_file\tstarted_at\tstatus\n' > "$index_file"
+    printf '%s\n' "$(almanac_loop_index_columns | _almanac_loop_tab_join)" > "$index_file"
   fi
 
   # Seed the run-status record by naming only the fields known at launch; the
   # record fills the rest (finished_at/round/summary blank) from the canonical
-  # schema. The index row is the lightweight pointer (the record's first seven
-  # fields).
+  # schema. Then derive the index row from the just-written record, so the
+  # lightweight pointer is a strict projection of the schema — no parallel
+  # 7-positional printf to keep aligned with it.
   almanac_loop_record_set "$status_file" "id=$run_id" "type=$type" "target=$target" "pid=$pid" "status_file=$status_rel" "started_at=$started_at" "status=running"
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$run_id" "$type" "$target" "$pid" "$status_rel" "$started_at" "running" >> "$index_file"
+  almanac_loop_index_row "$status_file" >> "$index_file"
   printf '%s\n' "$run_id"
 }
 
@@ -313,11 +368,18 @@ almanac_loop_mark_run_status() {
     finished_at="$(almanac_loop_now_utc)"
   fi
 
+  # Rewrite the index row's status column in place. The column number is
+  # derived from almanac_loop_index_columns so the old `$7 = status` magic — a
+  # latent bug if the index column list is reordered — is gone.
+  local status_col
+  status_col="$(almanac_loop_index_column_pos status)"
+  [ "$status_col" -gt 0 ] || return 2
+
   tmp="$(mktemp "${index_file}.XXXXXX")"
-  if ! awk -v run_id="$run_id" -v status="$status" '
+  if ! awk -v run_id="$run_id" -v status="$status" -v col="$status_col" '
     BEGIN { FS = OFS = "\t" }
     NR == 1 { print; next }
-    $1 == run_id { $7 = status; found = 1 }
+    $1 == run_id { $col = status; found = 1 }
     { print }
     END { if (!found) exit 4 }
   ' "$index_file" > "$tmp"; then
