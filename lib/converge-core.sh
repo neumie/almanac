@@ -619,23 +619,6 @@ almanac_converge_goal_summary() {
   printf '%s' "$1" | tr '\n' ' ' | cut -c 1-80
 }
 
-almanac_converge_latest_run_id() {
-  local root="$1"
-  local slug="$2"
-  local rows id type target pid status_rel started status match=""
-
-  rows="$(almanac_loop_list_runs "$root" 2>/dev/null)" || return 1
-  while IFS=$'\t' read -r id type target pid status_rel started status; do
-    [ -n "$id" ] || continue
-    [ "$type" = "converge" ] || continue
-    [ "$target" = "$slug" ] || continue
-    match="$id"
-  done <<< "$rows"
-
-  [ -n "$match" ] || return 1
-  printf '%s\n' "$match"
-}
-
 almanac_converge_worker_health() {
   local root="$1"
   local run_id="$2"
@@ -698,7 +681,7 @@ almanac_converge_dashboard_frame() {
   history_file="$plan_dir/goal.history.log"
   log_file="$plan_dir/overseer.log"
 
-  if run_id="$(almanac_converge_latest_run_id "$root" "$slug" 2>/dev/null)"; then
+  if run_id="$(almanac_loop_latest_run_for_target "$root" "converge" "$slug" 2>/dev/null)"; then
     status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
     round="$(almanac_loop_status_field "$status_file" "round" 2>/dev/null || true)"
     rounds="$(almanac_loop_status_field "$status_file" "rounds" 2>/dev/null || true)"
@@ -758,7 +741,7 @@ almanac_converge_watch() {
   while :; do
     almanac_loop_ui_clear
     almanac_converge_status "$root" "$slug"
-    if run_id="$(almanac_converge_latest_run_id "$root" "$slug" 2>/dev/null)"; then
+    if run_id="$(almanac_loop_latest_run_for_target "$root" "converge" "$slug" 2>/dev/null)"; then
       status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
       status="$(almanac_loop_status_field "$status_file" "status" 2>/dev/null || true)"
       case "$status" in

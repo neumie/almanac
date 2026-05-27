@@ -2003,6 +2003,7 @@ test_render_dashboard_reads_run_state_and_degrades() {
 
   # A real run dir the dashboard reads live worker state from.
   run_id="harden-src-app-js-20260525T120000Z-4242"
+  almanac_loop_register_run "$tmp" "harden" "src/app.js" "4242" "$run_id" "2026-05-25T12:00:00Z" >/dev/null
   wdir="$tmp/.almanac/runs/$run_id/workers/reviewer-correctness"
   mkdir -p "$wdir"
   printf '%s\n' '{"e":1}' > "$wdir/events.jsonl"
@@ -2047,6 +2048,7 @@ seed_live_run_state() {
   mkdir -p "$tmp/src"
   printf '%s\n' "code" > "$tmp/src/app.js"
 
+  almanac_loop_register_run "$tmp" "harden" "src/app.js" "4242" "$run_id" "2026-05-25T12:00:00Z" >/dev/null
   wdir="$tmp/.almanac/runs/$run_id/workers/reviewer-correctness"
   mkdir -p "$wdir"
   printf '%s\n' '{"e":1}' > "$wdir/events.jsonl"
@@ -2122,6 +2124,7 @@ test_watch_worker_streams_latest_run() {
   printf '%s\n' "code" > "$tmp/src/app.js"
 
   run_id="harden-src-app-js-20260525T120000Z-4242"
+  almanac_loop_register_run "$tmp" "harden" "src/app.js" "4242" "$run_id" "2026-05-25T12:00:00Z" >/dev/null
   wdir="$tmp/.almanac/runs/$run_id/workers/reviewer-security"
   mkdir -p "$wdir"
   printf '%s\n' '{"e":"review started"}' '{"e":"finding emitted"}' > "$wdir/events.jsonl"

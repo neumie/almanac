@@ -1780,34 +1780,6 @@ almanac_harden_dashboard_worker_rows() {
 # Find the most recent harden run id for a target under the run registry (newest
 # by directory mtime). Returns non-zero when no matching run exists. Used by the
 # dashboard to render the live run's state.
-almanac_harden_latest_run_id() {
-  local root="$1"
-  local target="$2"
-  local registry slug prefix d t base=""
-  local newest_t=0
-
-  registry="$(almanac_loop_registry_dir "$root")"
-  [ -d "$registry" ] || return 1
-  slug="$(almanac_loop_slug "$target")"
-  prefix="harden-$slug-"
-
-  # Glob + mtime rather than `ls -t | head`: the early pipe close in a head-
-  # truncated ls trips SIGPIPE under `set -o pipefail` and aborts the call.
-  shopt -s nullglob
-  for d in "$registry/$prefix"*/; do
-    [ -d "$d" ] || continue
-    t="$(stat -f %m "$d" 2>/dev/null || stat -c %Y "$d" 2>/dev/null || printf '%s' "0")"
-    if [ "$t" -ge "$newest_t" ]; then
-      newest_t="$t"
-      base="$(basename "$d")"
-    fi
-  done
-  shopt -u nullglob
-
-  [ -n "$base" ] || return 1
-  printf '%s\n' "$base"
-}
-
 # Render the supervision dashboard for a target's most recent run: gather the
 # run's reviewer health, findings tally, and rubric progress, compose the pure
 # rows, and style them (gum panel when available, plain text otherwise). Safe to
@@ -1821,7 +1793,7 @@ almanac_harden_render_dashboard() {
   local verdict="${5:-n/a}"
   local run_id ledger_path rubric_path tally progress rows
 
-  run_id="$(almanac_harden_latest_run_id "$root" "$target" || true)"
+  run_id="$(almanac_loop_latest_run_for_target "$root" "harden" "$target" || true)"
   ledger_path="$(almanac_harden_ledger_path "$root" "$target")"
   rubric_path="$(almanac_harden_rubric_path "$root" "$target")"
 
@@ -1901,7 +1873,7 @@ almanac_harden_dashboard_redraw() {
     if [ "$max_frames" -gt 0 ]; then
       [ "$frames" -ge "$max_frames" ] && break
     else
-      run_id="$(almanac_harden_latest_run_id "$root" "$target" || true)"
+      run_id="$(almanac_loop_latest_run_for_target "$root" "harden" "$target" || true)"
       if [ -z "$run_id" ] || ! almanac_harden_run_has_active_worker "$root" "$run_id"; then
         break
       fi
@@ -1925,7 +1897,7 @@ almanac_harden_watch_worker() {
   local follow="${4:-}"
   local run_id status_file
 
-  run_id="$(almanac_harden_latest_run_id "$root" "$target")" || {
+  run_id="$(almanac_loop_latest_run_for_target "$root" "harden" "$target")" || {
     _warn "No harden run found for target: $target"
     return 1
   }

@@ -555,6 +555,29 @@ almanac_loop_list_runs() {
   printf '%s\n' "$rows"
 }
 
+# Find the most recently registered run for (type, target) and print its run id.
+# "Latest" comes from the registry's append order — the index file is monotonic.
+# Both harden (per target) and converge (per slug) call this; their earlier
+# per-loop variants diverged in mechanism (glob+stat-mtime vs row-scan) but
+# agreed on intent. Returns 1 when no matching run exists.
+almanac_loop_latest_run_for_target() {
+  local root="$1"
+  local want_type="$2"
+  local want_target="$3"
+  local rows id type target pid status_rel started status match=""
+
+  rows="$(almanac_loop_list_runs "$root" 2>/dev/null)" || return 1
+  while IFS=$'\t' read -r id type target pid status_rel started status; do
+    [ -n "$id" ] || continue
+    [ "$type" = "$want_type" ] || continue
+    [ "$target" = "$want_target" ] || continue
+    match="$id"
+  done <<< "$rows"
+
+  [ -n "$match" ] || return 1
+  printf '%s\n' "$match"
+}
+
 # Read a single run's full status.tsv blob — the detail view the hub renders for
 # one run (identity plus live round/summary and finish state). Returns 1 when the
 # run is unknown.
