@@ -163,12 +163,14 @@ test_hub_new_dry_run_composes_harden_launch() {
 # Criterion 3: a new run missing its required config (harden target) is rejected
 # with a non-zero exit rather than launching a malformed run.
 test_hub_new_missing_required_errors() {
-  local rc=0
-  "$ALMANAC_BIN" hub --new harden --rounds 2 --dry-run </dev/null >/dev/null 2>&1 || rc=$?
+  local rc=0 out
+  out="$("$ALMANAC_BIN" hub --new harden --rounds 2 --dry-run </dev/null 2>&1)" || rc=$?
   [ "$rc" -ne 0 ] || fail "hub --new harden without a target must exit non-zero"
+  assert_contains "$out" "--target" "missing harden config should use the adapter's hint"
   rc=0
-  "$ALMANAC_BIN" hub --new converge --exec "echo hi" --dry-run </dev/null >/dev/null 2>&1 || rc=$?
+  out="$("$ALMANAC_BIN" hub --new converge --exec "echo hi" --dry-run </dev/null 2>&1)" || rc=$?
   [ "$rc" -ne 0 ] || fail "hub --new converge without --goal must exit non-zero"
+  assert_contains "$out" "--goal" "missing converge config should use the adapter's hint"
   rc=0
   "$ALMANAC_BIN" hub --new converge --goal "ship" --dry-run </dev/null >/dev/null 2>&1 || rc=$?
   [ "$rc" -ne 0 ] || fail "hub --new converge without --prompt or --exec must exit non-zero"
@@ -176,6 +178,16 @@ test_hub_new_missing_required_errors() {
   "$ALMANAC_BIN" hub --new converge --goal "ship" --prompt "/x" --exec "y" --dry-run </dev/null >/dev/null 2>&1 || rc=$?
   [ "$rc" -ne 0 ] || fail "hub --new converge with BOTH --prompt and --exec must exit non-zero"
   echo "  PASS: hub --new without required config errors"
+}
+
+test_hub_new_unknown_type_lists_discovered_loops() {
+  local out rc=0
+  out="$("$ALMANAC_BIN" hub --new bogus --dry-run </dev/null 2>&1)" || rc=$?
+  [ "$rc" -ne 0 ] || fail "hub --new unknown type must exit non-zero"
+  assert_contains "$out" "ralph" "unknown-type error should list ralph"
+  assert_contains "$out" "harden" "unknown-type error should list harden"
+  assert_contains "$out" "converge" "unknown-type error should list converge"
+  echo "  PASS: hub --new unknown type lists discovered loops"
 }
 
 # Criterion: `almanac hub --new converge --prompt …` (the dominant slash-command
@@ -263,6 +275,7 @@ test_hub_new_dry_run_composes_harden_launch
 test_hub_new_dry_run_composes_converge_launch
 test_hub_new_dry_run_composes_converge_prompt_launch
 test_hub_new_missing_required_errors
+test_hub_new_unknown_type_lists_discovered_loops
 test_hub_resume_harden_does_not_append_yes
 echo ""
 echo "All hub tests passed."

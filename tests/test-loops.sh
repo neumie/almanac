@@ -3,7 +3,7 @@
 #
 # Sources lib/loops.sh DIRECTLY (not through loop-core / the launcher) so the
 # seam's interface is its own test surface. The adapters are pure config (exec
-# argv composition + signal-file mapping), so nothing here calls a real runner —
+# argv/new-run composition + signal-file mapping), so nothing here calls a real runner —
 # exec_argv is asserted against a fake $ALMANAC_HOME, never executed.
 
 set -euo pipefail
@@ -41,6 +41,17 @@ test_dispatch_rejects_unknown_verb() {
   almanac_loop_adapter_call ralph no_such_verb >/dev/null 2>&1 || rc=$?
   assert_eq 2 "$rc" "dispatch should return 2 for a verb the adapter does not implement"
   echo "  PASS: dispatch rejects an unimplemented verb"
+}
+
+test_new_run_usage_contract() {
+  local out
+  out="$(almanac_loop_adapter_call ralph new_run_usage)"
+  case "$out" in *"--prd"*) ;; *) fail "ralph new_run_usage should mention --prd" ;; esac
+  out="$(almanac_loop_adapter_call harden new_run_usage)"
+  case "$out" in *"--target"*) ;; *) fail "harden new_run_usage should mention --target" ;; esac
+  out="$(almanac_loop_adapter_call converge new_run_usage)"
+  case "$out" in *"--goal"*--prompt*--exec*) ;; *) fail "converge new_run_usage should mention goal plus prompt/exec" ;; esac
+  echo "  PASS: new_run_usage contract"
 }
 
 test_signal_file_control_contract() {
@@ -158,6 +169,7 @@ test_kv_get_picks_value() {
 echo "=== Loop Seam Tests ==="
 test_discovery_lists_present_adapters
 test_dispatch_rejects_unknown_verb
+test_new_run_usage_contract
 test_signal_file_control_contract
 test_ralph_exec_argv_launch_contract
 test_harden_exec_argv_launch_contract

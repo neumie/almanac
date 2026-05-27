@@ -52,7 +52,7 @@ almanac_harden_role() {
     *) return 2 ;;
   esac
 
-  almanac_loop_role_config "harden" "$role" "$lens" "$(almanac_provider_default)" "" ""
+  almanac_loop_role_config "harden" "$role" "$lens" "claude" "" ""
 }
 
 # One field (provider | model | effort) of a harden role's resolved config, for

@@ -15,6 +15,7 @@
 #                   new_run_env). Enforces the prompt/exec mutex.
 #   new_run_env   — emit KEY=VALUE env lines for the role config (CONVERGE_*)
 #                   so the hub never has to know converge's env prefixes.
+#   new_run_usage — one-line missing-config hint for hub errors.
 #
 # Control contract (signal_file) inherits the default `.converge-stop` /
 # `.converge-steer` convention from lib/loops.sh — no adapter override needed.
@@ -207,6 +208,10 @@ almanac_loop_converge_new_run_env() {
   [ -n "$model" ]    && printf 'CONVERGE_MODEL=%s\n' "$model"
   [ -n "$effort" ]   && printf 'CONVERGE_EFFORT=%s\n' "$effort"
   return 0
+}
+
+almanac_loop_converge_new_run_usage() {
+  printf '%s\n' "requires --goal <text> and exactly one of --prompt <text> / --exec <cmd>"
 }
 
 # Read a converge run's status blob and emit the key=val pairs that

@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
 # lib/loops.sh — the loop-adapter seam (discovery + dispatch).
 #
-# Mirrors the provider-adapter seam (lib/agent.sh): each loop (ralph, harden) is a
+# Mirrors the provider-adapter seam (lib/agent.sh): each loop adapter is a
 # drop-in adapter file at lib/loops/<name>.sh answering one fixed question set, so
 # no central code branches on a loop type. This module owns discovery (the loop
 # list IS the files present), name-normalising dispatch (the one place a loop type
 # becomes a function call), and auto-loads the adapters at source time.
 #
-# Each adapter (called as almanac_loop_<name>_<verb>) declares two contracts:
-#   launch  — exec_argv: how to exec its runner (config in, _ALMANAC_LOOP_ARGV out)
-#             — consumed by the launcher (lib/loop-launcher.sh)
-#   control — signal_file <stop|steer>: its between-round dot-file basename.
-#             Optional override — almanac_loop_default_signal_file (below) handles
-#             the standard `.${name}-${kind}` convention every loop uses today, so
-#             adapters only define this if their convention diverges. Resolved
-#             through almanac_loop_signal_file (consumed by lib/run.sh control).
+# Each adapter (called as almanac_loop_<name>_<verb>) declares these contracts:
+#   launch     — launch / launch_usage / exec_argv, consumed by the launcher.
+#   new-run    — new_run_argv / new_run_env / new_run_usage, consumed by the hub.
+#   resume     — status_to_opts, plus optional launch_backed.
+#   control    — signal_file <stop|steer>, optional when using the standard
+#                `.${name}-${kind}` convention.
 #
 # Self-contained: uses only printf / tr / basename / source — no lib/core.sh
 # dependency — so the seam (and the adapters) are their own test surface and

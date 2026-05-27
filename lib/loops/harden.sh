@@ -17,6 +17,7 @@
 #   new_run_env   — emit KEY=VALUE env lines for the reviewer/role config
 #                   (HARDEN_LENSES/PROVIDER/MODEL/EFFORT) so the hub never has
 #                   to know harden's env prefixes.
+#   new_run_usage — one-line missing-config hint for hub errors.
 #
 # Control contract (signal_file) inherits the default `.harden-stop` /
 # `.harden-steer` convention from lib/loops.sh — no adapter override needed.
@@ -119,6 +120,10 @@ almanac_loop_harden_new_run_env() {
   [ -n "$model" ]    && printf 'HARDEN_MODEL=%s\n' "$model"
   [ -n "$effort" ]   && printf 'HARDEN_EFFORT=%s\n' "$effort"
   return 0
+}
+
+almanac_loop_harden_new_run_usage() {
+  printf '%s\n' "requires --target <path>"
 }
 
 # Read a harden run's status blob and emit the key=val pairs that

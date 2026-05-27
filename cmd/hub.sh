@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hub.sh — interactive front door to almanac loops (ralph, harden)
+# hub.sh — interactive front door to almanac loops.
 #
 # Bare `almanac` routes here on a TTY (and `almanac hub` always does). The hub
 # reads the run registry under the caller's repo ($PWD/.almanac/runs) and shows
@@ -17,7 +17,7 @@
 #   almanac hub --watch <id>           tail a run's live status (one frame off a TTY)
 #   almanac hub --stop  <id>           signal a run to stop (loop stop file)
 #   almanac hub --steer <id> <text…>   queue a steer directive for the next round
-#   almanac hub --new <ralph|harden|converge> [config…] [--dry-run]
+#   almanac hub --new <loop> [config…] [--dry-run]
 #                                      launch a new run (dry-run previews the command)
 #   almanac hub --resume <id>          re-launch a finished run with the same config (auto-confirm)
 #   almanac hub --clone  <id>          start the launcher pre-filled from a finished run (no auto-confirm)
@@ -31,13 +31,32 @@ source "$ALMANAC_HOME/lib/loop-launcher.sh"
 
 ROOT="$PWD"
 
+almanac_hub_loop_names_inline() {
+  local names=() name
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    names+=("$name")
+  done < <(almanac_loop_adapter_list)
+  (IFS='|'; printf '%s\n' "${names[*]}")
+}
+
+almanac_hub_new_run_config_hint() {
+  local type="$1" hint
+  hint="$(almanac_loop_adapter_call "$type" new_run_usage 2>/dev/null || true)"
+  if [ -n "$hint" ]; then
+    printf '%s\n' "$hint"
+  else
+    printf '%s\n' "check this loop adapter's required config"
+  fi
+}
+
 hub_usage() {
   printf '%s\n' "Usage:"
   printf '%s\n' "  almanac hub                      open the hub (interactive on a TTY, overview otherwise)"
   printf '%s\n' "  almanac hub --watch <run-id>     tail a run's live status"
   printf '%s\n' "  almanac hub --stop  <run-id>     signal a run to stop"
   printf '%s\n' "  almanac hub --steer <run-id> …   queue a steer directive for the next round"
-  printf '%s\n' "  almanac hub --new <ralph|harden|converge> [config…] [--dry-run]"
+  printf '%s\n' "  almanac hub --new <$(almanac_hub_loop_names_inline)> [config…] [--dry-run]"
   printf '%s\n' "                                  launch a new run (--dry-run previews it)"
   printf '%s\n' "  almanac hub --resume <run-id>    re-launch a finished run with the same config"
   printf '%s\n' "  almanac hub --clone  <run-id>    start the launcher pre-filled from a finished run"
@@ -84,12 +103,17 @@ almanac_hub_launch_new() {
 # Interactive New-run flow: pick the loop type, then hand off to the shared
 # almanac launcher (almanac_loop_launch), which gathers that loop's config
 # through the same gum seam, summarises, confirms, and execs the runner. No
-# config logic lives here — one launcher, one UX, shared with `almanac ralph`
-# and `almanac harden`. On confirm the launcher execs (hands over the terminal);
+# config logic lives here — one launcher, one UX, shared with direct loop CLIs.
+# On confirm the launcher execs (hands over the terminal);
 # if the operator cancels first it returns here and the menu loop continues.
 almanac_hub_new_run() {
-  local type
-  type="$(almanac_loop_ui_choose "New run — pick a loop" ralph harden converge)" || return 0
+  local type loop loops=()
+  while IFS= read -r loop; do
+    [ -n "$loop" ] || continue
+    loops+=("$loop")
+  done < <(almanac_loop_adapter_list)
+  [ "${#loops[@]}" -gt 0 ] || _die "No loop adapters found"
+  type="$(almanac_loop_ui_choose "New run — pick a loop" "${loops[@]}")" || return 0
   almanac_loop_launch "$type"
 }
 
@@ -206,7 +230,7 @@ while [ "$#" -gt 0 ]; do
       ;;
     --new)
       shift
-      [ "$#" -gt 0 ] || _die "Missing run type for --new (ralph|harden|converge)"
+      [ "$#" -gt 0 ] || _die "Missing run type for --new ($(almanac_hub_loop_names_inline))"
       ACTION="new"
       ACTION_TYPE="$1"
       shift
@@ -317,8 +341,8 @@ case "$ACTION" in
     fi
     case "$NEW_RC" in
       0) ;;
-      1) _die "Unknown run type: $ACTION_TYPE (use ralph or harden)" ;;
-      2) _die "Missing required config for $ACTION_TYPE (ralph needs --prd, harden needs --target)" ;;
+      1) _die "Unknown run type: $ACTION_TYPE (use $(almanac_hub_loop_names_inline))" ;;
+      2) _die "Missing or invalid config for $ACTION_TYPE: $(almanac_hub_new_run_config_hint "$ACTION_TYPE")" ;;
       *) _die "Could not compose $ACTION_TYPE run" ;;
     esac
     if [ "${#NEW_OPTS[@]}" -gt 0 ]; then

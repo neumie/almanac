@@ -7,7 +7,7 @@
 #
 # A run-status *record* is a per-run status.tsv — one `key<TAB>value` line per
 # field. This module owns the CANONICAL FIELD LIST and the only set/get-by-name
-# accessors for it, so the run-status contract — every run (ralph or harden)
+# accessors for it, so the run-status contract — every loop run
 # carries exactly this key set, in this order — is enforced *by construction*:
 # a caller names only the fields it has values for; the record fills in the rest,
 # and no writer ever enumerates the schema by hand.
@@ -36,8 +36,8 @@ fi
 # THE single source of truth for the run-status schema: the canonical field list
 # in write order. record_set iterates exactly this list, so every record carries
 # the same keys regardless of which subset a caller supplies. The first seven are
-# also the registry's index.tsv columns (the lightweight list pointer); the last
-# three (finished_at/round/summary) are the per-run detail the index omits.
+# also the registry's index.tsv columns (the lightweight list pointer); the rest
+# are per-run detail/config fields the index omits.
 almanac_loop_record_fields() {
   printf '%s\n' \
     id type target pid status_file started_at status finished_at round summary failure_reason \
@@ -922,14 +922,15 @@ almanac_loop_run_watch() {
 
 # --- New-run composition (hub "New run" flow) -------------------------------
 #
-# The hub's New-run flow picks a loop type (ralph|harden), gathers config, and
+# The hub's New-run flow picks a loop type from discovered adapters, gathers config, and
 # launches it. The argv/env COMPOSITION is pure (no gum, no exec) so it is unit-
 # testable off a terminal and doubles as the seam the gum menu and `almanac hub
 # --new … [--dry-run]` both drive: menu choices in, launch tokens out.
 #
 # Config arrives as `key=value` pairs (the keys the gum menu / --new flags
 # collect): ralph takes prd, mode, provider, model, effort, iterations, oversee;
-# harden takes target, rounds, lenses, provider, model, effort.
+# harden takes target, rounds, lenses, provider, model, effort; converge takes
+# goal, prompt/exec, rounds, provider, model, effort, oversee, oversee_every.
 
 # Compose the launcher argv for a new run, one token per line, starting with the
 # `almanac` subcommand. The loop-specific flag shape lives in each loop adapter's

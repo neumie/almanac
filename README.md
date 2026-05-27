@@ -69,7 +69,7 @@ almanac install codex                        # same, for ~/.codex/AGENTS.md
 ```
 almanac                      Open the interactive loop hub (in a TTY); else print help
 almanac hub                  Open the interactive loop hub (launch / list / watch loops)
-almanac hub --new <type>     Launch a new ralph|harden run (add --dry-run to preview)
+almanac hub --new <type>     Launch a new ralph|harden|converge run (add --dry-run to preview)
 almanac install <provider>   Install for a provider
 almanac uninstall <provider> Remove from a provider
 almanac list                 List available providers and install status
@@ -89,6 +89,8 @@ almanac harden <target> --watch
                              Redraw the live supervision dashboard for the latest run
 almanac harden <target> --watch-worker <lens>
                              Stream one reviewer's live event log
+almanac converge --goal "<goal>" --prompt "<text>" [--rounds N]
+                             Run a generic convergence loop with one agent prompt per round
 almanac converge --goal "<goal>" --exec "<cmd>" [--rounds N]
                              Run a generic convergence loop with one custom exec per round
 almanac converge <slug>      Print a converge run status summary

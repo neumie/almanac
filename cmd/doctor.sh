@@ -6,7 +6,7 @@ source "$ALMANAC_HOME/lib/core.sh"
 echo -e "${_BOLD}almanac doctor${_RESET} — environment check"
 echo ""
 
-# gum (Charm) — optional, styles the harden/ralph dashboards + HITL prompts.
+# gum (Charm) — optional, styles loop dashboards + HITL prompts.
 # Absent is fine: the CLI degrades to plain output (near-zero-dependency promise).
 almanac_report_gum
 

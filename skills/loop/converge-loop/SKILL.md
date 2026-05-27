@@ -219,8 +219,7 @@ installed.
 
 - `--no-oversee` disables goal mutation and steering entirely; the loop runs only
   the worker rounds until the budget is exhausted.
-- Converge is launched directly with `almanac converge --goal ... --exec ...` in
-  v1. The hub can list, watch, and stop converge runs, but the hub new-run
-  launcher covers only ralph and harden today.
+- Converge can be launched directly with `almanac converge --goal ... --prompt ...`
+  or `--exec ...`, and through `almanac hub --new converge ...`.
 - The exec command is trusted user input. Converge judges progress; it is not a
   dangerous-command sandbox or approval gate.

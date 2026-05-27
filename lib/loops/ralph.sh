@@ -17,6 +17,7 @@
 #   new_run_env   — emit KEY=VALUE env lines for fields that ride on environment
 #                   (none for ralph; the verb exists so the dispatch in lib/run.sh
 #                   has no `case "$type"` branches).
+#   new_run_usage — one-line missing-config hint for hub errors.
 #
 # Control contract (signal_file) inherits the default `.ralph-stop` / `.ralph-steer`
 # convention from lib/loops.sh — no adapter override needed.
@@ -151,6 +152,10 @@ almanac_loop_ralph_new_run_argv() {
 # on loop type at the new-run composer.
 almanac_loop_ralph_new_run_env() {
   return 0
+}
+
+almanac_loop_ralph_new_run_usage() {
+  printf '%s\n' "requires --prd <name>"
 }
 
 # Read a ralph run's status blob and emit the key=val pairs that
