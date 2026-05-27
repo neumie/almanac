@@ -222,6 +222,26 @@ You MUST emit all four KEY: lines even when a value is "none" or "unchanged"
 needed. Do NOT prefix the keys with **bold**, ### headings, - bullet points,
 or > quotes; the keys live at column 0 with the literal colon.
 
+GOAL_UPDATE guidance — when to emit a rewritten goal vs 'unchanged':
+
+  Emit 'unchanged' UNLESS the current goal is structurally broken:
+    - Too vague to judge against (no falsifiable criterion — "make it good")
+    - Too narrow to permit real fixes (locks out a needed direction)
+    - Phrased as the absence of a problem ("no X left") when the work
+      actually requires presence of a property ("X under control")
+    - Contradicted by what every recent self-report says is the real work
+      (the workers keep doing Y, but the goal asks for Z that Y doesn't
+      reach)
+
+  Do NOT mutate the goal just to:
+    - Add detail that makes you feel productive
+    - Narrow it to whatever the current round happened to focus on
+    - Phrase it more elegantly without changing meaning
+
+  A goal mutation is a controlled steering act, not editorial polish. If
+  the current goal would let you correctly answer the question "is this
+  done?", emit 'unchanged'.
+
 Be conservative. Malformed output is treated as CONTINUE with no steering and
 no goal update. GOAL_UPDATE may span multiple lines because it is the final
 field; the parser captures everything from the GOAL_UPDATE: marker to EOF.

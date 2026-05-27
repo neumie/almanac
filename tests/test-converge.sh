@@ -750,6 +750,14 @@ test_overseer_prompt_embeds_goal_reports_commits_and_contract() {
     "overseer prompt should specify verdict contract"
   assert_contains "$prompt" "GOAL_UPDATE: <new goal.md content, or 'unchanged'>" \
     "overseer prompt should specify goal update contract"
+  # GOAL_UPDATE guidance: discourage editorial polish, demand a structural
+  # reason for mutation. Without this, LLMs default to "unchanged" by path-
+  # of-least-resistance — across 5 prior runs (20 ticks total) the field
+  # never once moved, partly because the prompt didn't give criteria.
+  assert_contains "$prompt" "structurally broken" \
+    "overseer prompt should name when goal mutation is justified"
+  assert_contains "$prompt" "editorial polish" \
+    "overseer prompt should explicitly discourage editorial-only mutations"
 
   echo "  PASS: overseer prompt embeds goal, bounded reports, commits, and contract"
 }
