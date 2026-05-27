@@ -63,9 +63,7 @@ almanac_harden_role_field() {
   local field="$2"
   local lens="${3:-}"
 
-  # Consume all of almanac_harden_role's output (no early awk exit) so the
-  # producer never takes a SIGPIPE under `set -o pipefail`.
-  almanac_harden_role "$role" "$lens" | awk -F'\t' -v k="$field" '$1 == k { v = $2 } END { print v }'
+  almanac_harden_role "$role" "$lens" | almanac_loop_role_tsv_field "$field"
 }
 
 almanac_harden_rubric_path() {

@@ -57,7 +57,7 @@ almanac_converge_role_field() {
   local role="$1"
   local field="$2"
 
-  almanac_converge_role "$role" | awk -F'\t' -v k="$field" '$1 == k { v = $2 } END { print v }'
+  almanac_converge_role "$role" | almanac_loop_role_tsv_field "$field"
 }
 
 almanac_converge_ensure_prompt_template() {

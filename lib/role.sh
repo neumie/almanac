@@ -74,6 +74,17 @@ almanac_loop_role_field() {
   printf '%s\n' "$default_value"
 }
 
+# Read ONE field by name from a role-config TSV stream on stdin (the shape every
+# loop's role resolver emits via almanac_loop_role_config: `field<TAB>value` per
+# line). Echoes the value (empty when the field is absent). The full stream is
+# consumed (no early awk exit) so the producer never takes a SIGPIPE under
+# `set -o pipefail`. Lives here so each loop's per-field reader (harden_role_field,
+# converge_role_field, …) reduces to one line — the awk pipeline no longer lives
+# in each loop's core.
+almanac_loop_role_tsv_field() {
+  awk -F'\t' -v k="$1" '$1 == k { v = $2 } END { print v }'
+}
+
 # Resolve a role's full (provider, model, effort) config as three TSV rows, each
 # field resolved through almanac_loop_role_field with its own default. Returns 2
 # on missing args.

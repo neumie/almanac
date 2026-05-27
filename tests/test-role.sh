@@ -151,6 +151,22 @@ test_role_config_requires_two_args() {
   echo "  PASS: role_config requires two args"
 }
 
+test_role_tsv_field_reads_named_field() {
+  local stream actual
+  stream=$(printf 'provider\tcodex\nmodel\tgpt-5\neffort\thigh\n')
+  actual="$(printf '%s' "$stream" | almanac_loop_role_tsv_field provider)"
+  assert_eq "codex" "$actual" "role_tsv_field reads provider"
+  actual="$(printf '%s' "$stream" | almanac_loop_role_tsv_field effort)"
+  assert_eq "high" "$actual" "role_tsv_field reads effort"
+  actual="$(printf '%s' "$stream" | almanac_loop_role_tsv_field missing)"
+  assert_eq "" "$actual" "role_tsv_field echoes empty for an absent field"
+  # The reader consumes the whole stream (no awk early-exit) so a producer in a
+  # `set -o pipefail` shell never takes a SIGPIPE.
+  actual="$(set -o pipefail; printf '%s' "$stream" | almanac_loop_role_tsv_field provider)"
+  assert_eq "codex" "$actual" "role_tsv_field is pipefail-safe (no early-exit SIGPIPE)"
+  echo "  PASS: role_tsv_field reads a field from a TSV stream"
+}
+
 test_env_key_part_normalises_to_upper_underscore
 test_role_field_lens_layer_wins
 test_role_field_role_layer_beats_consumer_wide
@@ -162,6 +178,7 @@ test_role_field_requires_five_args
 test_resolves_role_config_with_lens_overrides
 test_resolves_role_config_with_ralph_style_fallbacks
 test_role_config_requires_two_args
+test_role_tsv_field_reads_named_field
 
 echo ""
 echo "All role config resolution tests passed."

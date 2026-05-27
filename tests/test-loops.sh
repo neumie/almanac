@@ -143,6 +143,18 @@ test_converge_exec_argv_launch_contract() {
   echo "  PASS: converge exec_argv launch contract"
 }
 
+test_kv_get_picks_value() {
+  assert_eq "auth-system" "$(_almanac_loop_kv_get prd prd=auth-system mode=afk)" "kv_get picks the matching value"
+  assert_eq "afk"         "$(_almanac_loop_kv_get mode prd=auth-system mode=afk)" "kv_get scans every pair"
+  assert_eq ""            "$(_almanac_loop_kv_get missing prd=auth-system)"      "kv_get echoes empty for an absent key"
+  assert_eq ""            "$(_almanac_loop_kv_get prd)"                          "kv_get echoes empty with no pairs"
+  # A value that contains `=` round-trips (e.g. converge --exec foo=bar).
+  assert_eq "echo foo=bar" "$(_almanac_loop_kv_get exec "exec=echo foo=bar")"    "kv_get preserves '=' in values"
+  # Last pair wins (matches the case-statement semantics the loops used inline).
+  assert_eq "second" "$(_almanac_loop_kv_get k k=first k=second)" "kv_get: later pair wins"
+  echo "  PASS: _almanac_loop_kv_get"
+}
+
 echo "=== Loop Seam Tests ==="
 test_discovery_lists_present_adapters
 test_dispatch_rejects_unknown_verb
@@ -150,5 +162,6 @@ test_signal_file_control_contract
 test_ralph_exec_argv_launch_contract
 test_harden_exec_argv_launch_contract
 test_converge_exec_argv_launch_contract
+test_kv_get_picks_value
 
 echo "All loop seam tests passed."

@@ -76,6 +76,25 @@ almanac_loop_adapter_call() {
   "$fn" "$@"
 }
 
+# Look up the value for KEY in a stream of `key=value` PAIRS (the lingua franca
+# the hub speaks to a loop adapter's new_run_argv / new_run_env verbs). Echoes
+# the value (which may itself contain `=`, e.g. `--prompt /foo bar=baz`) and
+# returns 0; echoes nothing when KEY is absent. Later pairs win, matching the
+# `case "$key" in foo) v="$val" ;; esac` semantics each adapter used to inline.
+# Lives in the loop-adapter seam (lib/loops.sh) because every adapter's
+# composer is its only caller — keeps the lookup pattern in one place so a
+# fourth loop is a single-file addition instead of a fourth copy of the loop.
+_almanac_loop_kv_get() {
+  local want="$1"; shift
+  local pair value=""
+  for pair in "$@"; do
+    case "$pair" in
+      "$want="*) value="${pair#*=}" ;;
+    esac
+  done
+  printf '%s\n' "$value"
+}
+
 # Default signal-file basename for a loop's between-round control. Every loop uses
 # the same `.${name}-${kind}` convention (`.ralph-stop`, `.harden-steer`, …) so the
 # pattern lives once here instead of being copy-pasted into each adapter. A loop

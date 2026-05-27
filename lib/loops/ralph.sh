@@ -125,20 +125,14 @@ almanac_loop_ralph_launch() {
 # its config as flags — no env lines — so it has no new_run_env counterpart with
 # real work to do, but it still implements one (below) for contract uniformity.
 almanac_loop_ralph_new_run_argv() {
-  local prd="" mode="" provider="" model="" effort="" iterations="" oversee=""
-  local kv key val
-  for kv in "$@"; do
-    key="${kv%%=*}"; val="${kv#*=}"
-    case "$key" in
-      prd) prd="$val" ;;
-      mode) mode="$val" ;;
-      provider) provider="$val" ;;
-      model) model="$val" ;;
-      effort) effort="$val" ;;
-      iterations) iterations="$val" ;;
-      oversee) oversee="$val" ;;
-    esac
-  done
+  local prd mode provider model effort iterations oversee
+  prd="$(_almanac_loop_kv_get prd "$@")"
+  mode="$(_almanac_loop_kv_get mode "$@")"
+  provider="$(_almanac_loop_kv_get provider "$@")"
+  model="$(_almanac_loop_kv_get model "$@")"
+  effort="$(_almanac_loop_kv_get effort "$@")"
+  iterations="$(_almanac_loop_kv_get iterations "$@")"
+  oversee="$(_almanac_loop_kv_get oversee "$@")"
 
   [ -n "$prd" ] || return 2
   printf '%s\n' ralph

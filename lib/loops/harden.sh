@@ -95,14 +95,9 @@ almanac_loop_harden_launch() {
 # all other reviewer/role config rides on env (see new_run_env). Returns 2 when
 # a required field (target) is missing.
 almanac_loop_harden_new_run_argv() {
-  local target="" rounds="" kv key val
-  for kv in "$@"; do
-    key="${kv%%=*}"; val="${kv#*=}"
-    case "$key" in
-      target) target="$val" ;;
-      rounds) rounds="$val" ;;
-    esac
-  done
+  local target rounds
+  target="$(_almanac_loop_kv_get target "$@")"
+  rounds="$(_almanac_loop_kv_get rounds "$@")"
 
   [ -n "$target" ] || return 2
   printf '%s\n%s\n%s\n' harden "$target" --loop
@@ -114,16 +109,11 @@ almanac_loop_harden_new_run_argv() {
 # key=val pairs: reviewer lenses + role config (HARDEN_LENSES / HARDEN_PROVIDER /
 # HARDEN_MODEL / HARDEN_EFFORT). Empty fields drop their key.
 almanac_loop_harden_new_run_env() {
-  local provider="" model="" effort="" lenses="" kv key val
-  for kv in "$@"; do
-    key="${kv%%=*}"; val="${kv#*=}"
-    case "$key" in
-      provider) provider="$val" ;;
-      model)    model="$val" ;;
-      effort)   effort="$val" ;;
-      lenses)   lenses="$val" ;;
-    esac
-  done
+  local provider model effort lenses
+  provider="$(_almanac_loop_kv_get provider "$@")"
+  model="$(_almanac_loop_kv_get model "$@")"
+  effort="$(_almanac_loop_kv_get effort "$@")"
+  lenses="$(_almanac_loop_kv_get lenses "$@")"
   [ -n "$lenses" ]   && printf 'HARDEN_LENSES=%s\n' "$lenses"
   [ -n "$provider" ] && printf 'HARDEN_PROVIDER=%s\n' "$provider"
   [ -n "$model" ]    && printf 'HARDEN_MODEL=%s\n' "$model"

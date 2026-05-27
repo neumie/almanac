@@ -165,19 +165,13 @@ almanac_loop_converge_launch() {
 # config (provider/model/effort) rides on env via new_run_env. Returns 2 when a
 # required field is missing or the prompt/exec mutex is violated.
 almanac_loop_converge_new_run_argv() {
-  local goal="" prompt="" exec_cmd="" rounds="" oversee="" oversee_every=""
-  local kv key val
-  for kv in "$@"; do
-    key="${kv%%=*}"; val="${kv#*=}"
-    case "$key" in
-      goal) goal="$val" ;;
-      prompt) prompt="$val" ;;
-      exec) exec_cmd="$val" ;;
-      rounds) rounds="$val" ;;
-      oversee) oversee="$val" ;;
-      oversee_every) oversee_every="$val" ;;
-    esac
-  done
+  local goal prompt exec_cmd rounds oversee oversee_every
+  goal="$(_almanac_loop_kv_get goal "$@")"
+  prompt="$(_almanac_loop_kv_get prompt "$@")"
+  exec_cmd="$(_almanac_loop_kv_get exec "$@")"
+  rounds="$(_almanac_loop_kv_get rounds "$@")"
+  oversee="$(_almanac_loop_kv_get oversee "$@")"
+  oversee_every="$(_almanac_loop_kv_get oversee_every "$@")"
 
   [ -n "$goal" ] || return 2
   # Mutex: prompt is the dominant mode (agent invocation); exec is the escape
@@ -205,15 +199,10 @@ almanac_loop_converge_new_run_argv() {
 # lookup uses for both worker and overseer roles unless the user has set
 # CONVERGE_{AGENT,OVERSEER}_* explicitly. Empty fields drop their key.
 almanac_loop_converge_new_run_env() {
-  local provider="" model="" effort="" kv key val
-  for kv in "$@"; do
-    key="${kv%%=*}"; val="${kv#*=}"
-    case "$key" in
-      provider) provider="$val" ;;
-      model)    model="$val" ;;
-      effort)   effort="$val" ;;
-    esac
-  done
+  local provider model effort
+  provider="$(_almanac_loop_kv_get provider "$@")"
+  model="$(_almanac_loop_kv_get model "$@")"
+  effort="$(_almanac_loop_kv_get effort "$@")"
   [ -n "$provider" ] && printf 'CONVERGE_PROVIDER=%s\n' "$provider"
   [ -n "$model" ]    && printf 'CONVERGE_MODEL=%s\n' "$model"
   [ -n "$effort" ]   && printf 'CONVERGE_EFFORT=%s\n' "$effort"
