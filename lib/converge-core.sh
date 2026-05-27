@@ -238,17 +238,44 @@ almanac_converge_overseer_parse() {
   ALMANAC_CONVERGE_GOAL_UPDATE="unchanged"
 
   # State-machine line walker. Each KEY: prefix switches the current field;
-  # subsequent non-key lines append to whatever field is currently open. This
-  # lets the LLM emit either inline values (`REASON: blah`) or values on the
-  # next line (`REASON:\nblah`) or multi-line paragraphs that span until the
-  # next KEY: marker — all parse correctly. Before this fix the parser only
-  # captured the value text on the SAME line as KEY:, dropping continuation
-  # lines and producing empty REASON / STEER for any LLM that emitted
-  # paragraph-shaped values — the bug observed in the first --prompt converge
-  # run (REASON empty, STEER none in the overseer.log entry despite the LLM
-  # clearly being asked to produce both).
+  # subsequent non-key lines append to whatever field is currently open.
+  #
+  # Pre-leniency: parser only matched the literal "KEY:" prefix. LLMs that
+  # added markdown bold (`**VERDICT:**`), heading hashes (`### VERDICT:`),
+  # or list-bullet markers (`- VERDICT:`) silently failed the case match,
+  # found_X stayed 0, and the guard at the bottom returned with all defaults
+  # — producing the canonical "VERDICT=CONTINUE, REASON='', STEER=none,
+  # GOAL_UPDATE=unchanged" mirage seen across every overseer tick of three
+  # consecutive converge runs.
+  #
+  # Now: strip a small set of decorative prefixes (markdown bold, leading
+  # `#`/`-`/`*`/`>` characters + space) from the start of each line BEFORE
+  # the case match, and trim trailing `**` for the bold-close variant
+  # (`**VERDICT:**`). This is purposely a tight whitelist — we don't want
+  # to start accepting `; VERDICT:` or `// VERDICT:` and then debug new
+  # ambiguities; just the markdown shapes models actually emit.
   while IFS= read -r line || [ -n "$line" ]; do
-    key_line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//')"
+    # Normalize a small set of decorative prefixes that wrap KEY: markers.
+    # The targeted shapes (in order, all anchored to start of line):
+    #   `**VERDICT:** value`   markdown bold + colon-close
+    #   `**VERDICT:**`         bold-only, value on next line
+    #   `### VERDICT: value`   markdown heading (1-6 hashes)
+    #   `- VERDICT: value`     list bullet (`-` or `*`)
+    #   `> VERDICT: value`     quote marker (rare but seen)
+    # Each strips ONLY the surrounding decoration, leaves the KEY: literal
+    # alone so the case match below works unchanged. Continuation lines
+    # (paragraph body) bypass these substitutions when they don't start
+    # with a recognized decoration — values keep their internal markdown
+    # (e.g. a REASON paragraph with `**bold**` inline emphasis stays
+    # intact).
+    key_line="$(printf '%s' "$line" | sed -E '
+      s/^[[:space:]]+//
+      s/^\*\*([A-Z_]+):\*\*[[:space:]]*/\1: /
+      s/^\*\*([A-Z_]+):\*\*[[:space:]]*$/\1:/
+      s/^#+[[:space:]]+([A-Z_]+:)/\1/
+      s/^[-*][[:space:]]+([A-Z_]+:)/\1/
+      s/^>[[:space:]]*([A-Z_]+:)/\1/
+    ')"
     case "$key_line" in
       VERDICT:*)
         current_key="VERDICT"; found_verdict=1
@@ -286,9 +313,35 @@ almanac_converge_overseer_parse() {
     esac
   done <<< "$content"
 
-  if [ "$found_verdict" -ne 1 ] || [ "$found_reason" -ne 1 ] || \
-    [ "$found_steer" -ne 1 ] || [ "$found_goal" -ne 1 ]; then
+  # Partial-output policy: capture every field we DID find, default-fill the
+  # rest. Pre-fix the parser bailed completely on any missing field —
+  # silently returning all-defaults — which masked the LLM's actual
+  # response. Now: VERDICT is required (a missing verdict can't be safely
+  # defaulted to CONTINUE — that's confusing; bail), but REASON / STEER /
+  # GOAL_UPDATE missing just keep their initial defaults ("", "none",
+  # "unchanged") and we proceed with the verdict we have. The bare verdict
+  # case (LLM emits "VERDICT: CONTINUE" followed by a paragraph instead of
+  # the other three keys) now produces a useful tick: the verdict is
+  # honored, the REASON section in overseer.log shows empty (operator can
+  # tighten the prompt), STEER stays none, goal stays unchanged.
+  if [ "$found_verdict" -ne 1 ]; then
+    # No usable verdict at all — surface this so the operator sees the
+    # parse failure in the overseer log instead of a silent all-defaults
+    # fallback. Caller still gets the conservative CONTINUE default but
+    # the parse-failure marker stamps the cause.
+    ALMANAC_CONVERGE_PARSE_NOTE="no VERDICT marker found"
     return 0
+  fi
+  ALMANAC_CONVERGE_PARSE_NOTE=""
+
+  # Note in the parse marker which optional fields the LLM skipped — so the
+  # operator can see whether to tighten the prompt for that model.
+  local _missing=()
+  [ "$found_reason" -eq 1 ] || _missing+=(REASON)
+  [ "$found_steer" -eq 1 ]  || _missing+=(STEER)
+  [ "$found_goal" -eq 1 ]   || _missing+=(GOAL_UPDATE)
+  if [ "${#_missing[@]}" -gt 0 ]; then
+    ALMANAC_CONVERGE_PARSE_NOTE="missing fields: ${_missing[*]}"
   fi
 
   # VERDICT is always a single token. A chatty LLM may put the token on its own
@@ -876,6 +929,12 @@ almanac_converge_run_overseer() {
   [ "$rc" -eq 0 ] || _warn "Converge overseer tick $round exited $rc; continuing"
   almanac_converge_overseer_parse "$result"
 
+  # Log the RAW LLM response alongside the parsed verdict. Pre-fix the
+  # overseer log showed only the parsed fields, so a parse failure (LLM
+  # using markdown bold, skipping fields, putting the value on the next
+  # line) looked identical to "the LLM gave us nothing useful". The raw
+  # block is fenced so it's visually distinct from the structured parser
+  # output and easy to grep for ("===== RAW =====") when debugging.
   ts="$(almanac_loop_now_utc)"
   {
     printf '\n===== tick=%s ts=%s overseer=%s exit=%s =====\n' "$round" "$ts" "$provider" "$rc"
@@ -883,6 +942,16 @@ almanac_converge_run_overseer() {
     printf 'REASON: %s\n' "$ALMANAC_CONVERGE_REASON"
     printf 'STEER: %s\n' "$ALMANAC_CONVERGE_STEER"
     printf 'GOAL_UPDATE: %s\n' "$ALMANAC_CONVERGE_GOAL_UPDATE"
+    if [ -n "${ALMANAC_CONVERGE_PARSE_NOTE:-}" ]; then
+      printf 'PARSE_NOTE: %s\n' "$ALMANAC_CONVERGE_PARSE_NOTE"
+    fi
+    printf '\n===== RAW LLM RESPONSE =====\n'
+    if [ -n "$result" ]; then
+      printf '%s\n' "$result"
+    else
+      printf '(empty — provider exited %s with no final message)\n' "$rc"
+    fi
+    printf '===== END RAW =====\n'
   } >> "$log_file"
 
   if [ "$ALMANAC_CONVERGE_GOAL_UPDATE" != "unchanged" ]; then
