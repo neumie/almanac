@@ -357,15 +357,94 @@ EOF
   assert_file_contains "$reports" "===== tick=1 ts=" "prompt-mode report should have a tick header"
   assert_file_contains "$prompt_log" "/almanac:codebase-improve" \
     "agent should see the verbatim --prompt text"
-  # The driver auto-committed; assert the CONVERGE prefix and slug appear on HEAD.
+  # The driver's fallback commit fires when the agent didn't commit itself
+  # (this test's fake codex doesn't commit). The message is distinctive
+  # ("driver-fallback") so a real run's git log shows clearly which commits
+  # were AI-authored vs driver-fallback.
   local commit_msg
   commit_msg="$(git -C "$tmp" log -1 --format=%s 2>/dev/null || true)"
   case "$commit_msg" in
-    "CONVERGE(prompt-mode-smoke): round 1") : ;;
-    *) fail "expected auto-commit with CONVERGE(prompt-mode-smoke): round 1 prefix; got: $commit_msg" ;;
+    "CONVERGE(prompt-mode-smoke): round 1 — driver-fallback"*) : ;;
+    *) fail "expected driver-fallback auto-commit (CONVERGE(prompt-mode-smoke): round 1 — driver-fallback ...); got: $commit_msg" ;;
   esac
 
-  echo "  PASS: prompt-mode invokes agent verbatim and driver auto-commits"
+  echo "  PASS: prompt-mode invokes agent verbatim and driver auto-commits (fallback message)"
+}
+
+# The prompt-mode worker prepends commit instructions to the user's --prompt
+# so the AGENT authors meaningful commit messages instead of the driver
+# falling back to the generic "round N" message. Pre-fix the prompt-mode
+# worker just wrote the user's prompt verbatim — slash commands like
+# /almanac:codebase-improve don't know about CONVERGE conventions, so they
+# never committed, and the driver fallback ("round 8" with no description)
+# made git log opaque after several rounds. This test pins that the
+# instructions reach the prompt.
+test_prompt_mode_worker_instructs_agent_to_commit() {
+  local tmp plan prompt_log
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  setup_git_repo "$tmp"
+
+  ensure_fake_converge_worker "$tmp"
+  prompt_log="$tmp/.almanac/prompt-mode-prompt-capture.log"
+  local fakebin="$tmp/.almanac/fakebin"
+  cat > "$fakebin/codex" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+prompt=""; result_file=""
+while [ "\$#" -gt 0 ]; do
+  case "\$1" in
+    --output-last-message) shift; result_file="\${1:-}" ;;
+    --sandbox) shift ;;
+    *) prompt="\$1" ;;
+  esac
+  shift || true
+done
+printf '%s\n' "\$prompt" > "$prompt_log"
+[ -n "\$result_file" ] && printf 'fake\n' > "\$result_file"
+printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"fake"}}'
+EOF
+  chmod +x "$fakebin/codex"
+
+  ( cd "$tmp" && \
+      PATH="$fakebin:$PATH" \
+      CONVERGE_AGENT_PROVIDER=codex \
+      CONVERGE_OVERSEER_PROVIDER=codex \
+      ALMANAC_HOME="$ROOT" \
+      HOME="$tmp" \
+      "$ALMANAC" converge \
+        --goal "Commit Instructions Test" \
+        --prompt "do the work" \
+        --rounds 1 \
+        --no-oversee \
+  ) >/dev/null 2>&1 || fail "prompt-mode converge with --prompt should run"
+
+  # Verify the agent saw commit instructions PREPENDED to the user prompt
+  [ -f "$prompt_log" ] || fail "prompt-mode worker should have invoked the agent"
+  local agent_prompt
+  agent_prompt="$(cat "$prompt_log")"
+
+  # The ground-rules section must precede the user prompt
+  case "$agent_prompt" in
+    *"CONVERGE LOOP"*"do the work"*) : ;;
+    *) fail "ground-rules block must appear BEFORE the user prompt (got: $agent_prompt)" ;;
+  esac
+
+  # The exact commit prefix the overseer's grep depends on must be named
+  assert_contains "$agent_prompt" 'CONVERGE(commit-instructions-test):' \
+    "ground rules must name the CONVERGE(<slug>): commit prefix"
+
+  # The "what good looks like" examples that prevent generic messages
+  assert_contains "$agent_prompt" "GOOD:" "ground rules must show good summary examples"
+  assert_contains "$agent_prompt" "BAD:" "ground rules must show bad summary examples"
+  assert_contains "$agent_prompt" "round" "ground rules must call out 'round N' as a BAD example"
+
+  # The skip-list — what NOT to commit
+  assert_contains "$agent_prompt" ".almanac/" "ground rules must list .almanac/ as do-not-commit"
+  assert_contains "$agent_prompt" "docs/plans/converge/" \
+    "ground rules must list the plan dir as do-not-commit"
+
+  echo "  PASS: prompt-mode worker prepends commit instructions before user prompt"
 }
 
 # Regression: pre-existing dirty paths must NOT be swept into the CONVERGE
@@ -1660,6 +1739,7 @@ test_hub_stop_writes_converge_signal() {
 test_cli_requires_goal_and_action
 test_plan_dir_scaffold_and_exec_smoke
 test_prompt_mode_invokes_agent_and_commits
+test_prompt_mode_worker_instructs_agent_to_commit
 test_prompt_mode_auto_commit_skips_pre_existing_dirty
 test_registry_records_converge_run_done
 test_run_aborts_cleanly_when_plan_dir_unwritable

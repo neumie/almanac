@@ -974,9 +974,15 @@ almanac_converge_commit_agent_paths() {
     return 0
   fi
 
+  # Distinctive fallback message — `git log` makes it visually obvious which
+  # commits were AI-authored (real summary lines) vs driver-fallback (this
+  # generic message that just records the round number). When you see a lot
+  # of "driver-fallback" entries, the prompt isn't pushing the agent to
+  # commit; tighten the worker prompt's commit instructions.
   if ! (cd "$root" \
           && git -c user.email=converge@almanac -c user.name=converge \
-                 commit -m "CONVERGE($slug): round $round" --no-verify >/dev/null 2>&1); then
+                 commit -m "CONVERGE($slug): round $round — driver-fallback (agent did not author commit)" \
+                 --no-verify >/dev/null 2>&1); then
     _warn "Converge round $round: auto-commit failed (changes left in worktree)"
   fi
 }
@@ -1004,10 +1010,17 @@ almanac_converge_run_worker_prompt() {
   # operator sees the agent working; tees the raw stream here for forensics.
   events_file="$plan_dir/converge-${provider}-iteration-${round}.log"
 
-  # Steer (one-shot): emitted by the overseer in the prior round, consumed and
-  # removed here so the next overseer tick can re-emit if the issue persists.
-  # Steer prefix comes BEFORE the user prompt so a slash command sees the
-  # directive as context before its own work.
+  # Prompt assembly:
+  #   1. Optional steer directive (one-shot, removed after consumption)
+  #   2. CONVERGE LOOP ground rules — including commit-message instructions
+  #      so the AGENT authors meaningful commit messages instead of the
+  #      driver fallback "round N" (which says nothing about what changed)
+  #   3. The user's verbatim --prompt text
+  #
+  # The ground-rules block is prepended (not appended) so the agent reads it
+  # as CONTEXT for the work, not as a post-hoc demand. Same reason ralph's
+  # iteration prompt frames the task before listing the rules.
+  local rel_plan_for_prompt="${plan_dir#"$root"/}"
   {
     if [ -f "$steer_path" ]; then
       printf '# Steer directive (from previous overseer tick):\n'
@@ -1015,6 +1028,50 @@ almanac_converge_run_worker_prompt() {
       printf '\n\n'
       rm -f "$steer_path"
     fi
+    cat <<EOF
+# === CONVERGE LOOP — round $round ===
+
+You are one iteration of an autonomous convergence loop. The driver runs you
+headlessly (no human to answer AskUserQuestion); the overseer reviews your
+work between rounds via git log + agent-reports.log.
+
+## Commit your work yourself
+
+AFTER you finish the user prompt below, COMMIT your changes:
+
+  git -c user.email=converge@almanac -c user.name=converge \\
+      commit -am "CONVERGE($slug): <one-line summary>"
+
+The "CONVERGE($slug):" prefix is REQUIRED — the overseer's drift review uses
+\`git log --grep="CONVERGE($slug):"\` to find your work each tick. Without it
+the overseer thinks the round did nothing.
+
+The <one-line summary> must describe WHAT you changed, concretely:
+
+  GOOD:  "extract loop-adapter signal_dir verb; scope converge signals to plan dir"
+  GOOD:  "fix harden ratify gate threading: pass conductor to demo_reproduces"
+  GOOD:  "rename almanac_converge_role_field -> almanac_converge_role_resolve"
+
+  BAD:   "round $round"
+  BAD:   "applied codebase-improve"
+  BAD:   "improvements"
+  BAD:   "fix stuff"
+
+Do NOT commit:
+  - .almanac/                    (run registry — runtime only)
+  - $rel_plan_for_prompt/        (this run's plan dir — runtime artifacts)
+
+If you finished without making meaningful changes, leave the worktree clean
+and don't commit. The driver detects this and skips its fallback commit too.
+
+If you committed correctly, the driver's auto-commit fallback will be a
+no-op (clean worktree). If you forgot, the driver commits leftover changes
+with a generic "round $round — driver-fallback" message — which shows up in
+git log as a signal that the agent didn't author the message that round.
+
+## User prompt
+
+EOF
     printf '%s\n' "$prompt"
   } > "$prompt_file"
 
