@@ -949,9 +949,16 @@ almanac_converge_run() {
   trap "${_converge_run_finalize_cmd}; exit 130" INT TERM
   trap "${_converge_run_finalize_cmd}" EXIT
 
+  # Persist enough of the launch config that the hub's resume path can rebuild
+  # the same invocation from status.tsv alone — see almanac_loop_converge_status_to_opts.
+  # Without these the hub would resume with --goal blank / no action verb.
   almanac_loop_set_run_config "$root" "$run_id" \
+    "goal=$goal" \
+    "prompt=$prompt" \
+    "exec=$exec_cmd" \
     "rounds=$rounds" \
     "oversee=$([ "$no_oversee" -eq 1 ] && printf off || printf 'every-%s' "$oversee_every")" \
+    "oversee_every=$oversee_every" \
     >/dev/null 2>&1 || true
 
   almanac_converge_scaffold "$root" "$goal"

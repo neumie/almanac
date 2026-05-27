@@ -41,7 +41,8 @@ fi
 almanac_loop_record_fields() {
   printf '%s\n' \
     id type target pid status_file started_at status finished_at round summary failure_reason \
-    provider model effort iterations oversee lenses rounds queue_progress
+    provider model effort iterations oversee lenses rounds queue_progress \
+    goal prompt exec oversee_every
 }
 
 # Get one field from a record FILE by name. Prints the value (which may itself
@@ -769,16 +770,6 @@ almanac_loop_hub_stats() {
 # also drivable non-interactively (`almanac hub --stop|--steer|--watch <id>`); the
 # gum selection menu in cmd/hub.sh is a thin TTY layer over them.
 
-# Map a run type + signal kind to the dot-file basename the loop's runner watches
-# for between rounds. Thin pass-through to almanac_loop_signal_file (lib/loops.sh),
-# which resolves the adapter's override if any else the standard `.${type}-${kind}`
-# default — so this run-registry layer is independent of which loops opt to use
-# the default and which override. Prints the basename; returns 1 for an unknown
-# type or kind.
-almanac_loop_run_signal_file() {
-  almanac_loop_signal_file "$1" "$2"
-}
-
 # Absolute path to a loop's between-round control file under BASE: BASE joined with
 # the type's stop|steer dot-file basename (`<base>/.harden-stop`, …). Centralises
 # the harden/converge pattern of "look up the signal file, prepend the path" so
@@ -787,7 +778,7 @@ almanac_loop_run_signal_file() {
 almanac_loop_run_control_file() {
   local type="$1" base="$2" kind="$3"
   local name
-  name="$(almanac_loop_run_signal_file "$type" "$kind")" || return 1
+  name="$(almanac_loop_signal_file "$type" "$kind")" || return 1
   printf '%s/%s\n' "$base" "$name"
 }
 
@@ -809,7 +800,7 @@ almanac_loop_run_stop() {
   status="$(almanac_loop_status_field "$status_file" "status" || true)"
   [ "$status" = "running" ] || return 4
 
-  stop_file="$(almanac_loop_run_signal_file "$type" stop)" || return 3
+  stop_file="$(almanac_loop_signal_file "$type" stop)" || return 3
   printf '%s\n' "stop requested via almanac hub: $run_id" > "$root/$stop_file"
   return 0
 }
@@ -832,7 +823,7 @@ almanac_loop_run_steer() {
   [ -f "$status_file" ] || return 2
 
   type="$(almanac_loop_status_field "$status_file" "type" || true)"
-  steer_file="$(almanac_loop_run_signal_file "$type" steer)" || return 3
+  steer_file="$(almanac_loop_signal_file "$type" steer)" || return 3
 
   printf '%s\n' "$directive" > "$root/$steer_file"
   return 0

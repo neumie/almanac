@@ -59,11 +59,24 @@ new_tmpdir() {
   TMPDIRS+=("$NEW_TMPDIR")
 }
 
+# Portable mapfile -t replacement for macOS bash 3.2 (no `mapfile` builtin):
+# splits stdin into the named array, one line per element, ignoring blanks.
+split_lines_into() {
+  local _arr_name="$1"
+  local _line
+  eval "$_arr_name=()"
+  while IFS= read -r _line; do
+    [ -n "$_line" ] || continue
+    eval "$_arr_name+=(\"\$_line\")"
+  done
+}
+
 test_record_fields_is_canonical_schema() {
   local expected actual
   expected=$(printf '%s\n' \
     id type target pid status_file started_at status finished_at round summary failure_reason \
-    provider model effort iterations oversee lenses rounds queue_progress)
+    provider model effort iterations oversee lenses rounds queue_progress \
+    goal prompt exec oversee_every)
   actual="$(almanac_loop_record_fields)"
   assert_eq "$expected" "$actual" "record_fields must be the canonical run-status schema, in order"
   echo "  PASS: record_fields is the canonical schema"
@@ -522,16 +535,16 @@ test_hub_overview_empty_registry_shows_empty_states() {
 # --- Hub per-run actions (crit 4: watch / stop / queue-steer) ------------------
 
 test_run_signal_file_maps_type_to_dotfile() {
-  assert_eq ".ralph-stop"   "$(almanac_loop_run_signal_file ralph stop)"   "ralph stop file basename"
-  assert_eq ".ralph-steer"  "$(almanac_loop_run_signal_file ralph steer)"  "ralph steer file basename"
-  assert_eq ".harden-stop"  "$(almanac_loop_run_signal_file harden stop)"  "harden stop file basename"
-  assert_eq ".harden-steer" "$(almanac_loop_run_signal_file harden steer)" "harden steer file basename"
-  assert_eq ".converge-stop" "$(almanac_loop_run_signal_file converge stop)" "converge stop file basename"
-  assert_eq ".converge-steer" "$(almanac_loop_run_signal_file converge steer)" "converge steer file basename"
-  if almanac_loop_run_signal_file bogus stop >/dev/null 2>&1; then
+  assert_eq ".ralph-stop"   "$(almanac_loop_signal_file ralph stop)"   "ralph stop file basename"
+  assert_eq ".ralph-steer"  "$(almanac_loop_signal_file ralph steer)"  "ralph steer file basename"
+  assert_eq ".harden-stop"  "$(almanac_loop_signal_file harden stop)"  "harden stop file basename"
+  assert_eq ".harden-steer" "$(almanac_loop_signal_file harden steer)" "harden steer file basename"
+  assert_eq ".converge-stop" "$(almanac_loop_signal_file converge stop)" "converge stop file basename"
+  assert_eq ".converge-steer" "$(almanac_loop_signal_file converge steer)" "converge steer file basename"
+  if almanac_loop_signal_file bogus stop >/dev/null 2>&1; then
     fail "unknown run type must return non-zero"
   fi
-  if almanac_loop_run_signal_file ralph bogus >/dev/null 2>&1; then
+  if almanac_loop_signal_file ralph bogus >/dev/null 2>&1; then
     fail "unknown signal kind must return non-zero"
   fi
   echo "  PASS: run signal file maps type to dotfile"
@@ -780,7 +793,7 @@ test_status_to_opts_inverts_new_run_for_ralph() {
 
   # Round-trip: feeding the emitted opts into new_run_argv must produce a usable
   # ralph launcher invocation — the hub depends on this inversion.
-  mapfile -t opt_arr <<< "$opts"
+  split_lines_into opt_arr <<< "$opts"
   flat="$(almanac_loop_new_run_argv ralph "${opt_arr[@]}" | tr '\n' ' ')"
   assert_contains "$flat" "--prd auth-system" "round-trip emits --prd"
   assert_contains "$flat" "--iterations 8"    "round-trip emits --iterations"
@@ -816,7 +829,7 @@ test_status_to_opts_inverts_new_run_for_harden() {
   case "$opts" in *rounds=3*)            ;; *) fail "harden status_to_opts must carry rounds" ;; esac
   case "$opts" in *provider=codex*)      ;; *) fail "harden status_to_opts must carry provider" ;; esac
 
-  mapfile -t opt_arr <<< "$opts"
+  split_lines_into opt_arr <<< "$opts"
   flat="$(almanac_loop_new_run_argv harden "${opt_arr[@]}" | tr '\n' ' ')"
   assert_contains "$flat" "harden src/app.js --loop" "round-trip relaunches the harden loop on the same target"
   assert_contains "$flat" "--rounds 3" "round-trip carries --rounds"
@@ -840,7 +853,7 @@ test_status_to_opts_inverts_new_run_for_converge() {
   case "$opts" in *oversee=off*)                             ;; *) fail "converge status_to_opts must carry oversee=off" ;; esac
   case "$opts" in *oversee_every=2*)                         ;; *) fail "converge status_to_opts must carry oversee_every" ;; esac
 
-  mapfile -t opt_arr <<< "$opts"
+  split_lines_into opt_arr <<< "$opts"
   flat="$(almanac_loop_new_run_argv converge "${opt_arr[@]}" | tr '\n' ' ')"
   assert_contains "$flat" "--goal ship it" "round-trip carries --goal"
   assert_contains "$flat" "--prompt /almanac:codebase-improve" "round-trip carries --prompt"
