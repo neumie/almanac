@@ -292,6 +292,21 @@ almanac_loop_status_field() {
   almanac_loop_record_get "$@"
 }
 
+# Read FIELD from a status blob and emit it as a `OUT_KEY=value\n` pair — the
+# inverse of _almanac_loop_kv_get (which reads pairs into adapter composers).
+# Empty fields drop the line. OUT_KEY defaults to FIELD; pass a third arg when
+# the adapter's opt key differs from the status key. Used by every adapter's
+# status_to_opts verb — collapses the `field=$(...); [ -n "$field" ] && printf
+# '%s\n' "key=$field"` pair into one call so passthrough fields are a single
+# line each. A fourth loop's status_to_opts is now a sequence of these emits
+# plus any per-field transforms (e.g. ralph deriving prd from target dirname).
+almanac_loop_status_emit_opt() {
+  local status_file="$1" field="$2" out_key="${3:-$2}" val
+  val="$(almanac_loop_status_field "$status_file" "$field" || true)"
+  [ -n "$val" ] && printf '%s=%s\n' "$out_key" "$val"
+  return 0
+}
+
 almanac_loop_register_run() {
   [ "$#" -ge 4 ] || return 2
 

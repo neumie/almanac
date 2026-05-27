@@ -164,15 +164,12 @@ almanac_loop_ralph_new_run_usage() {
 # hub never has to know ralph's status schema (it used to; this verb is the
 # deepening that makes the hub loop-agnostic).
 almanac_loop_ralph_status_to_opts() {
-  local status_file="$1"
-  local target iterations provider model effort oversee prd
+  local status_file="$1" target iterations oversee prd
+  # target → prd (derive from dirname) and iterations → mode are ralph's per-field
+  # transforms — neither passes through verbatim, so they read the status fields
+  # directly. The rest are passthrough.
   target="$(almanac_loop_status_field "$status_file" target || true)"
   iterations="$(almanac_loop_status_field "$status_file" iterations || true)"
-  provider="$(almanac_loop_status_field "$status_file" provider || true)"
-  model="$(almanac_loop_status_field "$status_file" model || true)"
-  effort="$(almanac_loop_status_field "$status_file" effort || true)"
-  oversee="$(almanac_loop_status_field "$status_file" oversee || true)"
-
   prd="$(basename "$(dirname "$target")")"
   printf '%s\n' "prd=$prd"
   if [ -n "$iterations" ]; then
@@ -180,9 +177,10 @@ almanac_loop_ralph_status_to_opts() {
   else
     printf '%s\n' "mode=once"
   fi
-  [ -n "$provider" ] && printf '%s\n' "provider=$provider"
-  [ -n "$model" ]    && printf '%s\n' "model=$model"
-  [ -n "$effort" ]   && printf '%s\n' "effort=$effort"
+  almanac_loop_status_emit_opt "$status_file" provider
+  almanac_loop_status_emit_opt "$status_file" model
+  almanac_loop_status_emit_opt "$status_file" effort
+  oversee="$(almanac_loop_status_field "$status_file" oversee || true)"
   [ "$oversee" = "off" ] && printf '%s\n' "oversee=off"
   return 0
 }

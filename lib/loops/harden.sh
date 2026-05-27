@@ -133,20 +133,12 @@ almanac_loop_harden_new_run_usage() {
 # deepening that makes the hub loop-agnostic).
 almanac_loop_harden_status_to_opts() {
   local status_file="$1"
-  local target lenses provider model effort rounds
-  target="$(almanac_loop_status_field "$status_file" target || true)"
-  lenses="$(almanac_loop_status_field "$status_file" lenses || true)"
-  provider="$(almanac_loop_status_field "$status_file" provider || true)"
-  model="$(almanac_loop_status_field "$status_file" model || true)"
-  effort="$(almanac_loop_status_field "$status_file" effort || true)"
-  rounds="$(almanac_loop_status_field "$status_file" rounds || true)"
-
-  [ -n "$target" ]   && printf '%s\n' "target=$target"
-  [ -n "$lenses" ]   && printf '%s\n' "lenses=$lenses"
-  [ -n "$provider" ] && printf '%s\n' "provider=$provider"
-  [ -n "$model" ]    && printf '%s\n' "model=$model"
-  [ -n "$effort" ]   && printf '%s\n' "effort=$effort"
-  [ -n "$rounds" ]   && printf '%s\n' "rounds=$rounds"
+  almanac_loop_status_emit_opt "$status_file" target
+  almanac_loop_status_emit_opt "$status_file" lenses
+  almanac_loop_status_emit_opt "$status_file" provider
+  almanac_loop_status_emit_opt "$status_file" model
+  almanac_loop_status_emit_opt "$status_file" effort
+  almanac_loop_status_emit_opt "$status_file" rounds
   return 0
 }
 

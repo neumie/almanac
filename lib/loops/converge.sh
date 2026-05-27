@@ -237,27 +237,19 @@ almanac_loop_converge_new_run_usage() {
 # so the hub never has to know converge's status schema (it used to; this verb
 # is the deepening that makes the hub loop-agnostic).
 almanac_loop_converge_status_to_opts() {
-  local status_file="$1"
-  local goal prompt exec_cmd rounds provider model effort oversee oversee_every
-  goal="$(almanac_loop_status_field "$status_file" goal || true)"
-  prompt="$(almanac_loop_status_field "$status_file" prompt || true)"
-  exec_cmd="$(almanac_loop_status_field "$status_file" exec || true)"
-  rounds="$(almanac_loop_status_field "$status_file" rounds || true)"
-  provider="$(almanac_loop_status_field "$status_file" provider || true)"
-  model="$(almanac_loop_status_field "$status_file" model || true)"
-  effort="$(almanac_loop_status_field "$status_file" effort || true)"
+  local status_file="$1" oversee
+  almanac_loop_status_emit_opt "$status_file" goal
+  almanac_loop_status_emit_opt "$status_file" prompt
+  almanac_loop_status_emit_opt "$status_file" exec
+  almanac_loop_status_emit_opt "$status_file" rounds
+  almanac_loop_status_emit_opt "$status_file" provider
+  almanac_loop_status_emit_opt "$status_file" model
+  almanac_loop_status_emit_opt "$status_file" effort
+  # oversee is a 3-state field (on / off / unset) — only `off` round-trips as
+  # an opt; `on` is the default and stays implicit. Not a generic passthrough.
   oversee="$(almanac_loop_status_field "$status_file" oversee || true)"
-  oversee_every="$(almanac_loop_status_field "$status_file" oversee_every || true)"
-
-  [ -n "$goal" ]          && printf '%s\n' "goal=$goal"
-  [ -n "$prompt" ]        && printf '%s\n' "prompt=$prompt"
-  [ -n "$exec_cmd" ]      && printf '%s\n' "exec=$exec_cmd"
-  [ -n "$rounds" ]        && printf '%s\n' "rounds=$rounds"
-  [ -n "$provider" ]      && printf '%s\n' "provider=$provider"
-  [ -n "$model" ]         && printf '%s\n' "model=$model"
-  [ -n "$effort" ]        && printf '%s\n' "effort=$effort"
-  [ "$oversee" = "off" ]  && printf '%s\n' "oversee=off"
-  [ -n "$oversee_every" ] && printf '%s\n' "oversee_every=$oversee_every"
+  [ "$oversee" = "off" ] && printf '%s\n' "oversee=off"
+  almanac_loop_status_emit_opt "$status_file" oversee_every
   return 0
 }
 
