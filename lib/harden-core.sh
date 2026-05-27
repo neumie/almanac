@@ -1586,17 +1586,10 @@ almanac_harden_run() {
       "rounds=$budget" >/dev/null 2>&1 || true
     # Mark the run aborted on any unexpected exit (signal, mid-round _die) that
     # leaves it still running; the normal exit paths below mark done/failed and
-    # clear this via almanac_harden_run_finalize. Bake $root/$run_id into the
-    # trap text at set-time via %q — bash uses dynamic scoping for trap
-    # expansion, and inner functions (e.g. almanac_harden_fanout) declare
-    # `local run_id` for their own bookkeeping; under `set -u`, _die exits from
-    # such a frame would resolve $run_id to the inner unset local, not this
-    # outer one, and bash would die on "run_id: unbound variable" before the
-    # finalize call ever runs.
-    local _harden_run_finalize_cmd
-    printf -v _harden_run_finalize_cmd 'almanac_harden_run_finalize %q %q aborted' "$root" "$run_id"
-    trap "${_harden_run_finalize_cmd}; exit 130" INT TERM
-    trap "${_harden_run_finalize_cmd}" EXIT
+    # clear this via almanac_harden_run_finalize. The shared helper owns the
+    # %q bake that defends against inner-frame `local run_id` shadowing — see
+    # `almanac_loop_install_finalize_trap` in lib/run.sh for the full why.
+    almanac_loop_install_finalize_trap almanac_harden_run_finalize "$root" "$run_id"
   fi
 
   round=0

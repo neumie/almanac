@@ -1223,10 +1223,11 @@ almanac_converge_run() {
   run_id="$(almanac_loop_register_run "$root" "converge" "$slug" "$pid")" \
     || _die "Could not register converge run"
 
-  local _converge_run_finalize_cmd
-  printf -v _converge_run_finalize_cmd 'almanac_converge_run_finalize %q %q aborted' "$root" "$run_id"
-  trap "${_converge_run_finalize_cmd}; exit 130" INT TERM
-  trap "${_converge_run_finalize_cmd}" EXIT
+  # Mark the run aborted on any unexpected exit (signal, mid-round _die) that
+  # leaves it still running; the normal exit paths below mark done/failed and
+  # clear this. The shared helper owns the %q bake — see
+  # `almanac_loop_install_finalize_trap` in lib/run.sh for why that matters.
+  almanac_loop_install_finalize_trap almanac_converge_run_finalize "$root" "$run_id"
 
   # Persist enough of the launch config that the hub's resume path can rebuild
   # the same invocation from status.tsv alone — see almanac_loop_converge_status_to_opts.

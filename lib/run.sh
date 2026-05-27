@@ -482,6 +482,34 @@ almanac_loop_update_run_progress() {
   almanac_loop_record_set "$status_file" "round=$round" "summary=$summary"
 }
 
+# Install the canonical run-lifecycle trap: on EXIT, INT, or TERM, call
+# FINALIZE_FN with (ROOT, RUN_ID, "aborted"). Every loop's `almanac_*_run`
+# uses this so an unexpected termination (signal, mid-round `_die`) leaves the
+# registry entry in a terminal `aborted` state instead of stuck `running`; the
+# normal exit paths in each loop's finalize call still mark `done`/`failed`
+# first and clear the trap implicitly when they return.
+#
+# The %q bake is the load-bearing detail: bash uses dynamic scoping for trap
+# text expansion, so by the time the trap fires the outer caller's `run_id`
+# local may have been shadowed by an inner function's local of the same name
+# (e.g. `almanac_harden_fanout` declares its own `local run_id` for worker
+# bookkeeping). Under `set -u`, an inner-frame `_die` would resolve `$run_id`
+# against the inner unset local and bash would abort with `run_id: unbound
+# variable` before the finalize call ever runs. printf %q resolves the values
+# at trap-set-time and bakes them into the trap text literal, eliminating
+# the scoping hazard. This helper is the one place that knowledge lives —
+# the two call sites used to be near-identical 4-line copies, only one of
+# which carried the explanatory comment.
+almanac_loop_install_finalize_trap() {
+  local finalize_fn="$1"
+  local root="$2"
+  local run_id="$3"
+  local cmd
+  printf -v cmd '%s %q %q aborted' "$finalize_fn" "$root" "$run_id"
+  trap "${cmd}; exit 130" INT TERM
+  trap "${cmd}" EXIT
+}
+
 # Detect a stale registry entry: a run whose recorded status is still `running`
 # but whose process is gone (crashed/killed without marking itself), so the hub
 # can surface or reap it. Returns 0 (stale) only when status is running AND the
