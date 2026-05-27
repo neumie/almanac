@@ -727,24 +727,12 @@ almanac_harden_ledger_status() {
 
 # Rewrite the status (and adjudication note) of the finding with this id in
 # place, leaving every other field and finding untouched. Returns 1 when the
-# ledger file is absent.
+# ledger file is absent. Thin sugar over `_set_status_many` — the canonical
+# in-place ledger-rewrite engine — so the awk program that knows the ledger
+# layout lives in ONE place; adding a ledger field is a one-spot change.
 almanac_harden_ledger_set_status() {
-  local path="$1"
-  local id="$2"
-  local status="$3"
-  local adjudication="${4:-}"
-  local tmp
-
-  [ -f "$path" ] || return 1
-
-  tmp="$(mktemp "${path}.XXXXXX")"
-  awk -v want="$id" -v status="$status" -v adj="$adjudication" '
-    /^## / { cur = substr($0, 4); print; next }
-    cur == want && /^- status:/ { print "- status: " status; next }
-    cur == want && /^- adjudication:/ { print "- adjudication: " adj; next }
-    { print }
-  ' "$path" > "$tmp"
-  mv "$tmp" "$path"
+  local path="$1" id="$2" status="$3" adjudication="${4:-}"
+  printf '%s\n' "$id" | almanac_harden_ledger_set_status_many "$path" "$status" "$adjudication"
 }
 
 # Rewrite status/adjudication for many finding ids in one ledger pass. Reads ids
