@@ -323,14 +323,45 @@ almanac_converge_overseer_parse() {
   fi
 }
 
+# Write the convergence.md final record.
+#
+# Args:
+#   root           — repo root
+#   goal           — initial goal text (used to derive the plan dir)
+#   outcome        — authoritative loop result, one of:
+#                      CONVERGED       overseer said so → goal met
+#                      NON_CONVERGED   round budget hit before overseer converged
+#                      STOPPED         stop signal (overseer STOP verdict OR human
+#                                      `.converge-stop`)
+#                      FAILED          exec error with CONVERGE_FAIL_ON_EXEC_ERROR=1
+#                      ABORTED         EXIT trap fired (mid-loop _die, signal, etc.)
+#   last_verdict   — the overseer's last raw verdict, informational only
+#                    (e.g. "CONTINUE" is meaningless as a FINAL answer — it just
+#                    means the overseer was asked one more time and wanted more
+#                    rounds). Pass "n/a" if no overseer ran (e.g. --no-oversee).
+#   tick           — round number reached
+#   budget         — round budget configured for the run
+#   started_epoch  — UNIX timestamp the run started (or empty for "unknown")
+#   reason         — one-line termination reason ("round budget exhausted (10/10)",
+#                    "exec exit=2 round=4", "overseer verdict: CONVERGED").
+#
+# Pre-fix the writer took only a single `verdict` argument and wrote it as
+# "Final verdict", which conflated three different things: the overseer's last
+# raw say, the loop's actual outcome, and whether convergence was reached.
+# A run that hit the round budget without convergence wrote "Final verdict:
+# CONTINUE" — readable as a soft answer, actually meaning "the overseer wanted
+# more rounds and we ran out". The split here makes the misread structurally
+# impossible: outcome is the source of truth, last_verdict is metadata.
 almanac_converge_write_convergence() {
   local root="$1"
   local goal="$2"
-  local verdict="$3"
-  local tick="$4"
-  local started_epoch="${5:-}"
-  local reason="${6:-}"
-  local plan_dir now_epoch elapsed
+  local outcome="$3"
+  local last_verdict="$4"
+  local tick="$5"
+  local budget="$6"
+  local started_epoch="${7:-}"
+  local reason="${8:-}"
+  local plan_dir now_epoch elapsed status_summary
 
   plan_dir="$(almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")")"
   now_epoch="$(date +%s)"
@@ -340,16 +371,41 @@ almanac_converge_write_convergence() {
     *) elapsed="$((now_epoch - started_epoch))s" ;;
   esac
 
+  # Human-readable headline for the Outcome section — one line that future
+  # operators (and agents reading convergence.md as evidence) can act on
+  # without parsing the rest.
+  case "$outcome" in
+    CONVERGED)
+      status_summary="CONVERGED — overseer reached convergence at round $tick of $budget."
+      ;;
+    NON_CONVERGED)
+      status_summary="NON_CONVERGED — round budget exhausted ($tick/$budget) without overseer reaching CONVERGED."
+      ;;
+    STOPPED)
+      status_summary="STOPPED — halted by stop signal at round $tick of $budget."
+      ;;
+    FAILED)
+      status_summary="FAILED — exec error at round $tick of $budget."
+      ;;
+    ABORTED)
+      status_summary="ABORTED — loop exited unexpectedly at round $tick of $budget (signal, mid-loop _die, etc.)."
+      ;;
+    *)
+      status_summary="UNKNOWN ($outcome) — round $tick of $budget."
+      ;;
+  esac
+
   {
     printf '# Convergence\n\n'
-    printf '## Final verdict\n\n%s\n\n' "$verdict"
-    printf '## Tick count\n\n%s\n\n' "$tick"
+    printf '## Outcome\n\n%s\n\n' "$status_summary"
+    printf '## Last overseer verdict\n\n%s\n\n' "${last_verdict:-n/a}"
+    printf '## Tick count\n\n%s of %s\n\n' "$tick" "$budget"
     printf '## Time elapsed\n\n%s\n\n' "${elapsed:-unknown}"
     printf '## Final goal\n\n'
     if [ -f "$plan_dir/goal.md" ]; then
       cat "$plan_dir/goal.md"
     fi
-    printf '\n\n## Final reason\n\n%s\n' "${reason:-none}"
+    printf '\n\n## Termination reason\n\n%s\n' "${reason:-none}"
   } > "$plan_dir/convergence.md"
 }
 
