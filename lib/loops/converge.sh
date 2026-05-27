@@ -34,7 +34,7 @@ almanac_loop_converge_signal_dir() {
   # If target is missing (defensive — hub may dispatch without target on a
   # malformed status), fall back to $root so the signal isn't lost.
   [ -n "$target" ] || { printf '%s\n' "$root"; return 0; }
-  printf '%s/docs/plans/converge/%s\n' "$root" "$target"
+  almanac_loop_plan_dir converge "$root" "$target"
 }
 #
 # The launch verb uses helpers defined in lib/loop-launcher.sh

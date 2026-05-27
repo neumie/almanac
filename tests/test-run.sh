@@ -1092,6 +1092,31 @@ test_plan_dir_composes_root_docs_plans_type_slug() {
   echo "  PASS: plan_dir composes <root>/docs/plans/<type>/<slug>"
 }
 
+test_plan_container_composes_root_docs_plans_type() {
+  local tmp actual
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  actual="$(almanac_loop_plan_container "harden" "$tmp")"
+  assert_eq "$tmp/docs/plans/harden" "$actual" \
+    "plan_container = <root>/docs/plans/<type>"
+  actual="$(almanac_loop_plan_container "converge" "$tmp")"
+  assert_eq "$tmp/docs/plans/converge" "$actual" \
+    "plan_container composes the same parent shape for every loop type"
+  echo "  PASS: plan_container composes <root>/docs/plans/<type>"
+}
+
+test_plan_dir_composes_off_plan_container() {
+  local tmp container plan_dir
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  # The container is the parent of every per-run plan dir for a type — the
+  # invariant that justifies the seam. If plan_dir ever forks its own prefix
+  # (instead of composing off plan_container), this assertion catches drift.
+  container="$(almanac_loop_plan_container "converge" "$tmp")"
+  plan_dir="$(almanac_loop_plan_dir "converge" "$tmp" "any-slug")"
+  assert_eq "$container/any-slug" "$plan_dir" \
+    "plan_dir must equal <plan_container>/<slug>"
+  echo "  PASS: plan_dir composes off plan_container (one prefix definition)"
+}
+
 test_plan_dir_passes_through_caller_slug() {
   local tmp actual
   new_tmpdir; tmp="$NEW_TMPDIR"
@@ -1181,6 +1206,8 @@ test_worker_dir_slugifies_the_worker_id
 test_worker_status_file_is_status_tsv_under_worker_dir
 test_worker_file_joins_filename_under_worker_dir
 test_plan_dir_composes_root_docs_plans_type_slug
+test_plan_container_composes_root_docs_plans_type
+test_plan_dir_composes_off_plan_container
 test_plan_dir_passes_through_caller_slug
 test_worker_paths_agree_on_shared_directory
 

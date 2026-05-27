@@ -124,7 +124,8 @@ almanac_converge_compose_plan_dir_name() {
 # Returns 1 when no matching dir exists.
 almanac_converge_resolve_plan_dir_name() {
   local root="$1" query="$2"
-  local container="$root/docs/plans/converge" match
+  local container match
+  container="$(almanac_loop_plan_container converge "$root")"
   [ -d "$container" ] || return 1
 
   # Exact match wins (already-resolved full name)

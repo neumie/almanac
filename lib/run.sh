@@ -204,6 +204,20 @@ almanac_loop_slug() {
   printf '%s\n' "$slug"
 }
 
+# A loop's plan container: <root>/docs/plans/<type>. Holds every per-run plan
+# dir for the type (one subdir per run, keyed by slug). Callers that need the
+# parent dir (resolvers scanning siblings, signal_dir overrides) use this;
+# callers that need a specific run's dir use almanac_loop_plan_dir, which
+# composes off this. The "<root>/docs/plans/<type>" prefix now lives in
+# exactly one place — adding a sibling loop never has to rediscover the
+# layout convention.
+almanac_loop_plan_container() {
+  local type="$1"
+  local root="$2"
+
+  printf '%s/docs/plans/%s\n' "$root" "$type"
+}
+
 # A loop's plan dir: <root>/docs/plans/<type>/<slug>. Each loop's plan/rubric/
 # ledger paths compose off this, so the docs/plans/<type>/<slug> prefix lives in
 # exactly one place. Caller supplies an already-slugified key (loops use
@@ -214,7 +228,7 @@ almanac_loop_plan_dir() {
   local root="$2"
   local slug="$3"
 
-  printf '%s/docs/plans/%s/%s\n' "$root" "$type" "$slug"
+  printf '%s/%s\n' "$(almanac_loop_plan_container "$type" "$root")" "$slug"
 }
 
 almanac_loop_now_utc() {
