@@ -216,8 +216,7 @@ Where `{{SKILL_SCRIPTS}}` is the absolute path to this skill's scripts. Resolve 
 
 1. `~/.agents/skills/almanac/ralph-loop/scripts` — set by `almanac install codex`; use this when running in Codex.
 2. `~/.claude/skills/almanac/ralph-loop/scripts` — set by `almanac install claude-code`; use this when running in Claude Code.
-3. `${CLAUDE_SKILL_DIR}/scripts` — fallback if the host agent populates `CLAUDE_SKILL_DIR` from the resolved skill directory.
-4. `$ALMANAC_HOME/skills/loop/ralph-loop/scripts` — fallback when invoked outside an installed provider.
+3. `$ALMANAC_HOME/skills/loop/ralph-loop/scripts` — fallback when invoked outside an installed provider.
 
 Print the literal provider install path in user-facing instructions (`~/.agents/...` for Codex, `~/.claude/...` for Claude Code) so users can run the scripts directly.
 

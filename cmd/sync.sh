@@ -26,7 +26,6 @@ _fetch_sha() {
 }
 
 _info "Checking adapted skills for upstream changes..."
-echo ""
 
 found=0
 up_to_date=0
@@ -59,39 +58,36 @@ while IFS= read -r skill_dir; do
   current_sha=$(_fetch_sha "repos/$repo/contents/$skill_path/SKILL.md")
 
   if [ -z "$current_sha" ]; then
-    echo -e "  ${_RED}✗${_RESET} $skill_name: failed to fetch upstream (bad path or API error)"
+    _error "$skill_name: failed to fetch upstream (bad path or API error)"
     errors=$((errors + 1))
     continue
   fi
 
   if [ -z "$upstream_sha" ]; then
-    echo -e "  ${_YELLOW}⚠${_RESET} $skill_name: no baseline upstream-sha recorded (upstream now ${current_sha:0:12})"
+    _warn "$skill_name: no baseline upstream-sha recorded (upstream now ${current_sha:0:12})"
     unbaselined=$((unbaselined + 1))
     continue
   fi
 
   if [ "$current_sha" = "$upstream_sha" ]; then
-    echo -e "  ${_GREEN}✓${_RESET} $skill_name: up to date"
+    _success "$skill_name: up to date"
     up_to_date=$((up_to_date + 1))
   else
-    echo -e "  ${_YELLOW}⚠${_RESET} $skill_name: upstream changed (adapted $adapted_date)"
+    _warn "$skill_name: upstream changed (adapted $adapted_date)"
     changed=$((changed + 1))
 
     if [ "$SHOW_DIFF" = true ]; then
-      echo ""
-      echo "    Upstream: https://github.com/$repo/blob/main/$skill_path/SKILL.md"
-      echo "    Local SHA:    ${upstream_sha:0:12}"
-      echo "    Upstream SHA: ${current_sha:0:12}"
-      echo ""
+      _info "  Upstream:     https://github.com/$repo/blob/main/$skill_path/SKILL.md"
+      _info "  Local SHA:    ${upstream_sha:0:12}"
+      _info "  Upstream SHA: ${current_sha:0:12}"
     fi
   fi
 done < <(almanac_list_skills)
 
-echo ""
 if [ "$found" -eq 0 ]; then
   _info "No skills with upstream tracking found"
 else
-  echo "Results: $found tracked, $up_to_date up to date, $changed changed, $unbaselined unbaselined, $errors errors"
+  _info "Results: $found tracked, $up_to_date up to date, $changed changed, $unbaselined unbaselined, $errors errors"
   if [ "$changed" -gt 0 ] && [ "$SHOW_DIFF" = false ]; then
     _warn "Run 'almanac sync --diff' to see details"
   fi

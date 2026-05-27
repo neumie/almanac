@@ -220,6 +220,36 @@ almanac_loop_converge_new_run_env() {
   return 0
 }
 
+# Read a converge run's status blob and emit the key=val pairs that
+# almanac_loop_converge_new_run_argv / _new_run_env consume — the inverse of
+# those composers. Resume / clone in the hub pipes the output straight to them,
+# so the hub never has to know converge's status schema (it used to; this verb
+# is the deepening that makes the hub loop-agnostic).
+almanac_loop_converge_status_to_opts() {
+  local status_file="$1"
+  local goal prompt exec_cmd rounds provider model effort oversee oversee_every
+  goal="$(almanac_loop_status_field "$status_file" goal || true)"
+  prompt="$(almanac_loop_status_field "$status_file" prompt || true)"
+  exec_cmd="$(almanac_loop_status_field "$status_file" exec || true)"
+  rounds="$(almanac_loop_status_field "$status_file" rounds || true)"
+  provider="$(almanac_loop_status_field "$status_file" provider || true)"
+  model="$(almanac_loop_status_field "$status_file" model || true)"
+  effort="$(almanac_loop_status_field "$status_file" effort || true)"
+  oversee="$(almanac_loop_status_field "$status_file" oversee || true)"
+  oversee_every="$(almanac_loop_status_field "$status_file" oversee_every || true)"
+
+  [ -n "$goal" ]          && printf '%s\n' "goal=$goal"
+  [ -n "$prompt" ]        && printf '%s\n' "prompt=$prompt"
+  [ -n "$exec_cmd" ]      && printf '%s\n' "exec=$exec_cmd"
+  [ -n "$rounds" ]        && printf '%s\n' "rounds=$rounds"
+  [ -n "$provider" ]      && printf '%s\n' "provider=$provider"
+  [ -n "$model" ]         && printf '%s\n' "model=$model"
+  [ -n "$effort" ]        && printf '%s\n' "effort=$effort"
+  [ "$oversee" = "off" ]  && printf '%s\n' "oversee=off"
+  [ -n "$oversee_every" ] && printf '%s\n' "oversee_every=$oversee_every"
+  return 0
+}
+
 # --help text for `almanac converge` / `almanac_loop_launch converge`. Stays
 # inside the adapter so adding a loop is a one-file change.
 almanac_loop_converge_launch_usage() {

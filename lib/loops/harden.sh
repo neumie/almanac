@@ -131,6 +131,30 @@ almanac_loop_harden_new_run_env() {
   return 0
 }
 
+# Read a harden run's status blob and emit the key=val pairs that
+# almanac_loop_harden_new_run_argv / _new_run_env consume — the inverse of those
+# composers. Resume / clone in the hub pipes the output straight to them, so the
+# hub never has to know harden's status schema (it used to; this verb is the
+# deepening that makes the hub loop-agnostic).
+almanac_loop_harden_status_to_opts() {
+  local status_file="$1"
+  local target lenses provider model effort rounds
+  target="$(almanac_loop_status_field "$status_file" target || true)"
+  lenses="$(almanac_loop_status_field "$status_file" lenses || true)"
+  provider="$(almanac_loop_status_field "$status_file" provider || true)"
+  model="$(almanac_loop_status_field "$status_file" model || true)"
+  effort="$(almanac_loop_status_field "$status_file" effort || true)"
+  rounds="$(almanac_loop_status_field "$status_file" rounds || true)"
+
+  [ -n "$target" ]   && printf '%s\n' "target=$target"
+  [ -n "$lenses" ]   && printf '%s\n' "lenses=$lenses"
+  [ -n "$provider" ] && printf '%s\n' "provider=$provider"
+  [ -n "$model" ]    && printf '%s\n' "model=$model"
+  [ -n "$effort" ]   && printf '%s\n' "effort=$effort"
+  [ -n "$rounds" ]   && printf '%s\n' "rounds=$rounds"
+  return 0
+}
+
 # --help text for `almanac harden --loop` / `almanac_loop_launch harden`. Stays
 # inside the adapter so adding a loop is a one-file change.
 almanac_loop_harden_launch_usage() {

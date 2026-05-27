@@ -153,74 +153,39 @@ almanac_hub_menu() {
 # Re-build a finished run's launch command from its registry blob and either
 # launch it auto-confirmed (resume) or hand it to the launcher for review/edit
 # (clone). The composer + exec path is the same one `--new` uses, so a resumed/
-# cloned run goes through every layer a fresh launch does. Config fields come
-# from the per-run status blob (provider/model/effort/iterations/oversee for
-# ralph; target/lenses/provider/model/effort/rounds for harden); ralph's mode is
-# inferred from whether `iterations` was recorded (afk) or not (once).
+# cloned run goes through every layer a fresh launch does. The hub is fully
+# loop-agnostic: the adapter's `status_to_opts` verb inverts its own status
+# schema into key=val pairs the new_run composers consume; the `launch_backed`
+# verb signals whether `--yes` (a launcher-only flag) is safe to append on
+# resume — direct-runner loops (harden, converge) leave it undefined and never
+# get the suffix.
 almanac_hub_resume_or_clone() {
   local mode="$1" run_id="$2"
-  local status_file run_type target provider model effort iterations oversee lenses rounds
-  local goal exec_cmd prompt oversee_every
-  local -a opts
-  local argv env_raw prd
+  local status_file run_type argv env_raw opts_raw
+  local -a opts=()
+  local line
 
   status_file="$(almanac_loop_run_status_file "$ROOT" "$run_id")"
   [ -f "$status_file" ] || _die "Unknown run: $run_id"
   run_type="$(almanac_loop_status_field "$status_file" type || true)"
-  target="$(almanac_loop_status_field "$status_file" target || true)"
-  provider="$(almanac_loop_status_field "$status_file" provider || true)"
-  model="$(almanac_loop_status_field "$status_file" model || true)"
-  effort="$(almanac_loop_status_field "$status_file" effort || true)"
-  iterations="$(almanac_loop_status_field "$status_file" iterations || true)"
-  oversee="$(almanac_loop_status_field "$status_file" oversee || true)"
-  lenses="$(almanac_loop_status_field "$status_file" lenses || true)"
-  rounds="$(almanac_loop_status_field "$status_file" rounds || true)"
-  goal="$(almanac_loop_status_field "$status_file" goal || true)"
-  exec_cmd="$(almanac_loop_status_field "$status_file" exec || true)"
-  prompt="$(almanac_loop_status_field "$status_file" prompt || true)"
-  oversee_every="$(almanac_loop_status_field "$status_file" oversee_every || true)"
+  [ -n "$run_type" ] || _die "Run '$run_id' has no recorded type"
 
-  case "$run_type" in
-    ralph)
-      prd="$(basename "$(dirname "$target")")"
-      opts=("prd=$prd")
-      if [ -n "$iterations" ]; then opts+=("mode=afk" "iterations=$iterations"); else opts+=("mode=once"); fi
-      [ -n "$provider" ] && opts+=("provider=$provider")
-      [ -n "$model" ]    && opts+=("model=$model")
-      [ -n "$effort" ]   && opts+=("effort=$effort")
-      [ "$oversee" = "off" ] && opts+=("oversee=off")
-      ;;
-    harden)
-      [ -n "$target" ]   && opts+=("target=$target")
-      [ -n "$lenses" ]   && opts+=("lenses=$lenses")
-      [ -n "$provider" ] && opts+=("provider=$provider")
-      [ -n "$model" ]    && opts+=("model=$model")
-      [ -n "$effort" ]   && opts+=("effort=$effort")
-      [ -n "$rounds" ]   && opts+=("rounds=$rounds")
-      ;;
-    converge)
-      [ -n "$goal" ]          && opts+=("goal=$goal")
-      [ -n "$prompt" ]        && opts+=("prompt=$prompt")
-      [ -n "$exec_cmd" ]      && opts+=("exec=$exec_cmd")
-      [ -n "$rounds" ]        && opts+=("rounds=$rounds")
-      [ -n "$provider" ]      && opts+=("provider=$provider")
-      [ -n "$model" ]         && opts+=("model=$model")
-      [ -n "$effort" ]        && opts+=("effort=$effort")
-      [ "$oversee" = "off" ]  && opts+=("oversee=off")
-      [ -n "$oversee_every" ] && opts+=("oversee_every=$oversee_every")
-      ;;
-    *) _die "Cannot $mode run of unknown type: $run_type" ;;
-  esac
+  opts_raw="$(almanac_loop_adapter_call "$run_type" status_to_opts "$status_file")" \
+    || _die "Cannot $mode run of unknown type: $run_type"
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    opts+=("$line")
+  done <<< "$opts_raw"
 
   argv="$(almanac_loop_new_run_argv "$run_type" "${opts[@]}")" \
     || _die "Could not compose $mode for $run_id"
   env_raw="$(almanac_loop_new_run_env "$run_type" "${opts[@]}")" || env_raw=""
 
-  # resume auto-confirms launcher-backed runs via --yes; harden + converge argv
-  # is already the direct runner (`almanac harden|converge …`) and rejects the
-  # launcher-only --yes flag. clone leaves confirm in place where a launcher is
-  # used.
-  if [ "$mode" = "resume" ] && [ "$run_type" != "harden" ] && [ "$run_type" != "converge" ]; then
+  # resume auto-confirms launcher-backed loops (ralph) via --yes; loops whose
+  # adapter doesn't implement `launch_backed` exec their direct runner and would
+  # reject the launcher-only flag, so they get no suffix. clone leaves confirm
+  # in place where a launcher is used.
+  if [ "$mode" = "resume" ] && almanac_loop_adapter_call "$run_type" launch_backed 2>/dev/null; then
     argv="${argv}"$'\n''--yes'
   fi
   almanac_hub_launch_new 0 "$env_raw" "$argv"

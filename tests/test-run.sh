@@ -762,6 +762,107 @@ test_new_run_env_maps_harden_config() {
   echo "  PASS: new-run env maps harden config"
 }
 
+test_status_to_opts_inverts_new_run_for_ralph() {
+  local tmp status_file opts flat
+  new_tmpdir; tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "ralph" "docs/plans/auth-system/prd.md" "$$" "ralph-r" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_set_run_config "$tmp" "ralph-r" \
+    "provider=codex" "model=gpt-5.5" "effort=high" "iterations=8" "oversee=off"
+  status_file="$(almanac_loop_run_status_file "$tmp" "ralph-r")"
+
+  opts="$(almanac_loop_adapter_call ralph status_to_opts "$status_file")"
+  case "$opts" in *prd=auth-system*) ;; *) fail "ralph status_to_opts must derive prd from target dirname" ;; esac
+  case "$opts" in *mode=afk*)         ;; *) fail "ralph status_to_opts must emit mode=afk when iterations is set" ;; esac
+  case "$opts" in *iterations=8*)     ;; *) fail "ralph status_to_opts must carry iterations" ;; esac
+  case "$opts" in *provider=codex*)   ;; *) fail "ralph status_to_opts must carry provider" ;; esac
+  case "$opts" in *oversee=off*)      ;; *) fail "ralph status_to_opts must carry oversee=off" ;; esac
+
+  # Round-trip: feeding the emitted opts into new_run_argv must produce a usable
+  # ralph launcher invocation — the hub depends on this inversion.
+  mapfile -t opt_arr <<< "$opts"
+  flat="$(almanac_loop_new_run_argv ralph "${opt_arr[@]}" | tr '\n' ' ')"
+  assert_contains "$flat" "--prd auth-system" "round-trip emits --prd"
+  assert_contains "$flat" "--iterations 8"    "round-trip emits --iterations"
+  echo "  PASS: status_to_opts inverts ralph status into new_run opts"
+}
+
+test_status_to_opts_handles_ralph_once_mode() {
+  local tmp status_file opts
+  new_tmpdir; tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "ralph" "docs/plans/auth-system/prd.md" "$$" "ralph-once" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_set_run_config "$tmp" "ralph-once" "provider=codex"
+  status_file="$(almanac_loop_run_status_file "$tmp" "ralph-once")"
+
+  opts="$(almanac_loop_adapter_call ralph status_to_opts "$status_file")"
+  case "$opts" in *mode=once*) ;; *) fail "ralph status_to_opts must emit mode=once when iterations is absent" ;; esac
+  case "$opts" in *mode=afk*)  fail "no iterations → no mode=afk" ;; *) ;; esac
+  echo "  PASS: status_to_opts treats missing iterations as once-mode"
+}
+
+test_status_to_opts_inverts_new_run_for_harden() {
+  local tmp status_file opts flat
+  new_tmpdir; tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "harden-r" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_set_run_config "$tmp" "harden-r" \
+    "provider=codex" "model=gpt-5.5" "effort=high" "lenses=security,perf" "rounds=3"
+  status_file="$(almanac_loop_run_status_file "$tmp" "harden-r")"
+
+  opts="$(almanac_loop_adapter_call harden status_to_opts "$status_file")"
+  case "$opts" in *target=src/app.js*)   ;; *) fail "harden status_to_opts must carry target" ;; esac
+  case "$opts" in *lenses=security,perf*) ;; *) fail "harden status_to_opts must carry lenses" ;; esac
+  case "$opts" in *rounds=3*)            ;; *) fail "harden status_to_opts must carry rounds" ;; esac
+  case "$opts" in *provider=codex*)      ;; *) fail "harden status_to_opts must carry provider" ;; esac
+
+  mapfile -t opt_arr <<< "$opts"
+  flat="$(almanac_loop_new_run_argv harden "${opt_arr[@]}" | tr '\n' ' ')"
+  assert_contains "$flat" "harden src/app.js --loop" "round-trip relaunches the harden loop on the same target"
+  assert_contains "$flat" "--rounds 3" "round-trip carries --rounds"
+  echo "  PASS: status_to_opts inverts harden status into new_run opts"
+}
+
+test_status_to_opts_inverts_new_run_for_converge() {
+  local tmp status_file opts flat
+  new_tmpdir; tmp="$NEW_TMPDIR"
+
+  almanac_loop_register_run "$tmp" "converge" "docs/plans/converge/x" "$$" "converge-r" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_set_run_config "$tmp" "converge-r" \
+    "goal=ship it" "prompt=/almanac:codebase-improve" "rounds=5" \
+    "provider=codex" "model=gpt-5.5" "effort=high" "oversee=off" "oversee_every=2"
+  status_file="$(almanac_loop_run_status_file "$tmp" "converge-r")"
+
+  opts="$(almanac_loop_adapter_call converge status_to_opts "$status_file")"
+  case "$opts" in *"goal=ship it"*)                          ;; *) fail "converge status_to_opts must carry goal" ;; esac
+  case "$opts" in *prompt=/almanac:codebase-improve*)        ;; *) fail "converge status_to_opts must carry prompt" ;; esac
+  case "$opts" in *rounds=5*)                                ;; *) fail "converge status_to_opts must carry rounds" ;; esac
+  case "$opts" in *oversee=off*)                             ;; *) fail "converge status_to_opts must carry oversee=off" ;; esac
+  case "$opts" in *oversee_every=2*)                         ;; *) fail "converge status_to_opts must carry oversee_every" ;; esac
+
+  mapfile -t opt_arr <<< "$opts"
+  flat="$(almanac_loop_new_run_argv converge "${opt_arr[@]}" | tr '\n' ' ')"
+  assert_contains "$flat" "--goal ship it" "round-trip carries --goal"
+  assert_contains "$flat" "--prompt /almanac:codebase-improve" "round-trip carries --prompt"
+  assert_contains "$flat" "--no-oversee" "round-trip carries --no-oversee"
+  assert_contains "$flat" "--oversee-every 2" "round-trip carries --oversee-every"
+  echo "  PASS: status_to_opts inverts converge status into new_run opts"
+}
+
+test_launch_backed_signals_launcher_only_loops() {
+  # ralph runs through the launcher (which accepts --yes); harden + converge exec
+  # their direct runners and would reject --yes. The hub's resume path uses this
+  # verb to decide whether to append --yes — the only place that policy lives.
+  local rc
+  rc=0; almanac_loop_adapter_call ralph launch_backed >/dev/null 2>&1 || rc=$?
+  assert_eq "0" "$rc" "ralph adapter must declare itself launcher-backed"
+  rc=0; almanac_loop_adapter_call harden launch_backed >/dev/null 2>&1 || rc=$?
+  assert_eq "2" "$rc" "harden adapter must NOT implement launch_backed (direct-runner)"
+  rc=0; almanac_loop_adapter_call converge launch_backed >/dev/null 2>&1 || rc=$?
+  assert_eq "2" "$rc" "converge adapter must NOT implement launch_backed (direct-runner)"
+  echo "  PASS: launch_backed signals launcher-only loops"
+}
+
 test_hub_stats_groups_by_type_provider_model() {
   local tmp out
   new_tmpdir; tmp="$NEW_TMPDIR"
@@ -904,6 +1005,11 @@ test_new_run_argv_rejects_unknown_and_missing
 test_new_run_argv_converge_composes_flags
 test_new_run_env_maps_harden_config
 test_new_run_env_maps_converge_config
+test_status_to_opts_inverts_new_run_for_ralph
+test_status_to_opts_handles_ralph_once_mode
+test_status_to_opts_inverts_new_run_for_harden
+test_status_to_opts_inverts_new_run_for_converge
+test_launch_backed_signals_launcher_only_loops
 test_hub_stats_groups_by_type_provider_model
 test_hub_stats_empty_registry_returns_nonzero
 
