@@ -911,7 +911,8 @@ almanac_converge_run() {
   local no_oversee="${5:-0}"
   local oversee_every="${6:-1}"
   local prompt="${7:-}"
-  local slug plan_dir run_id pid exec_rc round started_epoch final_status final_verdict final_reason action_mode
+  local slug plan_dir run_id pid exec_rc round started_epoch action_mode
+  local final_status final_outcome final_verdict final_reason
 
   # Mode dispatch: prompt-mode (agent invocation, dominant) vs exec-mode (shell
   # command in a wrapping worker, escape hatch). cmd/converge.sh enforces the
@@ -956,13 +957,21 @@ almanac_converge_run() {
   almanac_converge_scaffold "$root" "$goal"
   plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
 
+  # Default state when the loop exits via the round budget. `final_verdict` is
+  # the overseer's LAST raw say (informational); `final_outcome` is the
+  # AUTHORITATIVE termination shape (used to label convergence.md). A run that
+  # hits the budget without an overseer-said CONVERGED is NON_CONVERGED — the
+  # loop ran out of attempts, not consensus. Pre-fix the convergence.md just
+  # echoed final_verdict, so a budget exhaustion looked like "Final verdict:
+  # CONTINUE" — misread by future agents (and humans) as a soft stop.
   final_status="done"
+  final_outcome="NON_CONVERGED"
   if [ "$no_oversee" -eq 1 ]; then
-    final_verdict="NO_OVERSEE"
-    final_reason="overseer disabled; round budget exhausted"
+    final_verdict="n/a"
+    final_reason="overseer disabled; round budget ($rounds) exhausted"
   else
     final_verdict="CONTINUE"
-    final_reason="round budget exhausted"
+    final_reason="round budget ($rounds) exhausted; overseer's last verdict was CONTINUE"
   fi
 
   local _converge_stop_file
@@ -972,6 +981,7 @@ almanac_converge_run() {
   while [ "$round" -lt "$rounds" ]; do
     if [ -f "$_converge_stop_file" ]; then
       final_status="aborted"
+      final_outcome="STOPPED"
       final_verdict="STOP"
       final_reason="stop signal present before round $((round + 1))"
       break
@@ -1015,7 +1025,9 @@ almanac_converge_run() {
     almanac_loop_update_run_progress "$root" "$run_id" "$round" "goal=$slug" >/dev/null 2>&1 || true
 
     if [ "$exec_rc" -ne 0 ] && [ "${CONVERGE_FAIL_ON_EXEC_ERROR:-0}" = "1" ]; then
-      almanac_converge_write_convergence "$root" "$goal" "FAILED" "$round" "$started_epoch" "exec exit=$exec_rc round=$round"
+      almanac_converge_write_convergence "$root" "$goal" \
+        "FAILED" "${final_verdict:-n/a}" "$round" "$rounds" "$started_epoch" \
+        "exec exit=$exec_rc round=$round"
       almanac_converge_run_finalize "$root" "$run_id" "failed" "exec exit=$exec_rc round=$round"
       return "$exec_rc"
     fi
@@ -1027,16 +1039,21 @@ almanac_converge_run() {
       case "$ALMANAC_CONVERGE_VERDICT" in
         CONVERGED)
           final_status="done"
+          final_outcome="CONVERGED"
+          [ -n "$final_reason" ] || final_reason="overseer verdict: CONVERGED at round $round"
           break
           ;;
         STOP)
           final_status="aborted"
+          final_outcome="STOPPED"
+          [ -n "$final_reason" ] || final_reason="overseer verdict: STOP at round $round"
           break
           ;;
       esac
     fi
   done
 
-  almanac_converge_write_convergence "$root" "$goal" "$final_verdict" "$round" "$started_epoch" "$final_reason"
+  almanac_converge_write_convergence "$root" "$goal" \
+    "$final_outcome" "$final_verdict" "$round" "$rounds" "$started_epoch" "$final_reason"
   almanac_converge_run_finalize "$root" "$run_id" "$final_status"
 }
