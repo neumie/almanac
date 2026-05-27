@@ -86,8 +86,6 @@ almanac_loop_ralph_launch() {
 
   # Provider / model / effort
   provider="$(_almanac_launch_need_provider provider "$provider")" || return 1
-  almanac_provider_known "$provider" || _die "--provider must be a supported provider (e.g. codex or claude)"
-  almanac_provider_available "$provider" || _die "Provider '$provider' selected but its CLI is not on PATH."
   model="$(_almanac_launch_need_choice "Model" "$model" $(almanac_provider_models "$provider"))" || return 1
   effort="$(_almanac_launch_need_choice "Thinking effort" "$effort" $(almanac_provider_efforts "$provider"))" || return 1
 
@@ -107,9 +105,7 @@ almanac_loop_ralph_launch() {
   [ -n "$yes" ] || almanac_loop_ui_confirm "Launch this run?" || { _info "Cancelled."; return 0; }
 
   # Export role config + exec the runner (no re-launch through `almanac ralph`).
-  export RALPH_PROVIDER="$provider"
-  [ -n "$model" ]  && export RALPH_MODEL="$model"   || unset RALPH_MODEL
-  [ -n "$effort" ] && export RALPH_EFFORT="$effort" || unset RALPH_EFFORT
+  _almanac_launch_export_role RALPH_ "$provider" "$model" "$effort"
   [ -n "$no_oversee" ] && export RALPH_NO_OVERSEE=1
 
   # Exec the runner via the ralph adapter (no hard-coded …/ralph-loop/scripts/…

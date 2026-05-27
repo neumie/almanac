@@ -32,17 +32,28 @@ _almanac_source_sibling loops.sh almanac_loop_adapter_call    # loop-adapter dis
 # The underscore prefix signals "private to the launching subsystem (this file +
 # adapter launch verbs)" — not for callers outside that path.
 
-# Pick a provider into the named-by-$1 variable if it is empty. Lists only
-# installed providers (discovered via the seam); dies if none.
+# Pick + validate a provider into the named-by-$1 variable if it is empty. Lists
+# only installed providers (discovered via the seam); dies if none. The chosen
+# provider is always run through the known + available checks so launch verbs
+# don't repeat the 3-line dance — adding a 4th adapter can't forget either
+# check, and the diagnostic for each is the single source of truth.
 _almanac_launch_need_provider() {
   local var="$1" current="${2:-}" providers=() p chosen
-  if [ -n "$current" ]; then printf '%s\n' "$current"; return 0; fi
-  for p in $(almanac_provider_list); do
-    almanac_provider_available "$p" && providers+=("$p")
-  done
-  [ "${#providers[@]}" -gt 0 ] || _die "No supported provider found. Install Codex or Claude Code."
-  if [ "${#providers[@]}" -eq 1 ]; then printf '%s\n' "${providers[0]}"; return 0; fi
-  chosen="$(almanac_loop_ui_choose "Provider" "${providers[@]}")" || return 1
+  if [ -n "$current" ]; then
+    chosen="$current"
+  else
+    for p in $(almanac_provider_list); do
+      almanac_provider_available "$p" && providers+=("$p")
+    done
+    [ "${#providers[@]}" -gt 0 ] || _die "No supported provider found. Install Codex or Claude Code."
+    if [ "${#providers[@]}" -eq 1 ]; then
+      chosen="${providers[0]}"
+    else
+      chosen="$(almanac_loop_ui_choose "Provider" "${providers[@]}")" || return 1
+    fi
+  fi
+  almanac_provider_known "$chosen"     || _die "--provider must be a supported provider (e.g. codex or claude)"
+  almanac_provider_available "$chosen" || _die "Provider '$chosen' selected but its CLI is not on PATH."
   printf '%s\n' "$chosen"
 }
 
@@ -78,6 +89,18 @@ _almanac_launch_need_positive_int() {
     [ "$reply" -gt 0 ] && { printf '%s\n' "$reply"; return 0; }
     _warn "Enter a positive integer." >&2
   done
+}
+
+# Export the consumer-wide role config (PROVIDER always, MODEL/EFFORT conditional)
+# under PREFIX (e.g. RALPH_, HARDEN_, CONVERGE_). Empty model/effort UNSET the
+# var so a stale value inherited from the parent env can't leak into the runner.
+# Single source of truth for the export shape — adding a 4th adapter can't
+# forget the unset, and the prefix convention lives in exactly one place.
+_almanac_launch_export_role() {
+  local prefix="$1" provider="$2" model="$3" effort="$4"
+  export "${prefix}PROVIDER=$provider"
+  if [ -n "$model" ];  then export "${prefix}MODEL=$model";   else unset "${prefix}MODEL";  fi
+  if [ -n "$effort" ]; then export "${prefix}EFFORT=$effort"; else unset "${prefix}EFFORT"; fi
 }
 
 # --- summary + dispatch --------------------------------------------------------

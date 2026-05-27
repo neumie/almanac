@@ -136,8 +136,6 @@ almanac_loop_converge_launch() {
   # still override per-role via CONVERGE_{AGENT,OVERSEER}_* env outside the
   # launcher.
   provider="$(_almanac_launch_need_provider provider "$provider")" || return 1
-  almanac_provider_known "$provider"     || _die "--provider must be a supported provider (e.g. codex or claude)"
-  almanac_provider_available "$provider" || _die "Provider '$provider' selected but its CLI is not on PATH."
   model="$(_almanac_launch_need_choice "Model" "$model" $(almanac_provider_models "$provider"))" || return 1
   effort="$(_almanac_launch_need_choice "Thinking effort" "$effort" $(almanac_provider_efforts "$provider"))" || return 1
 
@@ -165,9 +163,7 @@ almanac_loop_converge_launch() {
   # CONVERGE_PROVIDER/MODEL/EFFORT becomes the fallback that role.sh's lookup
   # uses for both the worker and overseer roles unless the user has set
   # CONVERGE_{AGENT,OVERSEER}_* explicitly.
-  export CONVERGE_PROVIDER="$provider"
-  [ -n "$model" ]  && export CONVERGE_MODEL="$model"   || unset CONVERGE_MODEL
-  [ -n "$effort" ] && export CONVERGE_EFFORT="$effort" || unset CONVERGE_EFFORT
+  _almanac_launch_export_role CONVERGE_ "$provider" "$model" "$effort"
 
   # Build the runner argv via the adapter (the path to bin/almanac and the flag
   # composition both live in this file — the launcher doesn't know them). The

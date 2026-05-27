@@ -66,8 +66,6 @@ almanac_loop_harden_launch() {
 
   lenses="$(test -n "$lenses" && printf '%s' "$lenses" || almanac_loop_ui_input "Lenses (blank = default set)")" || return 1
   provider="$(_almanac_launch_need_provider provider "$provider")" || return 1
-  almanac_provider_known "$provider" || _die "--provider must be a supported provider (e.g. codex or claude)"
-  almanac_provider_available "$provider" || _die "Provider '$provider' selected but its CLI is not on PATH."
   model="$(_almanac_launch_need_choice "Reviewer model" "$model" $(almanac_provider_models "$provider"))" || return 1
   effort="$(_almanac_launch_need_choice "Reviewer thinking effort" "$effort" $(almanac_provider_efforts "$provider"))" || return 1
   [ -n "$rounds" ] || rounds="$(almanac_loop_ui_input "Round budget (blank = default)")" || return 1
@@ -79,10 +77,8 @@ almanac_loop_harden_launch() {
     "Rounds:${rounds:-default budget}"
   [ -n "$yes" ] || almanac_loop_ui_confirm "Launch this run?" || { _info "Cancelled."; return 0; }
 
-  [ -n "$lenses" ]   && export HARDEN_LENSES="$lenses"
-  export HARDEN_PROVIDER="$provider"
-  [ -n "$model" ]    && export HARDEN_MODEL="$model"   || unset HARDEN_MODEL
-  [ -n "$effort" ]   && export HARDEN_EFFORT="$effort" || unset HARDEN_EFFORT
+  [ -n "$lenses" ] && export HARDEN_LENSES="$lenses"
+  _almanac_launch_export_role HARDEN_ "$provider" "$model" "$effort"
 
   # Exec the runner via the harden adapter (its convergence loop runs through
   # `almanac harden <target> --loop` — the adapter owns that invocation).
