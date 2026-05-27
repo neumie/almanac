@@ -73,6 +73,23 @@ almanac_converge_plan_dir() {
   almanac_loop_plan_dir converge "$root" "$resolved"
 }
 
+# Goal-form sibling of almanac_converge_plan_dir: a caller that has a GOAL (not
+# yet a slug) asks for its plan_dir directly. Composes slug + plan_dir in one
+# call so internal helpers that own a goal stop repeating
+# `almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")"` — five
+# callsites used to spell that two-step pre-slug dance and one carried a dead
+# `slug` local (computed but never read after the plan_dir lookup, because the
+# inside-an-active-run path short-circuits to _almanac_converge_active_plan_dir_name
+# and ignores the slug arg anyway). The query-form
+# almanac_converge_plan_dir stays for callers that already have a slug in scope
+# (CLI commands taking a user-typed slug; internal helpers that also need slug
+# for other uses like `CONVERGE_SLUG=$slug`).
+almanac_converge_plan_dir_for_goal() {
+  local root="$1"
+  local goal="$2"
+  almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")"
+}
+
 # Truncate the goal's kebab slug to a length that's comfortable in `ls`.
 # 30 chars is enough to recognize a goal at a glance ("codebase-improve-no-
 # major" vs "fix-the-test-suite") without dominating the directory listing
@@ -196,7 +213,7 @@ almanac_converge_ensure_prompt_template() {
   local goal="$2"
   local plan_dir prompt_file
 
-  plan_dir="$(almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")")"
+  plan_dir="$(almanac_converge_plan_dir_for_goal "$root" "$goal")"
   prompt_file="$plan_dir/prompt.md"
   [ -f "$prompt_file" ] && return 0
 
@@ -562,7 +579,7 @@ almanac_converge_write_convergence() {
   local reason="${8:-}"
   local plan_dir now_epoch elapsed status_summary
 
-  plan_dir="$(almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")")"
+  plan_dir="$(almanac_converge_plan_dir_for_goal "$root" "$goal")"
   now_epoch="$(date +%s)"
   elapsed=""
   case "$started_epoch" in
@@ -768,7 +785,7 @@ almanac_converge_apply_goal_update() {
   local new_goal="$6"
   local plan_dir goal_file history_file log_file ts old_goal old_file new_file diff_output diff_status summary
 
-  plan_dir="$(almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")")"
+  plan_dir="$(almanac_converge_plan_dir_for_goal "$root" "$goal")"
   goal_file="$plan_dir/goal.md"
   history_file="$plan_dir/goal.history.log"
   log_file="$plan_dir/overseer.log"
@@ -845,11 +862,10 @@ almanac_converge_run_worker() {
   local goal="$2"
   local exec_cmd="$3"
   local round="$4"
-  local provider model effort prompt_file result_file events_file plan_dir slug rc
+  local provider model effort prompt_file result_file events_file plan_dir rc
 
   IFS=$'\t' read -r provider model effort < <(almanac_converge_role_resolve agent)
-  slug="$(almanac_loop_slug "$goal")"
-  plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
+  plan_dir="$(almanac_converge_plan_dir_for_goal "$root" "$goal")"
 
   prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-worker-prompt.XXXXXX")"
   result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-worker-result.XXXXXX")"
@@ -1092,7 +1108,7 @@ almanac_converge_run_overseer() {
   local prompt_file result_file events_file
 
   IFS=$'\t' read -r provider model effort < <(almanac_converge_role_resolve overseer)
-  plan_dir="$(almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")")"
+  plan_dir="$(almanac_converge_plan_dir_for_goal "$root" "$goal")"
   log_file="$plan_dir/overseer.log"
 
   # Persist the overseer's events stream alongside the worker's iteration

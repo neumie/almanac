@@ -268,6 +268,29 @@ test_cli_requires_goal_and_action() {
   echo "  PASS: converge CLI requires --goal and exactly one of --prompt / --exec"
 }
 
+test_plan_dir_for_goal_composes_slug_and_lookup() {
+  # The goal-form sibling of almanac_converge_plan_dir collapses the
+  # `almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")"` two-step
+  # five internal callers used to spell. It must agree byte-for-byte with the
+  # query form when the query is `slug(goal)` — that equivalence is the
+  # contract every migrated callsite now relies on.
+  local tmp from_helper from_manual
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  almanac_converge_scaffold "$tmp" "Goal-form Sibling Smoke"
+
+  from_helper="$(almanac_converge_plan_dir_for_goal "$tmp" "Goal-form Sibling Smoke")"
+  from_manual="$(almanac_converge_plan_dir "$tmp" "$(almanac_loop_slug "Goal-form Sibling Smoke")")"
+
+  assert_eq "$from_manual" "$from_helper" \
+    "plan_dir_for_goal should equal plan_dir composed with slug(goal)"
+  [ -d "$from_helper" ] \
+    || fail "plan_dir_for_goal should resolve to the scaffolded directory: $from_helper"
+
+  echo "  PASS: almanac_converge_plan_dir_for_goal composes slug + plan_dir"
+}
+
 test_plan_dir_scaffold_and_exec_smoke() {
   local tmp marker plan reports
   new_tmpdir
@@ -1774,6 +1797,7 @@ test_hub_stop_writes_converge_signal() {
 }
 
 test_cli_requires_goal_and_action
+test_plan_dir_for_goal_composes_slug_and_lookup
 test_plan_dir_scaffold_and_exec_smoke
 test_prompt_mode_invokes_agent_and_commits
 test_prompt_mode_worker_instructs_agent_to_commit
