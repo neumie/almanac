@@ -31,7 +31,9 @@ _almanac_source_sibling feedback.sh almanac_loop_feedback_run    # objective fix
 #
 # Resolution layers, most specific first, via the shared loop resolver:
 #   provider: HARDEN_<ROLE>[_<LENS>]_PROVIDER -> HARDEN_<ROLE>_PROVIDER
-#             -> HARDEN_PROVIDER -> claude (sensible default: Claude plays every role)
+#             -> HARDEN_PROVIDER -> $(almanac_provider_default) (the central
+#             default-selection policy — active-env provider, else preference
+#             order; mirrors converge so neither loop hardcodes a provider name)
 #   model:    HARDEN_<ROLE>[_<LENS>]_MODEL    -> HARDEN_<ROLE>_MODEL
 #             -> HARDEN_MODEL -> "" (the provider's own default)
 #   effort:   HARDEN_<ROLE>[_<LENS>]_EFFORT   -> HARDEN_<ROLE>_EFFORT
@@ -58,7 +60,7 @@ almanac_harden_role_resolve() {
     *) return 2 ;;
   esac
 
-  almanac_loop_role_resolve "harden" "$role" "$lens" "claude" "" ""
+  almanac_loop_role_resolve "harden" "$role" "$lens" "$(almanac_provider_default)" "" ""
 }
 
 almanac_harden_rubric_path() {

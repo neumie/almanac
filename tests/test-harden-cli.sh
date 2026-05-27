@@ -1556,12 +1556,14 @@ test_run_status_contract_identical_for_harden_and_ralph() {
 
 test_role_config_resolves_all_three_roles() {
   local role provider model effort
-  # Every harden role resolves to a (provider, model, effort) triple, with
-  # Claude as the sensible default provider and the provider's own default
-  # model/effort (empty) unless tuned.
+  # Every harden role resolves to a (provider, model, effort) triple, honoring
+  # HARDEN_PROVIDER as the consumer-wide default and the provider's own default
+  # model/effort (empty) unless tuned. HARDEN_PROVIDER is set explicitly so the
+  # test does not depend on which providers are installed on the host (provider
+  # auto-detection is covered in tests/test-providers.sh).
   for role in conductor reviewer fixer; do
-    IFS=$'\t' read -r provider model effort < <(almanac_harden_role_resolve "$role")
-    assert_eq "claude" "$provider" "$role should default to the claude provider"
+    IFS=$'\t' read -r provider model effort < <(HARDEN_PROVIDER=claude almanac_harden_role_resolve "$role")
+    assert_eq "claude" "$provider" "$role should resolve to HARDEN_PROVIDER"
     assert_eq "" "$model" "$role model should default to empty (provider's own default)"
     assert_eq "" "$effort" "$role effort should default to empty (provider's own default)"
   done
@@ -1613,13 +1615,14 @@ test_role_config_overrides_each_role_via_env() {
 test_role_config_independent_of_host() {
   local from_claude_host from_codex_host
   # Resolution reads only HARDEN_* config, never a host marker, so launching from
-  # Claude Code vs Codex yields an identical tuple.
-  from_claude_host="$(CLAUDECODE=1 CLAUDE_CODE_ENTRYPOINT=cli almanac_harden_role_resolve conductor)"
-  from_codex_host="$(CODEX_SANDBOX=seatbelt CODEX_HOME=/tmp/codex almanac_harden_role_resolve conductor)"
+  # Claude Code vs Codex yields an identical tuple. HARDEN_PROVIDER is pinned so
+  # the assertion is independent of which providers are installed.
+  from_claude_host="$(HARDEN_PROVIDER=claude CLAUDECODE=1 CLAUDE_CODE_ENTRYPOINT=cli almanac_harden_role_resolve conductor)"
+  from_codex_host="$(HARDEN_PROVIDER=claude CODEX_SANDBOX=seatbelt CODEX_HOME=/tmp/codex almanac_harden_role_resolve conductor)"
 
   [ "$from_claude_host" = "$from_codex_host" ] || \
     fail "conductor resolution must be identical regardless of which host launched the run"
-  assert_eq $'claude\t\t' "$from_claude_host" "host-independent resolution should still apply harden defaults"
+  assert_eq $'claude\t\t' "$from_claude_host" "host-independent resolution should still apply the configured provider"
   echo "  PASS: role resolution is independent of the launching host"
 }
 
