@@ -1088,25 +1088,22 @@ almanac_converge_run_overseer() {
   local root="$1"
   local goal="$2"
   local round="$3"
-  local provider model effort prompt_file result_file events_file result rc plan_dir log_file ts
+  local provider model effort result rc plan_dir log_file ts
 
   IFS=$'\t' read -r provider model effort < <(almanac_converge_role_resolve overseer)
   plan_dir="$(almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")")"
   log_file="$plan_dir/overseer.log"
 
-  prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-overseer-prompt.XXXXXX")"
-  result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-overseer-result.XXXXXX")"
-  events_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-overseer-events.XXXXXX")"
-
-  almanac_converge_overseer_prompt "$root" "$goal" "$round" > "$prompt_file"
-
+  # The overseer is a one-shot capture: prompt in, verdict text out, events
+  # discarded. `capture_text` owns the full tmpfile lifecycle inside a
+  # subshell with an EXIT trap, so cleanup runs on every exit path (the
+  # 3-mktemp manual dance this replaced leaked partial tmpfiles if any of
+  # the three mktemps failed). The in_root wrapper keeps the cwd anchor at
+  # $root, identical to the worker callsites.
   rc=0
-  almanac_converge_agent_in_root capture "$root" "$provider" "$model" "$effort" "read-only" \
-    "$prompt_file" "$result_file" "$events_file" >/dev/null || rc=$?
-
-  result=""
-  [ -s "$result_file" ] && result="$(cat "$result_file")"
-  rm -f "$prompt_file" "$result_file" "$events_file"
+  result="$(almanac_converge_agent_in_root capture_text "$root" \
+    "$provider" "$model" "$effort" "read-only" \
+    "$(almanac_converge_overseer_prompt "$root" "$goal" "$round")")" || rc=$?
 
   [ "$rc" -eq 0 ] || _warn "Converge overseer tick $round exited $rc; continuing"
   almanac_converge_overseer_parse "$result"
