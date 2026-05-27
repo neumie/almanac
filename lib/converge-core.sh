@@ -1268,10 +1268,7 @@ almanac_converge_run() {
   # Signal files live in the run's plan dir now (per-run scope; see
   # lib/loops/converge.sh::almanac_loop_converge_signal_dir). The round loop
   # watches them at $plan_dir; nothing reads from $root anymore.
-  local _converge_stop_file _converge_steer_file
-  _converge_stop_file="$(almanac_loop_run_control_file converge "$plan_dir" stop)"
-  _converge_steer_file="$(almanac_loop_run_control_file converge "$plan_dir" steer)"
-
+  #
   # Clear leftover control signals before entering the round loop. With plan-
   # dir scoping cross-RUN contamination is structurally impossible (each run
   # has its own dir), but a user re-running converge with the SAME goal text
@@ -1283,12 +1280,19 @@ almanac_converge_run() {
   # Also wipe the legacy $root copies in case the operator launched a prior
   # run against an older build of converge that wrote there — one-time
   # migration grace; harmless on a clean workspace.
-  rm -f "$_converge_stop_file" "$_converge_steer_file" \
+  rm -f "$(almanac_loop_run_control_file converge "$plan_dir" stop)" \
+        "$(almanac_loop_run_control_file converge "$plan_dir" steer)" \
         "$root/.converge-stop" "$root/.converge-steer"
 
   round=0
   while [ "$round" -lt "$rounds" ]; do
-    if [ -f "$_converge_stop_file" ]; then
+    # Stop check routes through `almanac_loop_consume_signal` — the documented
+    # collapse seam in lib/run.sh:912 ("the seam they collapse onto"). Steer
+    # already uses it (almanac_converge_run_worker_prompt); stop was the last
+    # holdout doing a bare `[ -f $file ]` peek. Consume = read+delete in one
+    # op, so a refactor of this break path can't leave the file behind for
+    # the next iteration to re-fire on.
+    if almanac_loop_consume_signal converge "$plan_dir" stop >/dev/null; then
       final_status="aborted"
       final_outcome="STOPPED"
       final_verdict="STOP"

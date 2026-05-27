@@ -1699,10 +1699,14 @@ test_converge_stop_signal_exits_running_loop() {
     --exec "$ALMANAC converge self-stop --stop" \
     --rounds 3 --no-oversee >/dev/null
 
-  # converge --stop writes to the run's plan dir (per-run scope) — NOT to
-  # $root any more. The plan-dir signal is what the round loop watches.
-  [ -f "$(plan_dir_for_slug "$tmp" "self-stop")/.converge-stop" ] || \
-    fail "converge --stop should write stop signal in the plan dir"
+  # The round-start stop check routes through `almanac_loop_consume_signal`
+  # (read+delete in one op) — same seam harden uses (see test-harden-cli.sh
+  # ".harden-stop should be consumed"). Post-detection the file is gone; the
+  # abort status below is the delivery proof. Plan-dir scoping of the WRITE
+  # is covered by test_hub_stop_writes_converge_signal, which routes via the
+  # same almanac_loop_run_control_file resolver as the CLI path.
+  [ ! -f "$(plan_dir_for_slug "$tmp" "self-stop")/.converge-stop" ] || \
+    fail ".converge-stop should be consumed by the round-start check"
   [ ! -f "$tmp/.converge-stop" ] \
     || fail "converge --stop MUST NOT write to \$root (would poison sibling runs)"
   reports="$(plan_dir_for_slug "$tmp" "self-stop")/agent-reports.log"
