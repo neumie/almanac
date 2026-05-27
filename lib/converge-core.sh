@@ -179,11 +179,21 @@ almanac_converge_role() {
   almanac_loop_role_config "converge" "$role" "" "$(almanac_provider_default)" "" ""
 }
 
-almanac_converge_role_field() {
+# Resolve the role's (provider, model, effort) as one tab-separated line. The
+# deep form callers use to populate three locals in one shot:
+#   IFS=$'\t' read -r provider model effort < <(almanac_converge_role_resolve agent)
+# Pre-deepening, every callsite triple-called a thin `_role_field` wrapper that
+# itself re-walked the env layering for each field — nine env lookups per agent
+# spawn for three values. Returns 2 on unknown role.
+almanac_converge_role_resolve() {
   local role="$1"
-  local field="$2"
 
-  almanac_converge_role "$role" | almanac_loop_role_tsv_field "$field"
+  case "$role" in
+    agent|overseer) ;;
+    *) return 2 ;;
+  esac
+
+  almanac_loop_role_resolve "converge" "$role" "" "$(almanac_provider_default)" "" ""
 }
 
 almanac_converge_ensure_prompt_template() {
@@ -875,9 +885,7 @@ almanac_converge_run_worker() {
   local round="$4"
   local provider model effort prompt_file result_file events_file plan_dir slug rc
 
-  provider="$(almanac_converge_role_field "agent" "provider")"
-  model="$(almanac_converge_role_field "agent" "model")"
-  effort="$(almanac_converge_role_field "agent" "effort")"
+  IFS=$'\t' read -r provider model effort < <(almanac_converge_role_resolve agent)
   slug="$(almanac_loop_slug "$goal")"
   plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
 
@@ -986,9 +994,7 @@ almanac_converge_run_worker_prompt() {
   local provider model effort prompt_file result_file events_file rc
   local slug plan_dir log_file steer_path ts result_summary
 
-  provider="$(almanac_converge_role_field "agent" "provider")"
-  model="$(almanac_converge_role_field "agent" "model")"
-  effort="$(almanac_converge_role_field "agent" "effort")"
+  IFS=$'\t' read -r provider model effort < <(almanac_converge_role_resolve agent)
   slug="$(almanac_loop_slug "$goal")"
   plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
   log_file="$plan_dir/agent-reports.log"
@@ -1070,9 +1076,7 @@ almanac_converge_run_overseer() {
   local round="$3"
   local provider model effort prompt_file result_file events_file result rc plan_dir log_file ts
 
-  provider="$(almanac_converge_role_field "overseer" "provider")"
-  model="$(almanac_converge_role_field "overseer" "model")"
-  effort="$(almanac_converge_role_field "overseer" "effort")"
+  IFS=$'\t' read -r provider model effort < <(almanac_converge_role_resolve overseer)
   plan_dir="$(almanac_converge_plan_dir "$root" "$(almanac_loop_slug "$goal")")"
   log_file="$plan_dir/overseer.log"
 

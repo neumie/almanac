@@ -55,15 +55,23 @@ almanac_harden_role() {
   almanac_loop_role_config "harden" "$role" "$lens" "claude" "" ""
 }
 
-# One field (provider | model | effort) of a harden role's resolved config, for
-# call sites that need a single value. Thin reader over almanac_harden_role so
-# harden's per-role defaults stay defined in exactly one place.
-almanac_harden_role_field() {
+# Resolve the role's (provider, model, effort) as one tab-separated line. The
+# deep form callers use to populate three locals in one shot:
+#   IFS=$'\t' read -r provider model effort < <(almanac_harden_role_resolve reviewer "$lens")
+# Pre-deepening, every callsite triple-called a thin `_role_field` wrapper that
+# itself re-walked the env layering for each field — nine env lookups per
+# worker spawn for three values. Returns 2 on unknown role.
+almanac_harden_role_resolve() {
   local role="$1"
-  local field="$2"
-  local lens="${3:-}"
+  local lens="${2:-}"
 
-  almanac_harden_role "$role" "$lens" | almanac_loop_role_tsv_field "$field"
+  case "$role" in
+    reviewer) ;;
+    conductor | fixer) lens="" ;;
+    *) return 2 ;;
+  esac
+
+  almanac_loop_role_resolve "harden" "$role" "$lens" "claude" "" ""
 }
 
 almanac_harden_rubric_path() {
@@ -1041,9 +1049,7 @@ almanac_harden_fanout() {
   _info "Hardening $target — fanning out ${#lenses[@]} read-only reviewer(s)"
 
   for lens in "${lenses[@]}"; do
-    provider="$(almanac_harden_role_field "reviewer" "provider" "$lens")"
-    model="$(almanac_harden_role_field "reviewer" "model" "$lens")"
-    effort="$(almanac_harden_role_field "reviewer" "effort" "$lens")"
+    IFS=$'\t' read -r provider model effort < <(almanac_harden_role_resolve reviewer "$lens")
 
     worker_id="reviewer-$lens"
     prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-prompt.XXXXXX")"
@@ -1243,9 +1249,7 @@ $open
 INNER
   )"
 
-  provider="$(almanac_harden_role_field "fixer" "provider")"
-  model="$(almanac_harden_role_field "fixer" "model")"
-  effort="$(almanac_harden_role_field "fixer" "effort")"
+  IFS=$'\t' read -r provider model effort < <(almanac_harden_role_resolve fixer)
 
   prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-fixer-prompt.XXXXXX")"
   result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-harden-fixer-result.XXXXXX")"
@@ -1410,9 +1414,7 @@ almanac_harden_ratify_open() {
   # The conductor is the role that ratifies findings by executing their
   # demonstrations; resolve its (provider, model, effort) once and hand it to the
   # execution seam for every finding this round.
-  cond_provider="$(almanac_harden_role_field "conductor" "provider")"
-  cond_model="$(almanac_harden_role_field "conductor" "model")"
-  cond_effort="$(almanac_harden_role_field "conductor" "effort")"
+  IFS=$'\t' read -r cond_provider cond_model cond_effort < <(almanac_harden_role_resolve conductor)
 
   while IFS=$'\t' read -r id lens severity location claim demonstration; do
     [ -n "$id" ] || continue
@@ -1591,9 +1593,7 @@ almanac_harden_run() {
 
   # Announce the configured conductor — the provider judging findings this run —
   # so the role config is visible to whoever is supervising.
-  cond_provider="$(almanac_harden_role_field "conductor" "provider")"
-  cond_model="$(almanac_harden_role_field "conductor" "model")"
-  cond_effort="$(almanac_harden_role_field "conductor" "effort")"
+  IFS=$'\t' read -r cond_provider cond_model cond_effort < <(almanac_harden_role_resolve conductor)
   _info "Conductor: provider=$cond_provider${cond_model:+ model=$cond_model}${cond_effort:+ effort=$cond_effort}"
 
   # Register this loop in the shared run registry — the SAME contract ralph emits

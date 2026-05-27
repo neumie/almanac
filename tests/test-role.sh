@@ -167,6 +167,45 @@ test_role_tsv_field_reads_named_field() {
   echo "  PASS: role_tsv_field reads a field from a TSV stream"
 }
 
+test_role_resolve_emits_one_tab_separated_line() {
+  local actual provider model effort
+  actual="$(
+    HARDEN_PROVIDER=claude \
+    HARDEN_MODEL=sonnet \
+    HARDEN_EFFORT=high \
+    HARDEN_REVIEWER_PROVIDER=codex \
+    HARDEN_REVIEWER_SECURITY_MODEL=security-model \
+    almanac_loop_role_resolve "harden" "reviewer" "security" "fallback-provider" "fallback-model" "low"
+  )"
+  assert_eq $'codex\tsecurity-model\thigh' "$actual" \
+    "role_resolve must emit provider<TAB>model<TAB>effort on one line"
+  # The intended caller idiom: pull three locals with one read.
+  IFS=$'\t' read -r provider model effort <<< "$actual"
+  assert_eq "codex" "$provider" "read should populate provider"
+  assert_eq "security-model" "$model" "read should populate model"
+  assert_eq "high" "$effort" "read should populate effort"
+  echo "  PASS: role_resolve emits one tab-separated line"
+}
+
+test_role_resolve_requires_two_args() {
+  local rc=0
+  almanac_loop_role_resolve "harden" >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 2 ] || fail "role_resolve with fewer than 2 args should return 2 (got $rc)"
+  echo "  PASS: role_resolve requires two args"
+}
+
+test_role_resolve_uses_defaults_when_env_unset() {
+  local actual
+  actual="$(
+    env -u RALPH_PROVIDER -u RALPH_MODEL -u RALPH_EFFORT \
+        -u RALPH_AGENT_PROVIDER -u RALPH_AGENT_MODEL -u RALPH_AGENT_EFFORT \
+      bash -c "source '$ROOT/lib/role.sh'; almanac_loop_role_resolve ralph agent '' codex sonnet medium"
+  )"
+  assert_eq $'codex\tsonnet\tmedium' "$actual" \
+    "role_resolve must fall through to per-field defaults when nothing is set"
+  echo "  PASS: role_resolve falls through to defaults"
+}
+
 test_env_key_part_normalises_to_upper_underscore
 test_role_field_lens_layer_wins
 test_role_field_role_layer_beats_consumer_wide
@@ -179,6 +218,9 @@ test_resolves_role_config_with_lens_overrides
 test_resolves_role_config_with_ralph_style_fallbacks
 test_role_config_requires_two_args
 test_role_tsv_field_reads_named_field
+test_role_resolve_emits_one_tab_separated_line
+test_role_resolve_requires_two_args
+test_role_resolve_uses_defaults_when_env_unset
 
 echo ""
 echo "All role config resolution tests passed."

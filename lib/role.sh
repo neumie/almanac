@@ -78,9 +78,9 @@ almanac_loop_role_field() {
 # loop's role resolver emits via almanac_loop_role_config: `field<TAB>value` per
 # line). Echoes the value (empty when the field is absent). The full stream is
 # consumed (no early awk exit) so the producer never takes a SIGPIPE under
-# `set -o pipefail`. Lives here so each loop's per-field reader (harden_role_field,
-# converge_role_field, …) reduces to one line — the awk pipeline no longer lives
-# in each loop's core.
+# `set -o pipefail`. Used by tests and any per-field reader that wants a single
+# value — most loop callers want all three at once and should use
+# almanac_loop_role_resolve instead.
 almanac_loop_role_tsv_field() {
   awk -F'\t' -v k="$1" '$1 == k { v = $2 } END { print v }'
 }
@@ -101,4 +101,26 @@ almanac_loop_role_config() {
   printf 'provider\t%s\n' "$(almanac_loop_role_field "$prefix" "$role" "$lens" "provider" "$default_provider")"
   printf 'model\t%s\n' "$(almanac_loop_role_field "$prefix" "$role" "$lens" "model" "$default_model")"
   printf 'effort\t%s\n' "$(almanac_loop_role_field "$prefix" "$role" "$lens" "effort" "$default_effort")"
+}
+
+# Resolve a role's (provider, model, effort) as ONE tab-separated line, for the
+# common case where a caller wants all three at once. Same arg shape as
+# almanac_loop_role_config; same per-field defaulting. Designed to be paired with
+# `IFS=$'\t' read -r provider model effort < <(almanac_loop_role_resolve …)`,
+# replacing three repeated `_role_field` calls (which each re-walked the env
+# layering) with a single resolution. Returns 2 on missing args.
+almanac_loop_role_resolve() {
+  [ "$#" -ge 2 ] || return 2
+
+  local prefix="$1"
+  local role="$2"
+  local lens="${3:-}"
+  local default_provider="${4:-}"
+  local default_model="${5:-}"
+  local default_effort="${6:-}"
+
+  printf '%s\t%s\t%s\n' \
+    "$(almanac_loop_role_field "$prefix" "$role" "$lens" "provider" "$default_provider")" \
+    "$(almanac_loop_role_field "$prefix" "$role" "$lens" "model" "$default_model")" \
+    "$(almanac_loop_role_field "$prefix" "$role" "$lens" "effort" "$default_effort")"
 }
