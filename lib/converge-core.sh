@@ -832,6 +832,21 @@ almanac_converge_git_user_status() {
   fi
 }
 
+# Run an agent shape (`stream` / `capture`) with cwd anchored at $root. The
+# three converge agent callsites (exec-mode worker, prompt-mode worker,
+# overseer) all need the agent process inside $root — exec_cmd in the
+# worker prompts is shell the agent runs against the project, and the
+# overseer's git log / git status references resolve relative to $root.
+# The agent runner itself (lib/agent.sh) is cwd-agnostic by design (slice
+# 04 contract), so converge owns this anchor as a local verb instead of
+# leaking a cd into every callsite. Args after $root pass straight through
+# to almanac_loop_agent_<shape>.
+almanac_converge_agent_in_root() {
+  local shape="$1" root="$2"
+  shift 2
+  ( cd "$root" && "almanac_loop_agent_$shape" "$@" )
+}
+
 almanac_converge_run_worker() {
   local root="$1"
   local goal="$2"
@@ -860,13 +875,9 @@ almanac_converge_run_worker() {
   # less than full access dies on every un-allowlisted Bash call ("This
   # command requires approval"). For codex this drops the sandbox; for claude
   # it maps to --permission-mode bypassPermissions (per the provider adapter).
-  #
-  # cwd into $root for the agent invocation — exec_cmd in the worker prompt
-  # is shell text the agent runs against the project, and matches the
-  # _run_worker_prompt sibling which also (cd "$root" && agent_stream).
   rc=0
-  (cd "$root" && almanac_loop_agent_stream "$provider" "$model" "$effort" "danger-full-access" \
-    "$prompt_file" "$result_file" "$events_file" merge-stderr) || rc=$?
+  almanac_converge_agent_in_root stream "$root" "$provider" "$model" "$effort" "danger-full-access" \
+    "$prompt_file" "$result_file" "$events_file" merge-stderr || rc=$?
 
   rm -f "$prompt_file" "$result_file"
   return "$rc"
@@ -1046,8 +1057,8 @@ EOF
   # danger-full-access: same rationale as exec-mode worker — converge agents
   # need to run arbitrary shell (tests, git status, lint) the prompt asks for.
   rc=0
-  (cd "$root" && almanac_loop_agent_stream "$provider" "$model" "$effort" "danger-full-access" \
-    "$prompt_file" "$result_file" "$events_file" merge-stderr) || rc=$?
+  almanac_converge_agent_in_root stream "$root" "$provider" "$model" "$effort" "danger-full-access" \
+    "$prompt_file" "$result_file" "$events_file" merge-stderr || rc=$?
 
   # Auto-commit only the agent-touched paths. A smart prompt may have committed
   # itself (worktree clean, nothing to do); a slash command like
@@ -1097,8 +1108,8 @@ almanac_converge_run_overseer() {
   almanac_converge_overseer_prompt "$root" "$goal" "$round" > "$prompt_file"
 
   rc=0
-  (cd "$root" && almanac_loop_agent_capture "$provider" "$model" "$effort" "read-only" \
-    "$prompt_file" "$result_file" "$events_file") >/dev/null || rc=$?
+  almanac_converge_agent_in_root capture "$root" "$provider" "$model" "$effort" "read-only" \
+    "$prompt_file" "$result_file" "$events_file" >/dev/null || rc=$?
 
   result=""
   [ -s "$result_file" ] && result="$(cat "$result_file")"
@@ -1289,7 +1300,8 @@ almanac_converge_run() {
     fi
 
     round=$((round + 1))
-    # Both worker fns own their own (cd "$root" && agent_stream …) — the
+    # Both worker fns route their agent invocation through
+    # almanac_converge_agent_in_root (cwd anchor lives there) — the
     # dispatcher just selects which fn + which action arg (prompt vs exec_cmd).
     exec_rc=0
     case "$action_mode" in
