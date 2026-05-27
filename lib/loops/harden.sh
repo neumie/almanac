@@ -111,11 +111,8 @@ almanac_loop_harden_new_run_env() {
   model="$(_almanac_loop_kv_get model "$@")"
   effort="$(_almanac_loop_kv_get effort "$@")"
   lenses="$(_almanac_loop_kv_get lenses "$@")"
-  [ -n "$lenses" ]   && printf 'HARDEN_LENSES=%s\n' "$lenses"
-  [ -n "$provider" ] && printf 'HARDEN_PROVIDER=%s\n' "$provider"
-  [ -n "$model" ]    && printf 'HARDEN_MODEL=%s\n' "$model"
-  [ -n "$effort" ]   && printf 'HARDEN_EFFORT=%s\n' "$effort"
-  return 0
+  [ -n "$lenses" ] && printf 'HARDEN_LENSES=%s\n' "$lenses"
+  _almanac_loop_emit_role_env HARDEN_ "$provider" "$model" "$effort"
 }
 
 almanac_loop_harden_new_run_usage() {

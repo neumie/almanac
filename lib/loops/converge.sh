@@ -217,10 +217,7 @@ almanac_loop_converge_new_run_env() {
   provider="$(_almanac_loop_kv_get provider "$@")"
   model="$(_almanac_loop_kv_get model "$@")"
   effort="$(_almanac_loop_kv_get effort "$@")"
-  [ -n "$provider" ] && printf 'CONVERGE_PROVIDER=%s\n' "$provider"
-  [ -n "$model" ]    && printf 'CONVERGE_MODEL=%s\n' "$model"
-  [ -n "$effort" ]   && printf 'CONVERGE_EFFORT=%s\n' "$effort"
-  return 0
+  _almanac_loop_emit_role_env CONVERGE_ "$provider" "$model" "$effort"
 }
 
 almanac_loop_converge_new_run_usage() {

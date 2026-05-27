@@ -96,6 +96,9 @@ _almanac_launch_need_positive_int() {
 # var so a stale value inherited from the parent env can't leak into the runner.
 # Single source of truth for the export shape — adding a 4th adapter can't
 # forget the unset, and the prefix convention lives in exactly one place.
+# Sibling to lib/loops.sh::_almanac_loop_emit_role_env (the printf form used by
+# `new_run_env` verbs); both helpers share the prefix+field convention but
+# differ in output medium (export with unset here vs printf with skip there).
 _almanac_launch_export_role() {
   local prefix="$1" provider="$2" model="$3" effort="$4"
   export "${prefix}PROVIDER=$provider"

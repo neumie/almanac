@@ -93,6 +93,23 @@ _almanac_loop_kv_get() {
   printf '%s\n' "$value"
 }
 
+# Emit the consumer-wide role triple as KEY=VALUE lines under PREFIX (the
+# `<PREFIX>PROVIDER` / `<PREFIX>MODEL` / `<PREFIX>EFFORT` env keys role.sh's
+# resolver layers under). Empty fields drop their key. Used by every loop
+# adapter's `new_run_env` verb (harden, converge — ralph rides on argv only) so
+# the key-name convention lives in exactly one printf — adding a 4th adapter
+# costs zero new spellings, and renaming a field key only changes this helper.
+# Sibling to lib/loop-launcher.sh::_almanac_launch_export_role (the export form
+# used by launch verbs); both helpers share the prefix+field convention but
+# differ in output medium (export with unset vs printf with skip).
+_almanac_loop_emit_role_env() {
+  local prefix="$1" provider="$2" model="$3" effort="$4"
+  [ -n "$provider" ] && printf '%sPROVIDER=%s\n' "$prefix" "$provider"
+  [ -n "$model" ]    && printf '%sMODEL=%s\n' "$prefix" "$model"
+  [ -n "$effort" ]   && printf '%sEFFORT=%s\n' "$prefix" "$effort"
+  return 0
+}
+
 # Default signal-file basename for a loop's between-round control. Every loop uses
 # the same `.${name}-${kind}` convention (`.ralph-stop`, `.harden-steer`, …) so the
 # pattern lives once here instead of being copy-pasted into each adapter. A loop
