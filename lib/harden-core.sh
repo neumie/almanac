@@ -600,6 +600,51 @@ almanac_harden_parse_findings() {
   done < <(almanac_harden_findings_tsv "$result_file")
 }
 
+# Walk the ledger markdown file and emit one TSV row per finding section:
+#   id, lens, severity, location, claim, demonstration, status, round, adjudication
+# Missing path -> emits nothing (return 0). This is the SINGLE markdown→record
+# walker for the ledger; every read-side consumer (open_blocking, status,
+# record's existing-statuses snapshot) slices these rows instead of re-parsing
+# the markdown. Schema list lives in this one awk — adding a finding field is
+# one variable, one case branch, one printf %s here, never N synchronised
+# parsers. Format mirrors almanac_harden_parse_findings (9 fields, same order)
+# so reviewer-parsed and ledger-parsed rows are directly comparable.
+almanac_harden_ledger_to_tsv() {
+  local path="$1"
+  [ -f "$path" ] || return 0
+  awk '
+    function flush() {
+      if (id != "") {
+        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", id, lens, severity, location, claim, demonstration, status, round, adjudication
+      }
+    }
+    /^## / {
+      flush()
+      id = substr($0, 4)
+      lens = ""; severity = ""; location = ""; claim = ""; demonstration = ""
+      status = ""; round = ""; adjudication = ""
+      next
+    }
+    /^- / {
+      line = substr($0, 3)
+      p = index(line, ":")
+      if (p == 0) next
+      key = substr(line, 1, p - 1)
+      val = substr(line, p + 1)
+      sub(/^ /, "", val)
+      if      (key == "lens")          lens = val
+      else if (key == "severity")      severity = val
+      else if (key == "location")      location = val
+      else if (key == "claim")         claim = val
+      else if (key == "demonstration") demonstration = val
+      else if (key == "status")        status = val
+      else if (key == "round")         round = val
+      else if (key == "adjudication")  adjudication = val
+    }
+    END { flush() }
+  ' "$path"
+}
+
 # Parse a reviewer result and append each new finding to the ledger, deduping
 # against everything already adjudicated. Prints the count of findings actually
 # added (duplicates do not count).
@@ -620,14 +665,7 @@ almanac_harden_ledger_record() {
 
   almanac_harden_parse_findings "$result_file" "$round" > "$parsed"
 
-  awk '
-    /^## / { id = substr($0, 4); next }
-    /^- status:/ && id != "" {
-      val = $0
-      sub(/^- status:[ \t]*/, "", val)
-      print id "\t" val
-    }
-  ' "$path" > "$statuses"
+  almanac_harden_ledger_to_tsv "$path" | awk -F'\t' '{ print $1 "\t" $7 }' > "$statuses"
 
   awk '
     BEGIN { FS = "\t" }
@@ -673,38 +711,8 @@ almanac_harden_ledger_record() {
 # (id, lens, severity, location, claim, demonstration). Only status=open
 # entries qualify; fixed / rejected-subjective / wontfix-per-context never gate.
 almanac_harden_ledger_open_blocking() {
-  local path="$1"
-
-  [ -f "$path" ] || return 0
-
-  awk '
-    function flush() {
-      if (id != "" && status == "open") {
-        printf "%s\t%s\t%s\t%s\t%s\t%s\n", id, lens, severity, location, claim, demonstration
-      }
-    }
-    /^## / {
-      flush()
-      id = substr($0, 4)
-      lens = ""; severity = ""; location = ""; claim = ""; demonstration = ""; status = ""
-      next
-    }
-    /^- / {
-      line = substr($0, 3)
-      p = index(line, ":")
-      if (p == 0) next
-      key = substr(line, 1, p - 1)
-      val = substr(line, p + 1)
-      sub(/^ /, "", val)
-      if (key == "lens") lens = val
-      else if (key == "severity") severity = val
-      else if (key == "location") location = val
-      else if (key == "claim") claim = val
-      else if (key == "demonstration") demonstration = val
-      else if (key == "status") status = val
-    }
-    END { flush() }
-  ' "$path"
+  almanac_harden_ledger_to_tsv "$1" \
+    | awk -F'\t' 'BEGIN { OFS="\t" } $7 == "open" { print $1, $2, $3, $4, $5, $6 }'
 }
 
 # Print the recorded status of the finding with this id (empty when the id is
@@ -713,17 +721,8 @@ almanac_harden_ledger_status() {
   local path="$1"
   local id="$2"
 
-  [ -f "$path" ] || return 0
-
-  awk -v want="$id" '
-    /^## / { cur = substr($0, 4); next }
-    /^- status:/ && cur == want {
-      val = $0
-      sub(/^- status:[ \t]*/, "", val)
-      print val
-      exit
-    }
-  ' "$path"
+  almanac_harden_ledger_to_tsv "$path" \
+    | awk -F'\t' -v want="$id" '$1 == want { print $7; exit }'
 }
 
 # Rewrite the status (and adjudication note) of the finding with this id in
