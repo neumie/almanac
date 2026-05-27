@@ -635,14 +635,28 @@ almanac_loop_read_run() {
   cat "$status_file"
 }
 
+# THE single source of truth for a run's worker container — the parent dir under
+# which each worker_id resolves to its own subdir. almanac_loop_worker_dir composes
+# off this; dashboard/health walkers that need to iterate every worker of a run
+# (e.g. harden's reviewer health rows) call this directly instead of re-spelling
+# "<registry>/<run_id>/workers" each time. One literal "workers" path segment
+# lives here, used everywhere.
+almanac_loop_workers_dir() {
+  local root="$1"
+  local run_id="$2"
+
+  printf '%s/%s/workers\n' \
+    "$(almanac_loop_registry_dir "$root")" \
+    "$run_id"
+}
+
 almanac_loop_worker_dir() {
   local root="$1"
   local run_id="$2"
   local worker_id="$3"
 
-  printf '%s/%s/workers/%s\n' \
-    "$(almanac_loop_registry_dir "$root")" \
-    "$run_id" \
+  printf '%s/%s\n' \
+    "$(almanac_loop_workers_dir "$root" "$run_id")" \
     "$(almanac_loop_slug "$worker_id")"
 }
 

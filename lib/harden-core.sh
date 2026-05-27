@@ -1726,7 +1726,7 @@ almanac_harden_dashboard_worker_rows() {
   local loop="${5:-5}"
   local workers_dir wdir status_file base id provider health
 
-  workers_dir="$(almanac_loop_registry_dir "$root")/$run_id/workers"
+  workers_dir="$(almanac_loop_workers_dir "$root" "$run_id")"
   [ -d "$workers_dir" ] || return 0
   [ -n "$now" ] || now="$(date +%s)"
 
@@ -1786,7 +1786,7 @@ almanac_harden_run_has_active_worker() {
   local run_id="$2"
   local workers_dir wdir st
 
-  workers_dir="$(almanac_loop_registry_dir "$root")/$run_id/workers"
+  workers_dir="$(almanac_loop_workers_dir "$root" "$run_id")"
   [ -d "$workers_dir" ] || return 1
 
   for wdir in "$workers_dir"/*/; do
