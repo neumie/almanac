@@ -10,6 +10,11 @@
 #                   runner is the CLI itself (`almanac converge --goal … --exec …`),
 #                   so the adapter yields that bin/almanac invocation. Mirrors
 #                   harden's adapter shape (no standalone runner script).
+#   new_run_argv  — emit the hub's "new run" launcher argv (one token per line)
+#                   from key=val pairs; role config rides on env (see
+#                   new_run_env). Enforces the prompt/exec mutex.
+#   new_run_env   — emit KEY=VALUE env lines for the role config (CONVERGE_*)
+#                   so the hub never has to know converge's env prefixes.
 #
 # Control contract (signal_file) inherits the default `.converge-stop` /
 # `.converge-steer` convention from lib/loops.sh — no adapter override needed.
@@ -153,6 +158,66 @@ almanac_loop_converge_launch() {
   almanac_loop_adapter_call converge exec_argv "$goal" "$action_mode" "$action_text" "$rounds" "$no_oversee" "$oversee_every" \
     || _die "converge adapter could not build a runner for goal: $goal"
   exec "${_ALMANAC_LOOP_ARGV[@]}"
+}
+
+# Compose the hub's new-run launcher argv for converge (one token per line). The
+# runner is `almanac converge --goal <g> (--prompt|--exec) <action> [...]`; role
+# config (provider/model/effort) rides on env via new_run_env. Returns 2 when a
+# required field is missing or the prompt/exec mutex is violated.
+almanac_loop_converge_new_run_argv() {
+  local goal="" prompt="" exec_cmd="" rounds="" oversee="" oversee_every=""
+  local kv key val
+  for kv in "$@"; do
+    key="${kv%%=*}"; val="${kv#*=}"
+    case "$key" in
+      goal) goal="$val" ;;
+      prompt) prompt="$val" ;;
+      exec) exec_cmd="$val" ;;
+      rounds) rounds="$val" ;;
+      oversee) oversee="$val" ;;
+      oversee_every) oversee_every="$val" ;;
+    esac
+  done
+
+  [ -n "$goal" ] || return 2
+  # Mutex: prompt is the dominant mode (agent invocation); exec is the escape
+  # hatch (shell command in a wrapping worker). Enforced here so the hub never
+  # composes a malformed launch; cmd/converge.sh enforces it again for direct
+  # invocations.
+  if [ -n "$prompt" ] && [ -n "$exec_cmd" ]; then return 2; fi
+  [ -n "$prompt" ] || [ -n "$exec_cmd" ] || return 2
+
+  printf '%s\n' converge
+  printf '%s\n%s\n' --goal "$goal"
+  if [ -n "$prompt" ]; then
+    printf '%s\n%s\n' --prompt "$prompt"
+  else
+    printf '%s\n%s\n' --exec "$exec_cmd"
+  fi
+  [ -n "$rounds" ]        && printf '%s\n%s\n' --rounds "$rounds"
+  [ "$oversee" = "off" ]  && printf '%s\n' --no-oversee
+  [ -n "$oversee_every" ] && printf '%s\n%s\n' --oversee-every "$oversee_every"
+  return 0
+}
+
+# Compose the hub's new-run env stream for converge (KEY=VALUE per line) from
+# key=val pairs: the consumer-wide CONVERGE_PROVIDER/MODEL/EFFORT that role.sh's
+# lookup uses for both worker and overseer roles unless the user has set
+# CONVERGE_{AGENT,OVERSEER}_* explicitly. Empty fields drop their key.
+almanac_loop_converge_new_run_env() {
+  local provider="" model="" effort="" kv key val
+  for kv in "$@"; do
+    key="${kv%%=*}"; val="${kv#*=}"
+    case "$key" in
+      provider) provider="$val" ;;
+      model)    model="$val" ;;
+      effort)   effort="$val" ;;
+    esac
+  done
+  [ -n "$provider" ] && printf 'CONVERGE_PROVIDER=%s\n' "$provider"
+  [ -n "$model" ]    && printf 'CONVERGE_MODEL=%s\n' "$model"
+  [ -n "$effort" ]   && printf 'CONVERGE_EFFORT=%s\n' "$effort"
+  return 0
 }
 
 # --help text for `almanac converge` / `almanac_loop_launch converge`. Stays

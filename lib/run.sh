@@ -928,115 +928,26 @@ almanac_loop_run_watch() {
 # harden takes target, rounds, lenses, provider, model, effort.
 
 # Compose the launcher argv for a new run, one token per line, starting with the
-# `almanac` subcommand. ralph config maps to ralph.sh flags; harden launches the
-# convergence loop (`harden <target> --loop [--rounds N]`) — its provider/model/
-# effort/lenses are environment, emitted by almanac_loop_new_run_env, not argv.
-# converge takes goal + exec + rounds + oversee config on argv (the only required
-# pieces of state the runner can't infer); role config (provider/model/effort)
-# rides on environment, same shape as harden.
-# Returns 1 for an unknown type, 2 when a required field is missing (ralph: prd;
-# harden: target; converge: goal+exec).
+# `almanac` subcommand. The loop-specific flag shape lives in each loop adapter's
+# `new_run_argv` verb (lib/loops/<name>.sh) — this dispatcher normalises the
+# unknown-type vs missing-field distinction and forwards the key=val pairs:
+#   - unknown loop type  -> 1
+#   - missing required   -> 2 (returned by the adapter)
+# Adding a loop is a single new file under lib/loops/ — this function does not
+# change. Symmetric with `almanac_loop_new_run_env` below.
 almanac_loop_new_run_argv() {
   local type="$1"; shift
-  local prd="" mode="" provider="" model="" effort="" iterations="" oversee="" target="" rounds=""
-  local goal="" exec_cmd="" prompt="" oversee_every="" kv key val
-  for kv in "$@"; do
-    key="${kv%%=*}"; val="${kv#*=}"
-    case "$key" in
-      prd) prd="$val" ;;
-      mode) mode="$val" ;;
-      provider) provider="$val" ;;
-      model) model="$val" ;;
-      effort) effort="$val" ;;
-      iterations) iterations="$val" ;;
-      oversee) oversee="$val" ;;
-      target) target="$val" ;;
-      rounds) rounds="$val" ;;
-      goal) goal="$val" ;;
-      exec) exec_cmd="$val" ;;
-      prompt) prompt="$val" ;;
-      oversee_every) oversee_every="$val" ;;
-    esac
-  done
-
-  case "$type" in
-    ralph)
-      [ -n "$prd" ] || return 2
-      printf '%s\n' ralph
-      printf '%s\n%s\n' --prd "$prd"
-      if [ -n "$mode" ]; then printf '%s\n%s\n' --mode "$mode"; fi
-      if [ -n "$provider" ]; then printf '%s\n%s\n' --provider "$provider"; fi
-      if [ -n "$model" ]; then printf '%s\n%s\n' --model "$model"; fi
-      if [ -n "$effort" ]; then printf '%s\n%s\n' --effort "$effort"; fi
-      if [ -n "$iterations" ]; then printf '%s\n%s\n' --iterations "$iterations"; fi
-      if [ "$oversee" = "off" ]; then printf '%s\n' --no-oversee; fi
-      ;;
-    harden)
-      [ -n "$target" ] || return 2
-      printf '%s\n%s\n%s\n' harden "$target" --loop
-      if [ -n "$rounds" ]; then printf '%s\n%s\n' --rounds "$rounds"; fi
-      ;;
-    converge)
-      [ -n "$goal" ] || return 2
-      # Exactly one of prompt / exec is required. prompt is the dominant mode
-      # (agent invocation); exec is the escape hatch (shell command in a
-      # wrapping worker). Mutex enforced here so the hub never composes a
-      # malformed launch.
-      if [ -n "$prompt" ] && [ -n "$exec_cmd" ]; then return 2; fi
-      [ -n "$prompt" ] || [ -n "$exec_cmd" ] || return 2
-      # Same split as harden: state the runner needs goes on argv (goal, the
-      # action flag, rounds, oversee flags), role config (provider/model/effort)
-      # rides on environment via almanac_loop_new_run_env. The runner is
-      # `almanac converge` — cmd/converge.sh; no launcher hop in this code path.
-      # The interactive menu uses almanac_loop_launch converge (the launcher)
-      # instead.
-      printf '%s\n' converge
-      printf '%s\n%s\n' --goal "$goal"
-      if [ -n "$prompt" ]; then
-        printf '%s\n%s\n' --prompt "$prompt"
-      else
-        printf '%s\n%s\n' --exec "$exec_cmd"
-      fi
-      if [ -n "$rounds" ]; then printf '%s\n%s\n' --rounds "$rounds"; fi
-      if [ "$oversee" = "off" ]; then printf '%s\n' --no-oversee; fi
-      if [ -n "$oversee_every" ]; then printf '%s\n%s\n' --oversee-every "$oversee_every"; fi
-      ;;
-    *) return 1 ;;
-  esac
-  return 0
+  almanac_loop_adapter_known "$type" || return 1
+  almanac_loop_adapter_call "$type" new_run_argv "$@"
 }
 
 # Compose the environment assignments (KEY=VALUE, one per line) a new run needs
-# beyond its argv. ralph takes all config as flags, so it emits nothing; harden's
-# reviewer/role config rides on environment (HARDEN_LENSES / HARDEN_PROVIDER /
-# HARDEN_MODEL / HARDEN_EFFORT). Returns 1 for an unknown type.
+# beyond its argv. The loop-specific env prefix lives in each loop adapter's
+# `new_run_env` verb (lib/loops/<name>.sh). Returns 1 for an unknown type;
+# adapters that have no env to emit (ralph today) return 0 with no output, so
+# this dispatcher never branches on loop type.
 almanac_loop_new_run_env() {
   local type="$1"; shift
-  local provider="" model="" effort="" lenses="" kv key val
-  for kv in "$@"; do
-    key="${kv%%=*}"; val="${kv#*=}"
-    case "$key" in
-      provider) provider="$val" ;;
-      model) model="$val" ;;
-      effort) effort="$val" ;;
-      lenses) lenses="$val" ;;
-    esac
-  done
-
-  case "$type" in
-    ralph) : ;;
-    harden)
-      if [ -n "$lenses" ]; then printf 'HARDEN_LENSES=%s\n' "$lenses"; fi
-      if [ -n "$provider" ]; then printf 'HARDEN_PROVIDER=%s\n' "$provider"; fi
-      if [ -n "$model" ]; then printf 'HARDEN_MODEL=%s\n' "$model"; fi
-      if [ -n "$effort" ]; then printf 'HARDEN_EFFORT=%s\n' "$effort"; fi
-      ;;
-    converge)
-      if [ -n "$provider" ]; then printf 'CONVERGE_PROVIDER=%s\n' "$provider"; fi
-      if [ -n "$model" ]; then printf 'CONVERGE_MODEL=%s\n' "$model"; fi
-      if [ -n "$effort" ]; then printf 'CONVERGE_EFFORT=%s\n' "$effort"; fi
-      ;;
-    *) return 1 ;;
-  esac
-  return 0
+  almanac_loop_adapter_known "$type" || return 1
+  almanac_loop_adapter_call "$type" new_run_env "$@"
 }

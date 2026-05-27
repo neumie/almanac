@@ -11,6 +11,12 @@
 #   exec_argv     — populate _ALMANAC_LOOP_ARGV with the runner exec tokens
 #                   for a given mode/prd/iterations. The ralph runner path lives
 #                   HERE (not hard-coded in the launcher).
+#   new_run_argv  — emit the hub's "new run" launcher argv (one token per line,
+#                   starting with the `almanac` subcommand) from key=val pairs.
+#                   The hub composes runs without knowing ralph's flag shape.
+#   new_run_env   — emit KEY=VALUE env lines for fields that ride on environment
+#                   (none for ralph; the verb exists so the dispatch in lib/run.sh
+#                   has no `case "$type"` branches).
 #
 # Control contract (signal_file) inherits the default `.ralph-stop` / `.ralph-steer`
 # convention from lib/loops.sh — no adapter override needed.
@@ -110,6 +116,47 @@ almanac_loop_ralph_launch() {
   almanac_loop_adapter_call ralph exec_argv "$mode" "$prd" "$iterations" \
     || _die "ralph adapter could not build a runner for mode: $mode"
   exec "${_ALMANAC_LOOP_ARGV[@]}"
+}
+
+# Compose the hub's new-run launcher argv for ralph (one token per line, starting
+# with the `almanac` subcommand). Accepts key=val pairs (the hub's lingua franca
+# for new-run config) so the dispatcher in lib/run.sh never has to know ralph's
+# flag shape. Returns 2 when a required field (prd) is missing. ralph takes all
+# its config as flags — no env lines — so it has no new_run_env counterpart with
+# real work to do, but it still implements one (below) for contract uniformity.
+almanac_loop_ralph_new_run_argv() {
+  local prd="" mode="" provider="" model="" effort="" iterations="" oversee=""
+  local kv key val
+  for kv in "$@"; do
+    key="${kv%%=*}"; val="${kv#*=}"
+    case "$key" in
+      prd) prd="$val" ;;
+      mode) mode="$val" ;;
+      provider) provider="$val" ;;
+      model) model="$val" ;;
+      effort) effort="$val" ;;
+      iterations) iterations="$val" ;;
+      oversee) oversee="$val" ;;
+    esac
+  done
+
+  [ -n "$prd" ] || return 2
+  printf '%s\n' ralph
+  printf '%s\n%s\n' --prd "$prd"
+  [ -n "$mode" ]       && printf '%s\n%s\n' --mode "$mode"
+  [ -n "$provider" ]   && printf '%s\n%s\n' --provider "$provider"
+  [ -n "$model" ]      && printf '%s\n%s\n' --model "$model"
+  [ -n "$effort" ]     && printf '%s\n%s\n' --effort "$effort"
+  [ -n "$iterations" ] && printf '%s\n%s\n' --iterations "$iterations"
+  [ "$oversee" = "off" ] && printf '%s\n' --no-oversee
+  return 0
+}
+
+# Compose the hub's new-run env stream for ralph. Empty by construction (ralph's
+# config rides entirely on argv), but the verb exists so dispatch never branches
+# on loop type at the new-run composer.
+almanac_loop_ralph_new_run_env() {
+  return 0
 }
 
 # --help text for `almanac ralph` / `almanac_loop_launch ralph`. Stays inside

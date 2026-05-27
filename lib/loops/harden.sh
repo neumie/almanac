@@ -11,6 +11,12 @@
 #   exec_argv     — populate _ALMANAC_LOOP_ARGV with the runner exec tokens
 #                   for a given target/rounds. Harden's runner runs through the
 #                   CLI (`almanac harden <target> --loop`).
+#   new_run_argv  — emit the hub's "new run" launcher argv (one token per line)
+#                   from key=val pairs; reviewer/role config rides on env, not
+#                   argv (see new_run_env).
+#   new_run_env   — emit KEY=VALUE env lines for the reviewer/role config
+#                   (HARDEN_LENSES/PROVIDER/MODEL/EFFORT) so the hub never has
+#                   to know harden's env prefixes.
 #
 # Control contract (signal_file) inherits the default `.harden-stop` /
 # `.harden-steer` convention from lib/loops.sh — no adapter override needed.
@@ -82,6 +88,47 @@ almanac_loop_harden_launch() {
   almanac_loop_adapter_call harden exec_argv "$target" "$rounds" \
     || _die "harden adapter could not build a runner for target: $target"
   exec "${_ALMANAC_LOOP_ARGV[@]}"
+}
+
+# Compose the hub's new-run launcher argv for harden (one token per line). The
+# convergence loop launches via `almanac harden <target> --loop [--rounds N]` —
+# all other reviewer/role config rides on env (see new_run_env). Returns 2 when
+# a required field (target) is missing.
+almanac_loop_harden_new_run_argv() {
+  local target="" rounds="" kv key val
+  for kv in "$@"; do
+    key="${kv%%=*}"; val="${kv#*=}"
+    case "$key" in
+      target) target="$val" ;;
+      rounds) rounds="$val" ;;
+    esac
+  done
+
+  [ -n "$target" ] || return 2
+  printf '%s\n%s\n%s\n' harden "$target" --loop
+  [ -n "$rounds" ] && printf '%s\n%s\n' --rounds "$rounds"
+  return 0
+}
+
+# Compose the hub's new-run env stream for harden (KEY=VALUE per line) from
+# key=val pairs: reviewer lenses + role config (HARDEN_LENSES / HARDEN_PROVIDER /
+# HARDEN_MODEL / HARDEN_EFFORT). Empty fields drop their key.
+almanac_loop_harden_new_run_env() {
+  local provider="" model="" effort="" lenses="" kv key val
+  for kv in "$@"; do
+    key="${kv%%=*}"; val="${kv#*=}"
+    case "$key" in
+      provider) provider="$val" ;;
+      model)    model="$val" ;;
+      effort)   effort="$val" ;;
+      lenses)   lenses="$val" ;;
+    esac
+  done
+  [ -n "$lenses" ]   && printf 'HARDEN_LENSES=%s\n' "$lenses"
+  [ -n "$provider" ] && printf 'HARDEN_PROVIDER=%s\n' "$provider"
+  [ -n "$model" ]    && printf 'HARDEN_MODEL=%s\n' "$model"
+  [ -n "$effort" ]   && printf 'HARDEN_EFFORT=%s\n' "$effort"
+  return 0
 }
 
 # --help text for `almanac harden --loop` / `almanac_loop_launch harden`. Stays
