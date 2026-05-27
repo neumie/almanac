@@ -12,7 +12,7 @@ fi
 
 _almanac_source_sibling run.sh    almanac_loop_register_run
 _almanac_source_sibling agent.sh  almanac_loop_agent_capture
-_almanac_source_sibling role.sh   almanac_loop_role_config
+_almanac_source_sibling role.sh   almanac_loop_role_resolve
 
 # Plan-dir name discipline:
 #
@@ -166,17 +166,6 @@ almanac_converge_scaffold() {
   fi
 
   printf '%s\n' "$dir_name"
-}
-
-almanac_converge_role() {
-  local role="$1"
-
-  case "$role" in
-    agent|overseer) ;;
-    *) return 2 ;;
-  esac
-
-  almanac_loop_role_config "converge" "$role" "" "$(almanac_provider_default)" "" ""
 }
 
 # Resolve the role's (provider, model, effort) as one tab-separated line. The

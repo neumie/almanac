@@ -2,10 +2,11 @@
 # test-role.sh - role config resolution tests (lib/role.sh)
 #
 # Sources lib/role.sh DIRECTLY (not through loop-core) so the role resolver —
-# almanac_loop_env_key_part / _env_value / role_field / role_config — is its own
+# almanac_loop_env_key_part / _env_value / role_field / role_resolve — is its own
 # test surface. These pin the layered precedence (lens -> role -> consumer-wide
-# -> default), the set-empty-wins rule, env-key normalisation, and the three-row
-# role_config projection that harden (test-harden-cli) and ralph build on.
+# -> default), the set-empty-wins rule, env-key normalisation, and the one-line
+# (provider<TAB>model<TAB>effort) role_resolve projection that harden
+# (test-harden-cli) and ralph build on.
 
 set -euo pipefail
 
@@ -106,67 +107,6 @@ test_role_field_requires_five_args() {
   echo "  PASS: role_field requires five args"
 }
 
-test_resolves_role_config_with_lens_overrides() {
-  local expected actual
-  expected=$(cat <<'EOF'
-provider	codex
-model	security-model
-effort	medium
-EOF
-)
-  actual="$(
-    HARDEN_PROVIDER=claude \
-    HARDEN_MODEL=default-model \
-    HARDEN_EFFORT=medium \
-    HARDEN_REVIEWER_PROVIDER=codex \
-    HARDEN_REVIEWER_SECURITY_MODEL=security-model \
-    almanac_loop_role_config "harden" "reviewer" "security" "fallback-provider" "fallback-model" "low"
-  )"
-  assert_eq "$expected" "$actual" "lens config should layer lens, role, shared, then defaults"
-  echo "  PASS: resolves role config with lens overrides"
-}
-
-test_resolves_role_config_with_ralph_style_fallbacks() {
-  local expected actual
-  expected=$(cat <<'EOF'
-provider	claude
-model	sonnet
-effort	high
-EOF
-)
-  actual="$(
-    RALPH_PROVIDER=claude \
-    RALPH_MODEL=sonnet \
-    RALPH_EFFORT=high \
-    almanac_loop_role_config "ralph" "worker" "" "codex" "" "medium"
-  )"
-  assert_eq "$expected" "$actual" "shared config should support Ralph-style global overrides"
-  echo "  PASS: resolves role config with Ralph-style fallbacks"
-}
-
-test_role_config_requires_two_args() {
-  local rc=0
-  almanac_loop_role_config "harden" >/dev/null 2>&1 || rc=$?
-  [ "$rc" -eq 2 ] || fail "role_config with fewer than 2 args should return 2 (got $rc)"
-  echo "  PASS: role_config requires two args"
-}
-
-test_role_tsv_field_reads_named_field() {
-  local stream actual
-  stream=$(printf 'provider\tcodex\nmodel\tgpt-5\neffort\thigh\n')
-  actual="$(printf '%s' "$stream" | almanac_loop_role_tsv_field provider)"
-  assert_eq "codex" "$actual" "role_tsv_field reads provider"
-  actual="$(printf '%s' "$stream" | almanac_loop_role_tsv_field effort)"
-  assert_eq "high" "$actual" "role_tsv_field reads effort"
-  actual="$(printf '%s' "$stream" | almanac_loop_role_tsv_field missing)"
-  assert_eq "" "$actual" "role_tsv_field echoes empty for an absent field"
-  # The reader consumes the whole stream (no awk early-exit) so a producer in a
-  # `set -o pipefail` shell never takes a SIGPIPE.
-  actual="$(set -o pipefail; printf '%s' "$stream" | almanac_loop_role_tsv_field provider)"
-  assert_eq "codex" "$actual" "role_tsv_field is pipefail-safe (no early-exit SIGPIPE)"
-  echo "  PASS: role_tsv_field reads a field from a TSV stream"
-}
-
 test_role_resolve_emits_one_tab_separated_line() {
   local actual provider model effort
   actual="$(
@@ -214,10 +154,6 @@ test_role_field_falls_through_to_default
 test_role_field_lens_skipped_when_empty
 test_role_field_set_empty_beats_general_layer
 test_role_field_requires_five_args
-test_resolves_role_config_with_lens_overrides
-test_resolves_role_config_with_ralph_style_fallbacks
-test_role_config_requires_two_args
-test_role_tsv_field_reads_named_field
 test_role_resolve_emits_one_tab_separated_line
 test_role_resolve_requires_two_args
 test_role_resolve_uses_defaults_when_env_unset

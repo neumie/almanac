@@ -1555,51 +1555,58 @@ test_run_status_contract_identical_for_harden_and_ralph() {
 # --- Role config (per-role provider/model/effort) -----------------------------
 
 test_role_config_resolves_all_three_roles() {
-  local role out
+  local role provider model effort
   # Every harden role resolves to a (provider, model, effort) triple, with
   # Claude as the sensible default provider and the provider's own default
   # model/effort (empty) unless tuned.
   for role in conductor reviewer fixer; do
-    out="$(almanac_harden_role "$role")"
-    assert_contains "$out" $'provider\tclaude' "$role should default to the claude provider"
-    assert_contains "$out" $'model\t' "$role config should include a model field"
-    assert_contains "$out" $'effort\t' "$role config should include an effort field"
+    IFS=$'\t' read -r provider model effort < <(almanac_harden_role_resolve "$role")
+    assert_eq "claude" "$provider" "$role should default to the claude provider"
+    assert_eq "" "$model" "$role model should default to empty (provider's own default)"
+    assert_eq "" "$effort" "$role effort should default to empty (provider's own default)"
   done
   # An unknown role is rejected rather than silently resolved.
-  if almanac_harden_role bogus >/dev/null 2>&1; then
-    fail "almanac_harden_role should reject an unknown role"
+  if almanac_harden_role_resolve bogus >/dev/null 2>&1; then
+    fail "almanac_harden_role_resolve should reject an unknown role"
   fi
   echo "  PASS: conductor, reviewer, and fixer each resolve to (provider, model, effort)"
 }
 
 test_role_config_mixes_providers_across_lenses() {
-  local sec corr
+  local sec_provider corr_provider _model _effort
   # A lens->provider map: two lenses resolve to two different providers in the
   # same round, so model families can be mixed across reviewers.
-  sec="$(HARDEN_REVIEWER_SECURITY_PROVIDER=codex HARDEN_REVIEWER_CORRECTNESS_PROVIDER=claude \
-    almanac_harden_role reviewer security)"
-  corr="$(HARDEN_REVIEWER_SECURITY_PROVIDER=codex HARDEN_REVIEWER_CORRECTNESS_PROVIDER=claude \
-    almanac_harden_role reviewer correctness)"
+  IFS=$'\t' read -r sec_provider _model _effort < <(
+    HARDEN_REVIEWER_SECURITY_PROVIDER=codex HARDEN_REVIEWER_CORRECTNESS_PROVIDER=claude \
+      almanac_harden_role_resolve reviewer security)
+  IFS=$'\t' read -r corr_provider _model _effort < <(
+    HARDEN_REVIEWER_SECURITY_PROVIDER=codex HARDEN_REVIEWER_CORRECTNESS_PROVIDER=claude \
+      almanac_harden_role_resolve reviewer correctness)
 
-  assert_contains "$sec" $'provider\tcodex' "security lens should resolve to its codex provider"
-  assert_contains "$corr" $'provider\tclaude' "correctness lens should resolve to its claude provider"
+  assert_eq "codex" "$sec_provider" "security lens should resolve to its codex provider"
+  assert_eq "claude" "$corr_provider" "correctness lens should resolve to its claude provider"
   echo "  PASS: reviewers mix providers across lenses within one round"
 }
 
 test_role_config_overrides_each_role_via_env() {
-  local cond fix rev
+  local cond_provider fix_provider fix_model fix_effort rev_provider _drop
   # Each role's config is overridable independently; one role's override must not
   # bleed into another.
-  cond="$(HARDEN_CONDUCTOR_PROVIDER=codex HARDEN_FIXER_PROVIDER=claude almanac_harden_role conductor)"
-  fix="$(HARDEN_CONDUCTOR_PROVIDER=codex HARDEN_FIXER_PROVIDER=claude \
-    HARDEN_FIXER_MODEL=opus HARDEN_FIXER_EFFORT=high almanac_harden_role fixer)"
-  rev="$(HARDEN_REVIEWER_PROVIDER=codex almanac_harden_role reviewer)"
+  IFS=$'\t' read -r cond_provider _drop _drop < <(
+    HARDEN_CONDUCTOR_PROVIDER=codex HARDEN_FIXER_PROVIDER=claude \
+      almanac_harden_role_resolve conductor)
+  IFS=$'\t' read -r fix_provider fix_model fix_effort < <(
+    HARDEN_CONDUCTOR_PROVIDER=codex HARDEN_FIXER_PROVIDER=claude \
+      HARDEN_FIXER_MODEL=opus HARDEN_FIXER_EFFORT=high \
+      almanac_harden_role_resolve fixer)
+  IFS=$'\t' read -r rev_provider _drop _drop < <(
+    HARDEN_REVIEWER_PROVIDER=codex almanac_harden_role_resolve reviewer)
 
-  assert_contains "$cond" $'provider\tcodex' "conductor provider should honor its per-role override"
-  assert_contains "$fix" $'provider\tclaude' "fixer provider should honor its per-role override"
-  assert_contains "$fix" $'model\topus' "fixer model should honor its per-role override"
-  assert_contains "$fix" $'effort\thigh' "fixer effort should honor its per-role override"
-  assert_contains "$rev" $'provider\tcodex' "reviewer provider should honor its per-role override"
+  assert_eq "codex" "$cond_provider" "conductor provider should honor its per-role override"
+  assert_eq "claude" "$fix_provider" "fixer provider should honor its per-role override"
+  assert_eq "opus" "$fix_model" "fixer model should honor its per-role override"
+  assert_eq "high" "$fix_effort" "fixer effort should honor its per-role override"
+  assert_eq "codex" "$rev_provider" "reviewer provider should honor its per-role override"
   echo "  PASS: each role's (provider, model, effort) is overridable independently via env"
 }
 
@@ -1607,12 +1614,12 @@ test_role_config_independent_of_host() {
   local from_claude_host from_codex_host
   # Resolution reads only HARDEN_* config, never a host marker, so launching from
   # Claude Code vs Codex yields an identical tuple.
-  from_claude_host="$(CLAUDECODE=1 CLAUDE_CODE_ENTRYPOINT=cli almanac_harden_role conductor)"
-  from_codex_host="$(CODEX_SANDBOX=seatbelt CODEX_HOME=/tmp/codex almanac_harden_role conductor)"
+  from_claude_host="$(CLAUDECODE=1 CLAUDE_CODE_ENTRYPOINT=cli almanac_harden_role_resolve conductor)"
+  from_codex_host="$(CODEX_SANDBOX=seatbelt CODEX_HOME=/tmp/codex almanac_harden_role_resolve conductor)"
 
   [ "$from_claude_host" = "$from_codex_host" ] || \
     fail "conductor resolution must be identical regardless of which host launched the run"
-  assert_contains "$from_claude_host" $'provider\tclaude' "host-independent resolution should still apply harden defaults"
+  assert_eq $'claude\t\t' "$from_claude_host" "host-independent resolution should still apply harden defaults"
   echo "  PASS: role resolution is independent of the launching host"
 }
 

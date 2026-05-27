@@ -19,7 +19,7 @@ _almanac_source_sibling agent.sh    almanac_loop_agent_capture   # agent run sha
 _almanac_source_sibling run.sh      almanac_loop_register_run    # run registry + worker paths/health
 _almanac_source_sibling worker.sh   almanac_loop_worker_start    # worker orchestration (reviewer/fixer fan-out)
 _almanac_source_sibling ui.sh       almanac_loop_ui_render       # gum-or-plain dashboard seam
-_almanac_source_sibling role.sh     almanac_loop_role_config     # per-role provider/model/effort resolution
+_almanac_source_sibling role.sh     almanac_loop_role_resolve    # per-role provider/model/effort resolution
 _almanac_source_sibling feedback.sh almanac_loop_feedback_run    # objective fixer gate
 
 # --- Role config (per-role provider / model / effort) --------------------------
@@ -40,23 +40,10 @@ _almanac_source_sibling feedback.sh almanac_loop_feedback_run    # objective fix
 # Only reviewers consult the lens, so providers can be mixed across lenses in one
 # round; conductor and fixer are single-instance and ignore it. Resolution reads
 # ONLY HARDEN_* (and the shared loop env) — never any host marker — so the tuple
-# is identical whether the run was launched from Claude Code or Codex. Emits three
-# TSV rows (provider/model/effort); returns 2 on an unknown role.
-almanac_harden_role() {
-  local role="$1"
-  local lens="${2:-}"
-
-  case "$role" in
-    reviewer) ;;                 # reviewers map lens -> provider
-    conductor | fixer) lens="" ;; # single-instance roles ignore the lens
-    *) return 2 ;;
-  esac
-
-  almanac_loop_role_config "harden" "$role" "$lens" "claude" "" ""
-}
-
-# Resolve the role's (provider, model, effort) as one tab-separated line. The
-# deep form callers use to populate three locals in one shot:
+# is identical whether the run was launched from Claude Code or Codex.
+#
+# Emits one tab-separated `provider<TAB>model<TAB>effort` line — the deep form
+# callers use to populate three locals in one read:
 #   IFS=$'\t' read -r provider model effort < <(almanac_harden_role_resolve reviewer "$lens")
 # Pre-deepening, every callsite triple-called a thin `_role_field` wrapper that
 # itself re-walked the env layering for each field — nine env lookups per

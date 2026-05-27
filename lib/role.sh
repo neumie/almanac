@@ -74,41 +74,13 @@ almanac_loop_role_field() {
   printf '%s\n' "$default_value"
 }
 
-# Read ONE field by name from a role-config TSV stream on stdin (the shape every
-# loop's role resolver emits via almanac_loop_role_config: `field<TAB>value` per
-# line). Echoes the value (empty when the field is absent). The full stream is
-# consumed (no early awk exit) so the producer never takes a SIGPIPE under
-# `set -o pipefail`. Used by tests and any per-field reader that wants a single
-# value — most loop callers want all three at once and should use
-# almanac_loop_role_resolve instead.
-almanac_loop_role_tsv_field() {
-  awk -F'\t' -v k="$1" '$1 == k { v = $2 } END { print v }'
-}
-
-# Resolve a role's full (provider, model, effort) config as three TSV rows, each
-# field resolved through almanac_loop_role_field with its own default. Returns 2
-# on missing args.
-almanac_loop_role_config() {
-  [ "$#" -ge 2 ] || return 2
-
-  local prefix="$1"
-  local role="$2"
-  local lens="${3:-}"
-  local default_provider="${4:-}"
-  local default_model="${5:-}"
-  local default_effort="${6:-}"
-
-  printf 'provider\t%s\n' "$(almanac_loop_role_field "$prefix" "$role" "$lens" "provider" "$default_provider")"
-  printf 'model\t%s\n' "$(almanac_loop_role_field "$prefix" "$role" "$lens" "model" "$default_model")"
-  printf 'effort\t%s\n' "$(almanac_loop_role_field "$prefix" "$role" "$lens" "effort" "$default_effort")"
-}
-
-# Resolve a role's (provider, model, effort) as ONE tab-separated line, for the
-# common case where a caller wants all three at once. Same arg shape as
-# almanac_loop_role_config; same per-field defaulting. Designed to be paired with
-# `IFS=$'\t' read -r provider model effort < <(almanac_loop_role_resolve …)`,
-# replacing three repeated `_role_field` calls (which each re-walked the env
-# layering) with a single resolution. Returns 2 on missing args.
+# Resolve a role's (provider, model, effort) as ONE tab-separated line — the
+# single shape every loop role resolver emits. Each of the three fields is
+# resolved through almanac_loop_role_field with its own default. Designed to be
+# paired with `IFS=$'\t' read -r provider model effort < <(almanac_loop_role_resolve …)`,
+# so a caller pulls three locals in one read instead of triple-calling a thin
+# wrapper that re-walks the env layering for each field. Returns 2 on missing
+# args.
 almanac_loop_role_resolve() {
   [ "$#" -ge 2 ] || return 2
 
