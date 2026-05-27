@@ -791,17 +791,26 @@ almanac_loop_run_control_file() {
 almanac_loop_run_stop() {
   local root="$1"
   local run_id="$2"
-  local status_file type status stop_file
+  local status_file type target status stop_file signal_dir
 
   status_file="$(almanac_loop_run_status_file "$root" "$run_id")"
   [ -f "$status_file" ] || return 2
 
   type="$(almanac_loop_status_field "$status_file" "type" || true)"
+  target="$(almanac_loop_status_field "$status_file" "target" || true)"
   status="$(almanac_loop_status_field "$status_file" "status" || true)"
   [ "$status" = "running" ] || return 4
 
   stop_file="$(almanac_loop_signal_file "$type" stop)" || return 3
-  printf '%s\n' "stop requested via almanac hub: $run_id" > "$root/$stop_file"
+  # signal_dir routes through the loop adapter — ralph/harden default to
+  # $root, converge overrides to the run's plan dir (so stopping one converge
+  # run doesn't halt another that shares the workspace). The directory is
+  # created if missing — for a run that registered but never scaffolded its
+  # plan dir (a quick abort), this still lets the operator queue a stop
+  # signal harmlessly.
+  signal_dir="$(almanac_loop_signal_dir "$type" "$root" "$target")" || signal_dir="$root"
+  mkdir -p "$signal_dir" 2>/dev/null || true
+  printf '%s\n' "stop requested via almanac hub: $run_id" > "$signal_dir/$stop_file"
   return 0
 }
 
@@ -813,7 +822,7 @@ almanac_loop_run_steer() {
   local root="$1"
   local run_id="$2"
   local directive="$3"
-  local status_file type steer_file
+  local status_file type target steer_file signal_dir
 
   if [ -z "${directive//[[:space:]]/}" ]; then
     return 4
@@ -823,9 +832,15 @@ almanac_loop_run_steer() {
   [ -f "$status_file" ] || return 2
 
   type="$(almanac_loop_status_field "$status_file" "type" || true)"
+  target="$(almanac_loop_status_field "$status_file" "target" || true)"
   steer_file="$(almanac_loop_signal_file "$type" steer)" || return 3
 
-  printf '%s\n' "$directive" > "$root/$steer_file"
+  # Same scoping as stop — converge's adapter routes this to the plan dir so
+  # the directive reaches the specific run, not every converge run in the
+  # workspace.
+  signal_dir="$(almanac_loop_signal_dir "$type" "$root" "$target")" || signal_dir="$root"
+  mkdir -p "$signal_dir" 2>/dev/null || true
+  printf '%s\n' "$directive" > "$signal_dir/$steer_file"
   return 0
 }
 

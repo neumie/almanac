@@ -23,3 +23,8 @@ docs/plans/*/overseer.log
 docs/plans/converge/*/converge-*-iteration-*.log
 docs/plans/converge/*/agent-reports.log
 docs/plans/converge/*/overseer.log
+# Per-run control signals (stop / steer) live in the plan dir now (see
+# lib/loops/converge.sh::almanac_loop_converge_signal_dir) — pure runtime,
+# consumed and removed by the loop, never useful to commit.
+docs/plans/converge/*/.converge-stop
+docs/plans/converge/*/.converge-steer

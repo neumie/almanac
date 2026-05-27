@@ -18,7 +18,24 @@
 #   new_run_usage — one-line missing-config hint for hub errors.
 #
 # Control contract (signal_file) inherits the default `.converge-stop` /
-# `.converge-steer` convention from lib/loops.sh — no adapter override needed.
+# `.converge-steer` convention from lib/loops.sh.
+#
+# Signal-DIR override (signal_dir): converge scopes its signal files to the
+# RUN'S OWN PLAN DIR instead of $root. Ralph and harden both watch $root, but
+# converge runs commonly share a workspace and a CONVERGED verdict's
+# `.converge-stop` written at $root would silently halt subsequent unrelated
+# runs (observed: previous run CONVERGED → wrote $root/.converge-stop → next
+# launch aborted at round 0 with "stop signal present before round 1").
+# Scoping to plan_dir gives each run its own private control channel; the hub's
+# generic stop/steer route through this and land in the right place.
+almanac_loop_converge_signal_dir() {
+  local root="$1" target="$2"
+  # converge registers with target=<slug>; plan dir is fixed by the slug.
+  # If target is missing (defensive — hub may dispatch without target on a
+  # malformed status), fall back to $root so the signal isn't lost.
+  [ -n "$target" ] || { printf '%s\n' "$root"; return 0; }
+  printf '%s/docs/plans/converge/%s\n' "$root" "$target"
+}
 #
 # The launch verb uses helpers defined in lib/loop-launcher.sh
 # (_almanac_launch_need_provider/_choice/_positive_int, almanac_loop_launch_summary)

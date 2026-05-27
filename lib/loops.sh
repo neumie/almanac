@@ -125,4 +125,29 @@ almanac_loop_signal_file() {
   fi
 }
 
+# Resolve the DIRECTORY a loop's signal file lives in.
+#
+# Default: $root — ralph and harden both drop `.ralph-stop` / `.harden-stop`
+# at the repo root because their loops watch root.
+#
+# Override: a loop's adapter can define `almanac_loop_<name>_signal_dir
+# <root> <target>` to scope signals to a per-run directory instead. Converge
+# does this — its signal files live under the run's plan dir so a CONVERGED
+# verdict's `.converge-stop` cannot poison a subsequent unrelated converge
+# run (the bug observed: previous CONVERGED run wrote $root/.converge-stop,
+# next launch aborted at round 0 because that root-level stop file was still
+# there). Returns 1 for an unknown loop name.
+almanac_loop_signal_dir() {
+  local key fn
+  key="$(almanac_loop_adapter_key "$1")"
+  almanac_loop_adapter_known "$key" || return 1
+  local root="$2" target="${3:-}"
+  fn="almanac_loop_${key}_signal_dir"
+  if declare -F "$fn" >/dev/null 2>&1; then
+    "$fn" "$root" "$target"
+  else
+    printf '%s\n' "$root"
+  fi
+}
+
 almanac_loop_adapter_load

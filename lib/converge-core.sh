@@ -92,7 +92,10 @@ almanac_converge_worker_prompt() {
   slug="$(almanac_loop_slug "$goal")"
   plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
   rel_plan="${plan_dir#"$root"/}"
-  steer_file="$(almanac_loop_run_control_file converge "$root" steer)"
+  # Signal files live in the plan dir (per-run scope), not at $root — so a
+  # CONVERGED verdict from one converge run cannot poison another sharing
+  # the same workspace.
+  steer_file="$(almanac_loop_run_control_file converge "$plan_dir" steer)"
 
   almanac_converge_ensure_prompt_template "$root" "$goal"
 
@@ -647,13 +650,14 @@ almanac_converge_watch() {
 almanac_converge_stop() {
   local root="$1"
   local slug="$2"
-  local plan_dir root_stop plan_stop
+  local plan_dir plan_stop
 
   plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
   [ -d "$plan_dir" ] || return 1
-  root_stop="$(almanac_loop_run_control_file converge "$root" stop)"
+  # Signal file lives in the plan dir (per-run scope). Pre-fix this wrote
+  # BOTH $root and $plan_dir to dual-target both the old and new convention;
+  # now the round loop only watches $plan_dir, so the $root write was dead.
   plan_stop="$(almanac_loop_run_control_file converge "$plan_dir" stop)"
-  printf 'stop requested via almanac converge: %s\n' "$slug" > "$root_stop"
   printf 'stop requested via almanac converge: %s\n' "$slug" > "$plan_stop"
 }
 
@@ -858,7 +862,9 @@ almanac_converge_run_worker_prompt() {
   slug="$(almanac_loop_slug "$goal")"
   plan_dir="$(almanac_converge_plan_dir "$root" "$slug")"
   log_file="$plan_dir/agent-reports.log"
-  steer_path="$(almanac_loop_run_control_file converge "$root" steer)"
+  # Steer file lives in the plan dir (per-run scope) — see signal_dir override
+  # in lib/loops/converge.sh.
+  steer_path="$(almanac_loop_run_control_file converge "$plan_dir" steer)"
 
   prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-prompt.XXXXXX")"
   result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-result.XXXXXX")"
@@ -987,13 +993,16 @@ almanac_converge_run_overseer() {
       "$ALMANAC_CONVERGE_REASON" "$ALMANAC_CONVERGE_GOAL_UPDATE"
   fi
 
+  # Verdict signals land in the run's plan_dir (per-run scope) so a CONVERGED
+  # verdict cannot poison subsequent unrelated runs sharing the same workspace
+  # — see lib/loops/converge.sh::almanac_loop_converge_signal_dir.
   case "$ALMANAC_CONVERGE_VERDICT" in
     CONVERGED|STOP)
-      : > "$(almanac_loop_run_control_file converge "$root" stop)"
+      : > "$(almanac_loop_run_control_file converge "$plan_dir" stop)"
       ;;
     STEER)
       if [ "$ALMANAC_CONVERGE_STEER" != "none" ]; then
-        printf '%s\n' "$ALMANAC_CONVERGE_STEER" > "$(almanac_loop_run_control_file converge "$root" steer)"
+        printf '%s\n' "$ALMANAC_CONVERGE_STEER" > "$(almanac_loop_run_control_file converge "$plan_dir" steer)"
       fi
       ;;
     CONTINUE) ;;
@@ -1078,8 +1087,26 @@ almanac_converge_run() {
     final_reason="round budget ($rounds) exhausted; overseer's last verdict was CONTINUE"
   fi
 
-  local _converge_stop_file
-  _converge_stop_file="$(almanac_loop_run_control_file converge "$root" stop)"
+  # Signal files live in the run's plan dir now (per-run scope; see
+  # lib/loops/converge.sh::almanac_loop_converge_signal_dir). The round loop
+  # watches them at $plan_dir; nothing reads from $root anymore.
+  local _converge_stop_file _converge_steer_file
+  _converge_stop_file="$(almanac_loop_run_control_file converge "$plan_dir" stop)"
+  _converge_steer_file="$(almanac_loop_run_control_file converge "$plan_dir" steer)"
+
+  # Clear leftover control signals before entering the round loop. With plan-
+  # dir scoping cross-RUN contamination is structurally impossible (each run
+  # has its own dir), but a user re-running converge with the SAME goal text
+  # gets the SAME plan dir — and a previous run's CONVERGED would have left
+  # .converge-stop sitting there, halting the new run at round 0. Clearing
+  # here keeps the same-goal-re-run case clean. Same hygiene for steer (one-
+  # shot directives must not bleed from a prior run).
+  #
+  # Also wipe the legacy $root copies in case the operator launched a prior
+  # run against an older build of converge that wrote there — one-time
+  # migration grace; harmless on a clean workspace.
+  rm -f "$_converge_stop_file" "$_converge_steer_file" \
+        "$root/.converge-stop" "$root/.converge-steer"
 
   round=0
   while [ "$round" -lt "$rounds" ]; do
