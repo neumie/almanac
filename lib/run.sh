@@ -677,6 +677,30 @@ almanac_loop_worker_file() {
   printf '%s/%s\n' "$(almanac_loop_worker_dir "$root" "$run_id" "$worker_id")" "$filename"
 }
 
+# THE single source of truth for the worker-artifact basenames. The worker
+# orchestrator (worker.sh) seeds these paths into status.tsv on spawn, but
+# callsites that reconstruct a worker's path independently — harden-core's
+# reviewer fan-in (reads the result file straight, never the status row) and
+# worker.sh's watch fallback (rebuilds events.jsonl when the status row is
+# absent) — must agree with that seed on the basename. These thin helpers
+# compose off almanac_loop_worker_file so "events.jsonl" / "result.txt" /
+# "stderr.log" each live in exactly one place: renaming an artifact's
+# storage filename is a one-line change here instead of a coordinated edit
+# across worker.sh + harden-core.sh (where a missed site would silently
+# diverge — the orchestrator records the new name in status.tsv while a
+# rebuilder still looks for the old one).
+almanac_loop_worker_events_file() {
+  almanac_loop_worker_file "$1" "$2" "$3" "events.jsonl"
+}
+
+almanac_loop_worker_result_file() {
+  almanac_loop_worker_file "$1" "$2" "$3" "result.txt"
+}
+
+almanac_loop_worker_stderr_file() {
+  almanac_loop_worker_file "$1" "$2" "$3" "stderr.log"
+}
+
 # --- Worker health detection ---------------------------------------------------
 #
 # Classify a worker's health from progress signals so the dashboard can surface a

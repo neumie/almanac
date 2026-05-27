@@ -96,9 +96,9 @@ almanac_loop_worker_start() {
 
   worker_dir="$(almanac_loop_worker_dir "$root" "$run_id" "$worker_id")"
   status_file="$(almanac_loop_worker_status_file "$root" "$run_id" "$worker_id")"
-  events_file="$(almanac_loop_worker_file "$root" "$run_id" "$worker_id" "events.jsonl")"
-  result_file="$(almanac_loop_worker_file "$root" "$run_id" "$worker_id" "result.txt")"
-  stderr_file="$(almanac_loop_worker_file "$root" "$run_id" "$worker_id" "stderr.log")"
+  events_file="$(almanac_loop_worker_events_file "$root" "$run_id" "$worker_id")"
+  result_file="$(almanac_loop_worker_result_file "$root" "$run_id" "$worker_id")"
+  stderr_file="$(almanac_loop_worker_stderr_file "$root" "$run_id" "$worker_id")"
 
   if [ -e "$worker_dir" ]; then
     return 3
@@ -162,7 +162,7 @@ almanac_loop_worker_watch() {
   if [ -f "$status_file" ]; then
     events_file="$(almanac_loop_status_field "$status_file" "events_file" || true)"
   fi
-  [ -n "$events_file" ] || events_file="$(almanac_loop_worker_file "$root" "$run_id" "$worker_id" "events.jsonl")"
+  [ -n "$events_file" ] || events_file="$(almanac_loop_worker_events_file "$root" "$run_id" "$worker_id")"
 
   if [ ! -f "$events_file" ]; then
     _warn "No event stream for worker '$worker_id' in run '$run_id' yet."

@@ -1067,7 +1067,7 @@ almanac_harden_fanout() {
     lens="${lenses[$i]}"
     i=$((i + 1))
     status_file="$(almanac_loop_worker_status_file "$root" "$run_id" "$worker_id")"
-    result_file="$(almanac_loop_worker_file "$root" "$run_id" "$worker_id" "result.txt")"
+    result_file="$(almanac_loop_worker_result_file "$root" "$run_id" "$worker_id")"
 
     wstatus=""
     if [ -f "$status_file" ]; then

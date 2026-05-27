@@ -1128,6 +1128,23 @@ test_plan_dir_passes_through_caller_slug() {
   echo "  PASS: plan_dir does not re-slugify its slug argument"
 }
 
+test_worker_artifact_helpers_compose_off_worker_file() {
+  local tmp dir events result stderr
+  new_tmpdir; tmp="$NEW_TMPDIR"
+  dir="$(almanac_loop_worker_dir "$tmp" "r1" "reviewer-security")"
+  events="$(almanac_loop_worker_events_file "$tmp" "r1" "reviewer-security")"
+  result="$(almanac_loop_worker_result_file "$tmp" "r1" "reviewer-security")"
+  stderr="$(almanac_loop_worker_stderr_file "$tmp" "r1" "reviewer-security")"
+  # The three artifact helpers are the single source of truth for the worker
+  # basenames (events.jsonl / result.txt / stderr.log). Pinning the composed
+  # paths catches drift if a helper ever forks its own dir-building convention
+  # instead of routing through almanac_loop_worker_file.
+  assert_eq "$dir/events.jsonl" "$events" "worker_events_file = <worker_dir>/events.jsonl"
+  assert_eq "$dir/result.txt"   "$result" "worker_result_file = <worker_dir>/result.txt"
+  assert_eq "$dir/stderr.log"   "$stderr" "worker_stderr_file = <worker_dir>/stderr.log"
+  echo "  PASS: worker artifact helpers compose <worker_dir>/<canonical-basename>"
+}
+
 test_worker_paths_agree_on_shared_directory() {
   local tmp dir status_file event_file
   new_tmpdir; tmp="$NEW_TMPDIR"
@@ -1205,6 +1222,7 @@ test_worker_dir_composes_registry_run_worker_with_slug
 test_worker_dir_slugifies_the_worker_id
 test_worker_status_file_is_status_tsv_under_worker_dir
 test_worker_file_joins_filename_under_worker_dir
+test_worker_artifact_helpers_compose_off_worker_file
 test_plan_dir_composes_root_docs_plans_type_slug
 test_plan_container_composes_root_docs_plans_type
 test_plan_dir_composes_off_plan_container
