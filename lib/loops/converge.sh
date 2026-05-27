@@ -131,13 +131,13 @@ almanac_loop_converge_launch() {
     action_text="$exec_cmd"
   fi
 
-  # Provider / model / effort — same resolution as ralph + harden. Single
-  # provider drives both the worker and overseer roles by default; the user can
-  # still override per-role via CONVERGE_{AGENT,OVERSEER}_* env outside the
-  # launcher.
-  provider="$(_almanac_launch_need_provider provider "$provider")" || return 1
-  model="$(_almanac_launch_need_choice "Model" "$model" $(almanac_provider_models "$provider"))" || return 1
-  effort="$(_almanac_launch_need_choice "Thinking effort" "$effort" $(almanac_provider_efforts "$provider"))" || return 1
+  # Provider / model / effort — the universal role-config dance, owned by the
+  # launcher helper (same shape as ralph + harden). The chosen triple drives
+  # both the worker and overseer roles by default; the user can still override
+  # per-role via CONVERGE_{AGENT,OVERSEER}_* env outside the launcher.
+  { IFS= read -r provider && IFS= read -r model && IFS= read -r effort; } \
+    < <(_almanac_launch_need_role_triple "$provider" "$model" "$effort" \
+          "Model" "Thinking effort") || return 1
 
   # Rounds: optional; blank accepts the cmd/converge.sh default
   # (CONVERGE_ROUND_BUDGET or 10). Validated when present.

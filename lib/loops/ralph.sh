@@ -84,10 +84,12 @@ almanac_loop_ralph_launch() {
   [ -n "$mode" ] || mode="$(almanac_loop_ui_choose "Mode" once afk)" || return 1
   case "$mode" in once|afk) ;; *) _die "--mode must be once or afk" ;; esac
 
-  # Provider / model / effort
-  provider="$(_almanac_launch_need_provider provider "$provider")" || return 1
-  model="$(_almanac_launch_need_choice "Model" "$model" $(almanac_provider_models "$provider"))" || return 1
-  effort="$(_almanac_launch_need_choice "Thinking effort" "$effort" $(almanac_provider_efforts "$provider"))" || return 1
+  # Provider / model / effort — the universal role-config dance, owned by the
+  # launcher helper so the dependency order (model+effort menus require provider)
+  # lives in one place.
+  { IFS= read -r provider && IFS= read -r model && IFS= read -r effort; } \
+    < <(_almanac_launch_need_role_triple "$provider" "$model" "$effort" \
+          "Model" "Thinking effort") || return 1
 
   # Iterations + overseer (afk only)
   if [ "$mode" = "afk" ]; then

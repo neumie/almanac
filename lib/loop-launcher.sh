@@ -105,6 +105,33 @@ _almanac_launch_need_positive_int_optional() {
   printf '%s\n' "$current"
 }
 
+# Collect the (provider, model, effort) triple — the universal role-config dance
+# every loop adapter's launch verb does. Resolves provider first (so the model
+# and effort menus can be scoped to that provider's options), then provider-
+# conditioned model and effort. Emits the three values one per line on stdout in
+# that order; caller reads back with `read` triplet. Returns 1 on any cancel
+# (the helper this dispatches to short-circuits, the pipe closes, the caller's
+# `read` returns false).
+#
+# Pre-extraction this 3-line block lived verbatim in ralph/harden/converge
+# adapters — three sites diverging only in the model+effort label strings
+# (ralph: "Model"/"Thinking effort", harden: "Reviewer model"/"Reviewer thinking
+# effort", converge: "Model"/"Thinking effort"). The dependency between the
+# three calls (model+effort menus REQUIRE provider) was structural; encoding
+# that rule in one place makes "add a 4th loop adapter" a one-line call to this
+# helper instead of a copy-pasted 3-line dance an adapter could subtly mis-order
+# (e.g. asking the model menu before the provider is known).
+#
+# Sibling to _almanac_launch_need_provider/_choice (the primitives this composes);
+# any change to the label convention or menu-scoping rule lives here.
+_almanac_launch_need_role_triple() {
+  local provider="$1" model="$2" effort="$3" model_label="$4" effort_label="$5"
+  provider="$(_almanac_launch_need_provider provider "$provider")" || return 1
+  model="$(_almanac_launch_need_choice "$model_label" "$model" $(almanac_provider_models "$provider"))" || return 1
+  effort="$(_almanac_launch_need_choice "$effort_label" "$effort" $(almanac_provider_efforts "$provider"))" || return 1
+  printf '%s\n%s\n%s\n' "$provider" "$model" "$effort"
+}
+
 # Export the consumer-wide role config (PROVIDER always, MODEL/EFFORT conditional)
 # under PREFIX (e.g. RALPH_, HARDEN_, CONVERGE_). Empty model/effort UNSET the
 # var so a stale value inherited from the parent env can't leak into the runner.

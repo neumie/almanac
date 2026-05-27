@@ -65,9 +65,13 @@ almanac_loop_harden_launch() {
   [ -n "$target" ] || _die "A harden target is required."
 
   lenses="$(test -n "$lenses" && printf '%s' "$lenses" || almanac_loop_ui_input "Lenses (blank = default set)")" || return 1
-  provider="$(_almanac_launch_need_provider provider "$provider")" || return 1
-  model="$(_almanac_launch_need_choice "Reviewer model" "$model" $(almanac_provider_models "$provider"))" || return 1
-  effort="$(_almanac_launch_need_choice "Reviewer thinking effort" "$effort" $(almanac_provider_efforts "$provider"))" || return 1
+  # Provider / model / effort — the universal role-config dance, owned by the
+  # launcher helper. Harden's reviewer role is the dominant role here, hence the
+  # "Reviewer …" label qualifier (conductor and fixer roles inherit reviewer's
+  # provider unless overridden via HARDEN_{CONDUCTOR,FIXER}_* env).
+  { IFS= read -r provider && IFS= read -r model && IFS= read -r effort; } \
+    < <(_almanac_launch_need_role_triple "$provider" "$model" "$effort" \
+          "Reviewer model" "Reviewer thinking effort") || return 1
   rounds="$(_almanac_launch_need_positive_int_optional "Round budget" "$rounds")" || return 1
 
   almanac_loop_launch_summary "harden" \
