@@ -104,24 +104,24 @@ almanac_report_gum() {
   fi
 }
 
-# Check if a provider is installed (return 0 = yes, 1 = no)
+# Check if a provider is installed (return 0 = yes, 1 = no).
+#
+# Each installable provider declares its install marker — the path that exists
+# iff almanac is installed for that provider — as the first line of
+# providers/<name>/install-marker. A leading `~` is expanded to $HOME. Providers
+# without a marker file are treated as not-installed (e.g. _shared, or a future
+# README-only provider that has no detectable filesystem footprint).
+#
+# Keeping the marker path next to its provider means adding a new installable
+# provider is a one-file change (`mkdir providers/foo && echo '~/.foo' >
+# providers/foo/install-marker`) — no edits to core.sh.
 _is_installed() {
   local provider="$1"
-  case "$provider" in
-    claude-code)
-      [[ -d "$HOME/.claude/commands/almanac" ]]
-      ;;
-    opencode)
-      [[ -e "$HOME/.config/opencode/skills/almanac" ]]
-      ;;
-    cursor)
-      [[ -e "$HOME/.cursor/skills/almanac" ]]
-      ;;
-    codex)
-      [[ -e "$HOME/.agents/skills/almanac" ]]
-      ;;
-    *)
-      return 1
-      ;;
-  esac
+  local marker_file="$ALMANAC_HOME/providers/$provider/install-marker"
+  [[ -f "$marker_file" ]] || return 1
+  local marker
+  IFS= read -r marker < "$marker_file" || return 1
+  [[ -n "$marker" ]] || return 1
+  marker="${marker/#\~/$HOME}"
+  [[ -e "$marker" ]]
 }

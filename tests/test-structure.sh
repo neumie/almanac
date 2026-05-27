@@ -74,6 +74,13 @@ check "providers/opencode/README.md"
 check "providers/cursor/README.md"
 check "providers/codex/README.md"
 
+# Provider install-marker metadata (read by _is_installed; one line per file,
+# the path that signals "installed" — ~ expands to $HOME).
+check "providers/claude-code/install-marker"
+check "providers/codex/install-marker"
+check "providers/cursor/install-marker"
+check "providers/opencode/install-marker"
+
 # Tests
 check "tests/test-structure.sh"
 check "tests/test-skills.sh"
