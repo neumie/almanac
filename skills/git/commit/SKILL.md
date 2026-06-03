@@ -25,6 +25,7 @@ Types: `feat`, `fix`, `refactor`, `perf`, `chore`, `ci`, `docs`, `test`
 ## Splitting into logical commits
 
 - If you have context about what work was done (e.g. you just finished implementing something), commit **only** that work. Don't bundle unrelated changes — leave other unstaged/untracked changes alone.
+- **Planning artifacts ARE part of the work — always commit them.** A plan/spec/context scaffold that drove the change (e.g. `docs/plans/<date>-<slug>/` containing `context.md`, `README.md`, `.planning-prompt`, or similar planning docs) is not "unrelated untracked junk" — it is the record of *why* this commit exists. Stage and commit these alongside the code in the same commit (or a dedicated `docs:` commit). Never leave them behind. The only exception is regenerated runtime logs explicitly listed in `.gitignore`.
 - You MAY split your work into multiple logical commits if it makes sense (e.g. a refactor commit + a feature commit, or separating test changes from implementation).
 - If you have no prior context, read `git diff` and `git diff --cached` to understand all changes, then group them into reasonable logical commits by topic/purpose. If some changes appear unrelated to each other and you can't determine what belongs together, ask before committing.
 - Each commit should be self-contained and buildable on its own when possible.
