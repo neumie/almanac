@@ -1495,13 +1495,22 @@ almanac_harden_hitl_checkpoint() {
 # HARDEN_AUTOCOMMIT is disabled. A commit failure (e.g. no git identity) leaves the
 # changes in the working tree and warns rather than aborting the loop.
 #
+# The 4th arg is the round's kill-list (open-blocking TSV: id,lens,severity,
+# location,claim,demonstration, captured after ratify / before the fixer). The
+# loop — not an agent — composes a DESCRIPTIVE message from it (subject carries the
+# fix count; body lists each addressed finding as "- [lens] claim"), so the commit
+# reads well without giving the write-capable fixer git access. Empty kill-list →
+# a "checkpoint" commit (the round still produced ledger/test artifacts worth
+# recording).
+#
 # Stages the WHOLE work tree (minus .almanac/), so start a harden run from a clean
 # tree — any pre-existing uncommitted change is swept into the round's commit.
 almanac_harden_commit_round() {
   local root="$1"
   local target="$2"
   local round="${3:-1}"
-  local slug
+  local killlist="${4:-}"
+  local slug subject body count
 
   case "${HARDEN_AUTOCOMMIT:-1}" in
     0|no|false|off) return 0 ;;
@@ -1517,10 +1526,20 @@ almanac_harden_commit_round() {
   fi
 
   slug="$(almanac_harden_slug "$target")"
+  count="$(printf '%s\n' "$killlist" | grep -c '[^[:space:]]')" || count=0
+  if [ "$count" -gt 0 ]; then
+    subject="harden(${slug}): round ${round} fixes (${count})"
+    # One bullet per addressed finding: "- [lens] claim".
+    body="$(printf '%s\n' "$killlist" \
+      | awk -F '\t' 'NF>=5 && $1!="" { printf "- [%s] %s\n", $2, $5 }')"
+  else
+    subject="harden(${slug}): round ${round} checkpoint"
+    body="No blocking findings fixed this round; committing round artifacts."
+  fi
+
   if git -C "$root" commit -q \
-       -m "harden(${slug}): round ${round} fixes" \
-       -m "Automated harden-loop checkpoint for target: ${target}" >/dev/null 2>&1; then
-    _info "Committed round ${round} changes: harden(${slug}): round ${round} fixes"
+       -m "$subject" -m "$body" -m "harden target: ${target}" >/dev/null 2>&1; then
+    _info "Committed round ${round}: ${subject}"
   else
     _warn "Could not commit round ${round} changes — left in the working tree (is git user.name/email configured?)."
   fi
@@ -1541,10 +1560,14 @@ almanac_harden_round() {
   local target="$2"
   local round="${3:-1}"
   local directive="${4:-}"
-  local rc
+  local rc killlist
 
   almanac_harden_fanout "$root" "$target" "$round" "$directive"
   almanac_harden_ratify_open "$root" "$target" "$round"
+
+  # Snapshot the kill-list the fixer is about to address (after ratify, before the
+  # fixer marks it fixed) so the round's commit message can enumerate the findings.
+  killlist="$(almanac_harden_ledger_open_blocking "$(almanac_harden_ledger_path "$root" "$target")")"
 
   if ! almanac_harden_fix "$root" "$target" "$round" "$directive"; then
     _warn "Fixer did not complete cleanly this round; unaddressed findings carry to the next round."
@@ -1552,7 +1575,7 @@ almanac_harden_round() {
 
   rc=0
   almanac_harden_report_feedback "$root" || rc=$?
-  almanac_harden_commit_round "$root" "$target" "$round"
+  almanac_harden_commit_round "$root" "$target" "$round" "$killlist"
   return "$rc"
 }
 

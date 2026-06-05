@@ -1581,10 +1581,12 @@ test_harden_slug_caps_long_target_at_word_boundary() {
 }
 
 # Per-round auto-commit: each round commits the fixer's edits + findings ledger in
-# the target repo so the run leaves a reviewable checkpoint per round. The commit
-# message carries the capped slug + round number.
+# the target repo so the run leaves a reviewable checkpoint per round. The message
+# is DESCRIPTIVE — the loop enumerates the round's kill-list (subject carries the
+# fix count, body lists each finding as "- [lens] claim") without giving the fixer
+# git access.
 test_commit_round_creates_per_round_commit() {
-  local tmp before after subject
+  local tmp before after subject body killlist
   new_tmpdir
   tmp="$NEW_TMPDIR"
   init_git_repo "$tmp"
@@ -1592,20 +1594,52 @@ test_commit_round_creates_per_round_commit() {
   printf 'fixed\n' > "$tmp/src/app.ts"
   printf 'finding\n' > "$tmp/docs/plans/harden/pr-47/findings.md"
 
+  # Open-blocking TSV: id, lens, severity, location, claim, demonstration.
+  killlist="$(printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+    f1 contracts medium src/x.ts:9 "archived slot leaves backup event" demo1 \
+    && printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+    f2 security high src/y.ts:3 "missing auth check" demo2)"
+
   before="$(git -C "$tmp" rev-list --count HEAD)"
-  almanac_harden_commit_round "$tmp" "PR 47" 2
+  almanac_harden_commit_round "$tmp" "PR 47" 2 "$killlist"
   after="$(git -C "$tmp" rev-list --count HEAD)"
 
   [ "$after" -eq "$((before + 1))" ] || fail "a round with changes must create exactly one commit (before=$before after=$after)"
   subject="$(git -C "$tmp" log -1 --pretty='%s')"
-  assert_eq "harden(pr-47): round 2 fixes" "$subject" "the commit subject must carry the slug + round"
+  assert_eq "harden(pr-47): round 2 fixes (2)" "$subject" "subject must carry slug + round + fix count"
+  body="$(git -C "$tmp" log -1 --pretty='%b')"
+  case "$body" in
+    *"- [contracts] archived slot leaves backup event"*) : ;;
+    *) fail "commit body must enumerate the addressed findings (got: $body)" ;;
+  esac
+  case "$body" in
+    *"- [security] missing auth check"*) : ;;
+    *) fail "commit body must list every kill-list finding (got: $body)" ;;
+  esac
   [ -z "$(git -C "$tmp" status --porcelain)" ] || fail "the working tree must be clean after the round commit"
   # Both the code fix and the findings ledger are part of the round's artifact.
   git -C "$tmp" show --name-only --pretty=format: HEAD | grep -qx "src/app.ts" \
     || fail "the fixer's code change must be in the commit"
   git -C "$tmp" show --name-only --pretty=format: HEAD | grep -qx "docs/plans/harden/pr-47/findings.md" \
     || fail "the findings ledger must be in the commit"
-  echo "  PASS: a round with changes commits the fix + ledger with a slug/round subject"
+  echo "  PASS: a round commits fix + ledger with a descriptive slug/round/findings message"
+}
+
+# Empty kill-list (no blocking findings fixed) but the round still changed the
+# tree (e.g. new non-blocking notes in the ledger) -> a "checkpoint" commit, not a
+# "fixes (0)" one.
+test_commit_round_checkpoint_when_no_killlist() {
+  local tmp subject
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  init_git_repo "$tmp"
+  printf 'note\n' > "$tmp/notes.md"
+
+  almanac_harden_commit_round "$tmp" "PR 47" 3
+  subject="$(git -C "$tmp" log -1 --pretty='%s')"
+  assert_eq "harden(pr-47): round 3 checkpoint" "$subject" \
+    "an empty kill-list must produce a checkpoint subject, not 'fixes (0)'"
+  echo "  PASS: a round with no addressed findings commits a checkpoint"
 }
 
 # The .almanac/ runtime registry (run state, worker dirs, events) must never be
@@ -2359,6 +2393,7 @@ test_run_aborts_cleanly_when_die_mid_loop
 test_freeform_target_reaches_past_existence_gate
 test_harden_slug_caps_long_target_at_word_boundary
 test_commit_round_creates_per_round_commit
+test_commit_round_checkpoint_when_no_killlist
 test_commit_round_excludes_almanac_runtime
 test_commit_round_noop_outside_git_repo
 test_commit_round_respects_autocommit_off
