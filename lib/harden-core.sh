@@ -63,26 +63,38 @@ almanac_harden_role_resolve() {
   almanac_loop_role_resolve "harden" "$role" "$lens" "$(almanac_provider_default)" "" ""
 }
 
+# Slugify a free-form harden target into a short, path-safe identifier for the
+# committed plan dir (docs/plans/harden/<slug>/). A target is now free-form prose
+# — "the retry logic when the queue is full", "PR 47", "src/worker.sh" — which
+# the shared almanac_loop_slug would turn into an unwieldy committed directory
+# name. Cap the slug at a word boundary so the on-disk contract dir stays
+# readable (the run registry keeps the full, timestamped run-id for disambiguation
+# — this only shortens the human-facing plan path). Composes off almanac_loop_slug
+# so normalization rules live in one place. Override the cap via
+# ALMANAC_HARDEN_SLUG_MAXLEN.
+almanac_harden_slug() {
+  local target="$1"
+  local slug max
+  slug="$(almanac_loop_slug "$target")"
+  max="${ALMANAC_HARDEN_SLUG_MAXLEN:-48}"
+  if [ "${#slug}" -gt "$max" ]; then
+    slug="${slug:0:$max}"   # hard cap
+    slug="${slug%-*}"       # back off to the last hyphen — never a partial word
+    slug="${slug%-}"        # strip any trailing hyphen
+    [ -n "$slug" ] || slug="run"
+  fi
+  printf '%s\n' "$slug"
+}
+
+# Both the rubric and the findings ledger live under the same committed plan dir,
+# so they must agree on the slug — route both through almanac_harden_slug.
 almanac_harden_rubric_path() {
   local root="$1"
   local target="$2"
   local slug
 
-  slug="$(almanac_loop_slug "$target")"
+  slug="$(almanac_harden_slug "$target")"
   printf '%s/rubric.md\n' "$(almanac_loop_plan_dir harden "$root" "$slug")"
-}
-
-# Resolve a target argument to its absolute filesystem path: absolute targets
-# pass through, relative targets are interpreted under $root. Path resolution
-# only — callers do their own existence check (some sites operate on the
-# ledger and don't need the target to still exist on disk).
-almanac_harden_target_path() {
-  local root="$1"
-  local target="$2"
-  case "$target" in
-    /*) printf '%s\n' "$target" ;;
-    *)  printf '%s/%s\n' "$root" "$target" ;;
-  esac
 }
 
 almanac_harden_write_rubric() {
@@ -354,6 +366,12 @@ Review the target below for ${lens} defects only. You cannot modify any files;
 this is a read-only review.
 
 Target: ${target}
+
+The target is free-form: it may be a path, a pull-request or branch reference
+(e.g. "PR 47", "#47"), or a prose description of behavior. Locate the relevant
+code yourself before reviewing: if it names a PR or branch, inspect its diff
+(e.g. \`gh pr diff 47\`); if it describes behavior, find the code that implements
+it. Scope your review to what the target points at.
 EOF
 
   if [ -n "$rubric_bar" ]; then
@@ -483,7 +501,7 @@ almanac_harden_ledger_path() {
   local target="$2"
   local slug
 
-  slug="$(almanac_loop_slug "$target")"
+  slug="$(almanac_harden_slug "$target")"
   printf '%s/findings.md\n' "$(almanac_loop_plan_dir harden "$root" "$slug")"
 }
 
@@ -781,14 +799,16 @@ almanac_harden_ledger_set_status_many() {
 # token so the parser can be unambiguous (see almanac_harden_ratify_verdict).
 almanac_harden_ratify_prompt() {
   local demonstration="$1"
-  local target_path="${2:-}"
+  local target="${2:-}"
 
   cat <<EOF
 You are the CONDUCTOR in a code-hardening loop. Ratify ONE reviewer finding by
 EXECUTING its demonstration against the current code — decide by reproduction,
 never by opinion.
 
-Target: ${target_path:-(the current working directory)}
+Target: ${target:-(the current working directory)}
+(The target is free-form — a path, a PR/branch ref, or a prose description.
+Locate the code it points at as needed; for a PR, inspect its diff.)
 
 Demonstration to reproduce:
 ${demonstration}
@@ -847,7 +867,7 @@ almanac_harden_ratify_verdict_text() {
 # to drive the decision paths directly; here it is the real executor.
 almanac_harden_demo_reproduces() {
   local demonstration="$1"
-  local target_path="${2:-}"
+  local target="${2:-}"
   local conductor_provider="${3:-}"
   local conductor_model="${4:-}"
   local conductor_effort="${5:-}"
@@ -863,7 +883,7 @@ almanac_harden_demo_reproduces() {
   # an EXIT-trapped subshell, so a signal mid-call can't leak them.
   result_text="$(almanac_loop_agent_capture_text \
     "$conductor_provider" "$conductor_model" "$conductor_effort" "read-only" \
-    "$(almanac_harden_ratify_prompt "$demonstration" "$target_path")" 2>/dev/null)" || rc=$?
+    "$(almanac_harden_ratify_prompt "$demonstration" "$target")" 2>/dev/null)" || rc=$?
 
   # Provider missing/crashed or the demonstration was un-runnable: cannot
   # confirm reproduction -> non-blocking note, never a hang or a hard failure.
@@ -899,7 +919,7 @@ almanac_harden_ratify() {
   local claim="$6"
   local demonstration="$7"
   local round="${8:-1}"
-  local target_path="${9:-}"
+  local target="${9:-}"
   local rubric_path="${10:-}"
   local conductor_provider="${11:-}"
   local conductor_model="${12:-}"
@@ -909,7 +929,7 @@ almanac_harden_ratify() {
   almanac_harden_ledger_init "$path"
   current_status="$(almanac_harden_ledger_status "$path" "$id")"
 
-  if almanac_harden_demo_reproduces "$demonstration" "$target_path" \
+  if almanac_harden_demo_reproduces "$demonstration" "$target" \
       "$conductor_provider" "$conductor_model" "$conductor_effort"; then
     reproduces=1
   else
@@ -973,16 +993,15 @@ almanac_harden_fanout() {
   local target="$2"
   local round="${3:-1}"
   local directive="${4:-}"
-  local target_path run_id run_id_base registry_dir ledger_path rubric_path lens provider model effort
+  local run_id run_id_base registry_dir ledger_path rubric_path lens provider model effort
   local worker_id prompt_file pidfile pid result_file status_file wstatus
   local added total_added i max_reviewers succeeded_count suffix
   local -a lenses=() worker_ids=() worker_pids=() prompt_files=()
 
-  target_path="$(almanac_harden_target_path "$root" "$target")"
-
-  if [ ! -e "$target_path" ]; then
-    _die "Harden target not found: $target"
-  fi
+  # The target is free-form: a path, a PR/branch ref ("PR 47"), or a prose
+  # description of what to review. There is no filesystem gate — reviewers locate
+  # the relevant code themselves (see almanac_harden_reviewer_prompt), so a target
+  # need not exist on disk.
 
   while IFS= read -r lens; do
     [ -n "$lens" ] || continue
@@ -1141,6 +1160,10 @@ passes after, so the defect cannot silently return.
 
 Target: ${target}
 
+The target is free-form — a path, a PR/branch reference (e.g. "PR 47"), or a
+prose description. Locate the code it points at yourself (for a PR, inspect its
+diff, e.g. \`gh pr diff 47\`) before applying fixes.
+
 Blocking findings to fix:
 ${findings_text}
 EOF
@@ -1196,16 +1219,12 @@ almanac_harden_fix() {
   local target="$2"
   local round="${3:-1}"
   local directive="${4:-}"
-  local target_path ledger_path rubric_path open findings_text count
+  local ledger_path rubric_path open findings_text count
   local provider model effort rubric_snapshot rc
   local id lens severity location claim demonstration
 
-  target_path="$(almanac_harden_target_path "$root" "$target")"
-
-  if [ ! -e "$target_path" ]; then
-    _die "Harden target not found: $target"
-  fi
-
+  # Free-form target (path / PR ref / description); no filesystem gate — the
+  # fixer's prompt carries the raw target and locates the code itself.
   ledger_path="$(almanac_harden_ledger_path "$root" "$target")"
   rubric_path="$(almanac_harden_rubric_path "$root" "$target")"
 
@@ -1372,11 +1391,9 @@ almanac_harden_ratify_open() {
   local root="$1"
   local target="$2"
   local round="${3:-1}"
-  local ledger_path rubric_path target_path open
+  local ledger_path rubric_path open
   local cond_provider cond_model cond_effort
   local id lens severity location claim demonstration
-
-  target_path="$(almanac_harden_target_path "$root" "$target")"
 
   ledger_path="$(almanac_harden_ledger_path "$root" "$target")"
   rubric_path="$(almanac_harden_rubric_path "$root" "$target")"
@@ -1392,7 +1409,7 @@ almanac_harden_ratify_open() {
   while IFS=$'\t' read -r id lens severity location claim demonstration; do
     [ -n "$id" ] || continue
     almanac_harden_ratify "$ledger_path" "$id" "$lens" "$severity" \
-      "$location" "$claim" "$demonstration" "$round" "$target_path" "$rubric_path" \
+      "$location" "$claim" "$demonstration" "$round" "$target" "$rubric_path" \
       "$cond_provider" "$cond_model" "$cond_effort" >/dev/null
   done <<INNER
 $open

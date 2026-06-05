@@ -61,7 +61,7 @@ almanac_loop_harden_launch() {
     shift
   done
 
-  [ -n "$target" ] || target="$(almanac_loop_ui_input "Target (file / dir / PR)")" || return 1
+  [ -n "$target" ] || target="$(almanac_loop_ui_input "What to harden (path, PR ref, or description)")" || return 1
   [ -n "$target" ] || _die "A harden target is required."
 
   lenses="$(test -n "$lenses" && printf '%s' "$lenses" || almanac_loop_ui_input "Lenses (blank = default set)")" || return 1
@@ -119,7 +119,7 @@ almanac_loop_harden_new_run_env() {
 }
 
 almanac_loop_harden_new_run_usage() {
-  printf '%s\n' "requires --target <path>"
+  printf '%s\n' "requires --target <what-to-harden>"
 }
 
 # Read a harden run's status blob and emit the key=val pairs that
@@ -143,7 +143,7 @@ almanac_loop_harden_status_to_opts() {
 almanac_loop_harden_launch_usage() {
   cat >&2 <<'EOF'
 Usage (loop launch): <target> [options]
-  <target>            file / dir / PR to harden
+  <target>            what to harden: a path, a PR ref ("PR 47"), or a description
   --lenses <list>     reviewer lenses (blank = default set)
   --provider <p>      codex | claude
   --model <m>         reviewer model

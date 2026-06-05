@@ -543,17 +543,6 @@ test_fix_is_noop_without_open_blocking() {
   echo "  PASS: fix is a no-op without open blocking findings"
 }
 
-test_review_errors_on_missing_target() {
-  local tmp output
-  new_tmpdir
-  tmp="$NEW_TMPDIR"
-
-  if output=$(cd "$tmp" && "$ALMANAC" harden src/missing.js 2>&1); then
-    fail "review should reject a missing target"
-  fi
-  assert_contains "$output" "not found" "review should report the missing target via _die"
-  echo "  PASS: review errors on missing target"
-}
 
 test_format_findings_skips_malformed_lines() {
   local tmp result output
@@ -1480,29 +1469,36 @@ test_run_registers_in_the_run_registry() {
   echo "  PASS: a harden run registers in the run registry and is marked done on exit"
 }
 
-# Regression (set -u trap-scope bug): when _die fires deep in fan-out (e.g. the
-# target file does not exist), the EXIT trap set in almanac_harden_run must mark
-# the run aborted without bash dying on "run_id: unbound variable". The trap text
-# referenced $root/$run_id; bash uses dynamic scoping for trap expansion, and
-# almanac_harden_fanout declares `local run_id` for its own bookkeeping, so the
-# trap was resolving $run_id to fanout's unset local instead of the outer's value.
-# Fix bakes both values into the trap text at set-time via printf %q.
-test_run_aborts_cleanly_when_target_missing() {
-  local tmp output rc row run_id status
+# Regression (set -u trap-scope bug): when _die fires deep in fan-out, the EXIT
+# trap set in almanac_harden_run must mark the run aborted without bash dying on
+# "run_id: unbound variable". The trap text referenced $root/$run_id; bash uses
+# dynamic scoping for trap expansion, and almanac_harden_fanout declares `local
+# run_id` for its own bookkeeping, so the trap was resolving $run_id to fanout's
+# unset local instead of the outer's value. Fix bakes both values into the trap
+# text at set-time via printf %q.
+#
+# Targets are now free-form (a non-existent path is NOT a _die — reviewers locate
+# the code themselves), so this drives the mid-loop _die via a drafted-but-
+# unapproved rubric instead: fanout's rubric-approval gate fires AFTER the run
+# registers, the same post-registration _die path the trap must survive.
+test_run_aborts_cleanly_when_die_mid_loop() {
+  local tmp output rc row run_id status target
   new_tmpdir
   tmp="$NEW_TMPDIR"
-  # No file created at tmp/missing.js — fanout's `[ ! -e "$target_path" ]` _die
-  # fires before any reviewer work, exercising the trap-on-mid-loop-_die path.
+  target="auth flow"
+  # A draft (unapproved) rubric makes fanout _die ("Rubric not approved") after
+  # the loop-level run is registered and its EXIT trap installed.
+  almanac_harden_write_rubric "$tmp" "$target" "harden the auth flow" >/dev/null
   # Invoke via a fresh bash so the EXIT-trap-time unbound-variable error (which
   # bash writes outside any captured subshell when triggered from $()) is
   # observable in stderr.
-  output="$(cd "$tmp" && ALMANAC_HOME="$ROOT" bash "$ALMANAC" harden missing.js --loop --rounds 1 2>&1)" && rc=0 || rc=$?
+  output="$(cd "$tmp" && ALMANAC_HOME="$ROOT" bash "$ALMANAC" harden "$target" --loop --rounds 1 2>&1)" && rc=0 || rc=$?
 
-  [ "$rc" -ne 0 ] || fail "a missing target must exit non-zero (got rc=0)"
+  [ "$rc" -ne 0 ] || fail "an unapproved rubric must exit non-zero (got rc=0)"
   case "$output" in
     *"unbound variable"*) fail "EXIT trap must not crash on unbound \$run_id/\$root (got: $output)" ;;
   esac
-  assert_contains "$output" "Harden target not found" \
+  assert_contains "$output" "Rubric not approved" \
     "the underlying _die message must still reach the user"
 
   row="$(almanac_loop_list_runs "$tmp" | awk -F'\t' '$2=="harden"{print; exit}')"
@@ -1513,6 +1509,64 @@ test_run_aborts_cleanly_when_target_missing() {
     "a run that _die's mid-loop must be marked aborted by the EXIT trap"
 
   echo "  PASS: a mid-loop _die marks the run aborted without crashing on set -u"
+}
+
+# Free-form target: a non-existent path is no longer gated. With the existence
+# check removed, a bogus target ("PR 47") reaches the reviewer-cap _die (a LATER
+# check) instead of dying with "Harden target not found" — proof the filesystem
+# gate is gone and the target is treated as free-form. No worker spawns (the cap
+# _die fires first), so no provider is needed.
+test_freeform_target_reaches_past_existence_gate() {
+  local tmp output rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  rc=0
+  output="$(cd "$tmp" && HARDEN_MAX_REVIEWERS=2 \
+    HARDEN_LENSES="correctness,security,perf" \
+    "$ALMANAC" harden "PR 47" 2>&1)" || rc=$?
+
+  [ "$rc" -ne 0 ] || fail "over-cap lenses must still exit non-zero"
+  case "$output" in
+    *"Harden target not found"*)
+      fail "a free-form target must not hit a filesystem existence gate (got: $output)" ;;
+  esac
+  assert_contains "$output" "Too many reviewer lenses" \
+    "a non-existent free-form target should reach the reviewer-cap check, not a missing-file _die"
+  echo "  PASS: a free-form (non-path) target is accepted past the existence gate"
+}
+
+# A free-form description would slug into an unwieldy committed plan path. The
+# harden slug caps at a word boundary; the rubric and ledger paths must derive
+# from the SAME capped slug so they always agree under docs/plans/harden/<slug>/.
+test_harden_slug_caps_long_target_at_word_boundary() {
+  local long slug full rubric ledger
+  long="the retry logic when the queue is completely full and overflowing badly"
+  slug="$(almanac_harden_slug "$long")"
+  full="$(almanac_loop_slug "$long")"
+
+  [ "${#slug}" -le 48 ] || fail "slug must be capped at 48 chars (got ${#slug}: $slug)"
+  case "$slug" in
+    -*|*-) fail "slug must not start or end with a hyphen (got: $slug)" ;;
+  esac
+  # Word-boundary cap: the slug is the full slug verbatim (short target) or a
+  # prefix of it ending exactly at a hyphen — never a sliced partial word.
+  case "$full" in
+    "$slug"|"$slug"-*) : ;;
+    *) fail "slug must be a hyphen-boundary prefix of the full slug (slug=$slug full=$full)" ;;
+  esac
+
+  rubric="$(almanac_harden_rubric_path "/repo" "$long")"
+  ledger="$(almanac_harden_ledger_path "/repo" "$long")"
+  assert_eq "/repo/docs/plans/harden/$slug/rubric.md" "$rubric" \
+    "rubric path must use the capped slug"
+  assert_eq "/repo/docs/plans/harden/$slug/findings.md" "$ledger" \
+    "ledger path must use the capped slug"
+
+  # A short target passes through unchanged (no spurious truncation).
+  assert_eq "auth-flow" "$(almanac_harden_slug "auth flow")" \
+    "short targets must pass through unchanged"
+  echo "  PASS: almanac_harden_slug caps long targets at a word boundary; rubric/ledger agree"
 }
 
 # Criterion (67.5): the run-status contract is identical for harden and ralph —
@@ -2178,7 +2232,6 @@ test_fanout_uses_unique_run_id_for_same_second_rounds
 test_fix_applies_open_blocking_and_persists_tests
 test_fix_marks_all_open_findings_in_one_ledger_rewrite
 test_fix_is_noop_without_open_blocking
-test_review_errors_on_missing_target
 test_format_findings_skips_malformed_lines
 test_format_findings_reports_empty
 test_parse_findings_emits_ledger_entries
@@ -2205,7 +2258,9 @@ test_run_steer_threads_directive_into_round
 test_run_consumes_hub_queued_harden_steer
 test_run_consumes_hub_queued_harden_stop
 test_run_registers_in_the_run_registry
-test_run_aborts_cleanly_when_target_missing
+test_run_aborts_cleanly_when_die_mid_loop
+test_freeform_target_reaches_past_existence_gate
+test_harden_slug_caps_long_target_at_word_boundary
 test_run_status_contract_identical_for_harden_and_ralph
 test_role_config_resolves_all_three_roles
 test_role_config_mixes_providers_across_lenses

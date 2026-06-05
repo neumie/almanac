@@ -253,14 +253,20 @@ test_hub_resume_harden_does_not_append_yes() {
   almanac_loop_set_run_config "$tmp" "harden-resume" "lenses=correctness" "rounds=2"
   almanac_loop_mark_run_status "$tmp" "harden-resume" "done" "2026-05-25T12:10:00Z"
 
+  # Targets are free-form now, so a non-existent path no longer _die's; draft an
+  # (unapproved) rubric for the target so the resumed runner _die's at the
+  # rubric-approval gate instead — still a deterministic "reached the runner"
+  # signal that proves the launcher-only --yes flag was NOT appended to the argv.
+  (cd "$tmp" && "$ALMANAC_BIN" harden "src/missing.js" --goal "x" >/dev/null 2>&1) || true
+
   out="$(cd "$tmp" && "$ALMANAC_BIN" hub --resume harden-resume </dev/null 2>&1)" || rc=$?
 
-  [ "$rc" -ne 0 ] || fail "resuming a missing harden target should fail before review"
+  [ "$rc" -ne 0 ] || fail "resuming a harden run with an unapproved rubric should fail before review"
   case "$out" in
     *"Unknown harden option: --yes"*) fail "hub resume must not append launcher-only --yes to harden argv" ;;
     *) ;;
   esac
-  assert_contains "$out" "Harden target not found" "harden resume should reach the harden runner without --yes"
+  assert_contains "$out" "Rubric not approved" "harden resume should reach the harden runner without --yes"
   echo "  PASS: hub resume harden does not append --yes"
 }
 
