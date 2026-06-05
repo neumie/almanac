@@ -63,6 +63,17 @@ new_tmpdir() {
   TMPDIRS+=("$NEW_TMPDIR")
 }
 
+# Init a git repo with a local identity + an initial commit, so per-round
+# auto-commit tests have a HEAD and a configured author without depending on the
+# host's global git config.
+init_git_repo() {
+  local dir="$1"
+  git -C "$dir" init -q
+  git -C "$dir" config user.email "harden-test@example.com"
+  git -C "$dir" config user.name "Harden Test"
+  git -C "$dir" commit -q --allow-empty -m "init"
+}
+
 # Fake codex that writes canned JSON-Lines findings to --output-last-message and
 # logs its args, so the reviewer path is exercised without a real model call.
 write_fake_reviewer_codex() {
@@ -1569,6 +1580,92 @@ test_harden_slug_caps_long_target_at_word_boundary() {
   echo "  PASS: almanac_harden_slug caps long targets at a word boundary; rubric/ledger agree"
 }
 
+# Per-round auto-commit: each round commits the fixer's edits + findings ledger in
+# the target repo so the run leaves a reviewable checkpoint per round. The commit
+# message carries the capped slug + round number.
+test_commit_round_creates_per_round_commit() {
+  local tmp before after subject
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  init_git_repo "$tmp"
+  mkdir -p "$tmp/src" "$tmp/docs/plans/harden/pr-47"
+  printf 'fixed\n' > "$tmp/src/app.ts"
+  printf 'finding\n' > "$tmp/docs/plans/harden/pr-47/findings.md"
+
+  before="$(git -C "$tmp" rev-list --count HEAD)"
+  almanac_harden_commit_round "$tmp" "PR 47" 2
+  after="$(git -C "$tmp" rev-list --count HEAD)"
+
+  [ "$after" -eq "$((before + 1))" ] || fail "a round with changes must create exactly one commit (before=$before after=$after)"
+  subject="$(git -C "$tmp" log -1 --pretty='%s')"
+  assert_eq "harden(pr-47): round 2 fixes" "$subject" "the commit subject must carry the slug + round"
+  [ -z "$(git -C "$tmp" status --porcelain)" ] || fail "the working tree must be clean after the round commit"
+  # Both the code fix and the findings ledger are part of the round's artifact.
+  git -C "$tmp" show --name-only --pretty=format: HEAD | grep -qx "src/app.ts" \
+    || fail "the fixer's code change must be in the commit"
+  git -C "$tmp" show --name-only --pretty=format: HEAD | grep -qx "docs/plans/harden/pr-47/findings.md" \
+    || fail "the findings ledger must be in the commit"
+  echo "  PASS: a round with changes commits the fix + ledger with a slug/round subject"
+}
+
+# The .almanac/ runtime registry (run state, worker dirs, events) must never be
+# committed into the target repo — only code + contract artifacts.
+test_commit_round_excludes_almanac_runtime() {
+  local tmp
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  init_git_repo "$tmp"
+  mkdir -p "$tmp/src" "$tmp/.almanac/runs/r1"
+  printf 'fixed\n' > "$tmp/src/app.ts"
+  printf 'runtime\n' > "$tmp/.almanac/runs/r1/status.tsv"
+
+  almanac_harden_commit_round "$tmp" "PR 47" 1
+
+  git -C "$tmp" show --name-only --pretty=format: HEAD | grep -qx "src/app.ts" \
+    || fail "the code change must be committed"
+  if git -C "$tmp" show --name-only --pretty=format: HEAD | grep -q "^\.almanac/"; then
+    fail "the .almanac/ runtime registry must not be committed"
+  fi
+  # .almanac/ stays as untracked runtime state, not swept into history.
+  git -C "$tmp" status --porcelain | grep -q "^?? .almanac/" \
+    || fail ".almanac/ should remain untracked after the commit"
+  echo "  PASS: round commit excludes the .almanac/ runtime registry"
+}
+
+# Harden targets need not be git repos; the commit step is a clean no-op outside a
+# work tree (no error, no .git created).
+test_commit_round_noop_outside_git_repo() {
+  local tmp rc
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  printf 'fixed\n' > "$tmp/app.ts"
+
+  rc=0
+  almanac_harden_commit_round "$tmp" "PR 47" 1 || rc=$?
+  [ "$rc" -eq 0 ] || fail "commit_round must succeed (no-op) outside a git repo (got rc=$rc)"
+  [ ! -d "$tmp/.git" ] || fail "commit_round must not initialize a repo"
+  echo "  PASS: round commit is a no-op outside a git work tree"
+}
+
+# HARDEN_AUTOCOMMIT=0 opts out: the fixer's changes are left in the working tree
+# for manual review, exactly like the pre-auto-commit behavior.
+test_commit_round_respects_autocommit_off() {
+  local tmp before after
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+  init_git_repo "$tmp"
+  printf 'fixed\n' > "$tmp/app.ts"
+
+  before="$(git -C "$tmp" rev-list --count HEAD)"
+  HARDEN_AUTOCOMMIT=0 almanac_harden_commit_round "$tmp" "PR 47" 1
+  after="$(git -C "$tmp" rev-list --count HEAD)"
+
+  [ "$after" -eq "$before" ] || fail "HARDEN_AUTOCOMMIT=0 must not create a commit"
+  git -C "$tmp" status --porcelain | grep -q "app.ts" \
+    || fail "the change must be left in the working tree when auto-commit is off"
+  echo "  PASS: HARDEN_AUTOCOMMIT=0 leaves changes uncommitted for manual review"
+}
+
 # Criterion (67.5): the run-status contract is identical for harden and ralph —
 # both register through the same shared engine helper, so their status.tsv blobs
 # carry the exact same field keys. Register a ralph run, run a harden loop in the
@@ -2261,6 +2358,10 @@ test_run_registers_in_the_run_registry
 test_run_aborts_cleanly_when_die_mid_loop
 test_freeform_target_reaches_past_existence_gate
 test_harden_slug_caps_long_target_at_word_boundary
+test_commit_round_creates_per_round_commit
+test_commit_round_excludes_almanac_runtime
+test_commit_round_noop_outside_git_repo
+test_commit_round_respects_autocommit_off
 test_run_status_contract_identical_for_harden_and_ralph
 test_role_config_resolves_all_three_roles
 test_role_config_mixes_providers_across_lenses

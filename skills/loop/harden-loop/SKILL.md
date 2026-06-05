@@ -9,7 +9,7 @@ metadata:
 
 # Harden Loop
 
-A **convergence loop** that hardens one target until it meets an explicit, per-task contract. You give it a target and a one-line goal; the conductor drafts a `rubric.md`; you edit and lock it; then it runs **rounds** of parallel review → ratify-by-execution → fix → feedback until the target is bulletproof or a round budget is hit.
+A **convergence loop** that hardens one target until it meets an explicit, per-task contract. You give it a target and a one-line goal; the conductor drafts a `rubric.md`; you edit and lock it; then it runs **rounds** of parallel review → ratify-by-execution → fix → feedback → commit until the target is bulletproof or a round budget is hit.
 
 Unlike `ralph-loop` (a slice-queue loop that builds a PRD task-by-task), harden-loop is **review-driven**: it discovers and fixes defects in code that already exists. Both sit on the same shared bash engine (the focused `lib/` modules — `lib/run.sh`, `lib/agent.sh`, `lib/worker.sh`, etc.), exposed as `almanac harden <target>`.
 
@@ -57,8 +57,9 @@ Other modes:
 3. **Fix.** A single sequential write-capable fixer applies the open blocking findings and leaves a failing-then-passing regression test per fix. No concurrent writers.
 4. **Feedback.** The project's feedback loops (tests / typecheck / lint) run — the objective half of "bulletproof", reusing the repo's existing detection.
 5. **Gate.** Exit when acceptance is met AND zero open blocking findings remain, or the round budget is hit (a clear NON-CONVERGED status). Each round prints the **kill-list** (open blocking findings) and a **verdict**.
+6. **Commit.** If the target is a git repo, the round's changes (fixer edits, regenerated tests, findings ledger) are committed as `harden(<slug>): round N fixes` — **every round, regardless of the feedback verdict** (a still-red round is still committed, so each round is a reviewable checkpoint). The `.almanac/` runtime registry is excluded. Start from a **clean tree** (the whole tree minus `.almanac/` is staged). Opt out with `HARDEN_AUTOCOMMIT=0` to leave fixes uncommitted for manual review.
 
-The deliverable is hardened code **plus the regression suite the loop built to prove it**.
+The deliverable is hardened code **plus the regression suite the loop built to prove it** — committed round by round when the target is a git repo.
 
 ## Lenses
 

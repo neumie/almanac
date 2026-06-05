@@ -87,6 +87,8 @@ almanac harden <target> --fix
 almanac harden <target> --loop [--rounds N]
                              Run the convergence loop until converged or budget hit
                              (HITL checkpoint each round: ship / continue / steer)
+                             (git target: each round commits its changes — set
+                             HARDEN_AUTOCOMMIT=0 to leave fixes uncommitted)
 almanac harden <target> --watch
                              Redraw the live supervision dashboard for the latest run
 almanac harden <target> --watch-worker <lens>

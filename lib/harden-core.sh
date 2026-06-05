@@ -1484,14 +1484,58 @@ almanac_harden_hitl_checkpoint() {
   esac
 }
 
+# Commit this round's changes (fixer edits, regenerated tests, findings ledger,
+# rubric appends) in the target repo so each round leaves a reviewable checkpoint.
+# "Commit every round" is intentional: round N+1 may revise round N's fixes, so
+# these per-round commits are the audit trail of what each round changed — the
+# feedback verdict does NOT gate the commit (a still-red round is still committed).
+# Excludes the .almanac/ runtime registry (run state, worker dirs, events) so the
+# target repo's history stays code + contract, not loop plumbing. No-ops when $root
+# is not a git work tree, the round changed nothing outside .almanac/, or
+# HARDEN_AUTOCOMMIT is disabled. A commit failure (e.g. no git identity) leaves the
+# changes in the working tree and warns rather than aborting the loop.
+#
+# Stages the WHOLE work tree (minus .almanac/), so start a harden run from a clean
+# tree — any pre-existing uncommitted change is swept into the round's commit.
+almanac_harden_commit_round() {
+  local root="$1"
+  local target="$2"
+  local round="${3:-1}"
+  local slug
+
+  case "${HARDEN_AUTOCOMMIT:-1}" in
+    0|no|false|off) return 0 ;;
+  esac
+
+  git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+
+  git -C "$root" add -A >/dev/null 2>&1 || return 0
+  # Never commit harden's own runtime registry into the target repo.
+  git -C "$root" reset -q -- .almanac >/dev/null 2>&1 || true
+  if git -C "$root" diff --cached --quiet 2>/dev/null; then
+    return 0   # nothing outside .almanac/ changed this round
+  fi
+
+  slug="$(almanac_harden_slug "$target")"
+  if git -C "$root" commit -q \
+       -m "harden(${slug}): round ${round} fixes" \
+       -m "Automated harden-loop checkpoint for target: ${target}" >/dev/null 2>&1; then
+    _info "Committed round ${round} changes: harden(${slug}): round ${round} fixes"
+  else
+    _warn "Could not commit round ${round} changes — left in the working tree (is git user.name/email configured?)."
+  fi
+}
+
 # Run one hardening round over the target: fan out reviewers -> ratify their
 # findings by execution -> fix the blocking findings -> run the project feedback
-# loops. The round's exit code is the feedback verdict (0 = all loops green) so
-# the loop can fold it into the acceptance signal. A fixer failure is reported but
-# does not abort the round — the next round's reviewers re-surface anything still
-# broken. An optional steer directive (4th arg) is threaded into both the reviewer
-# fan-out and the fixer, so a mid-run redirect reaches the agents. The per-round
-# kill-list + verdict are reported by almanac_harden_run.
+# loops -> commit the round's changes. The round's exit code is the feedback
+# verdict (0 = all loops green) so the loop can fold it into the acceptance signal.
+# A fixer failure is reported but does not abort the round — the next round's
+# reviewers re-surface anything still broken. An optional steer directive (4th arg)
+# is threaded into both the reviewer fan-out and the fixer, so a mid-run redirect
+# reaches the agents. The per-round kill-list + verdict are reported by
+# almanac_harden_run. The commit is last (after feedback) so it captures the full
+# round's tree, and is unconditional on the verdict per "commit every round".
 almanac_harden_round() {
   local root="$1"
   local target="$2"
@@ -1508,6 +1552,7 @@ almanac_harden_round() {
 
   rc=0
   almanac_harden_report_feedback "$root" || rc=$?
+  almanac_harden_commit_round "$root" "$target" "$round"
   return "$rc"
 }
 
