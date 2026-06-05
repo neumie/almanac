@@ -16,13 +16,34 @@
 # carrying both the command and its description — no parallel case-statement to
 # keep in sync. Private — public surface is almanac_loop_feedback_commands +
 # _markdown derived below.
+# True when package.json defines the given npm script. Gates the npm feedback
+# loops so a project that has a package.json but no `typecheck` (or `test`/`lint`)
+# script does NOT get `npm run typecheck` run against it — a missing script makes
+# `npm run X` exit with "Missing script", a phantom FAIL that can never go green
+# and so silently jams the harden convergence gate (acceptance is never met even
+# when the code is perfect). Parses with node, reading fresh each call (never
+# `require`, which would cache a stale package.json across rounds). Any repo with a
+# package.json is a node project, so node is normally present; if it is absent we
+# cannot run `npm run` anyway, so fall back to assuming the script exists rather
+# than silently dropping the loop (preserves the prior behavior).
+_almanac_loop_npm_has_script() {
+  local pkg="$1" name="$2"
+  [ -f "$pkg" ] || return 1
+  command -v node >/dev/null 2>&1 || return 0
+  node -e 'const fs=require("fs");let s={};try{s=(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).scripts)||{}}catch(e){process.exit(1)}process.exit(Object.prototype.hasOwnProperty.call(s,process.argv[2])?0:1)' \
+    "$pkg" "$name" 2>/dev/null
+}
+
 _almanac_loop_feedback_rows() {
   local root="${1:-.}"
 
   if [ -f "$root/package.json" ]; then
-    printf '%s\t%s\n' "npm run test"      "run npm tests"
-    printf '%s\t%s\n' "npm run typecheck" "run TypeScript type checks"
-    printf '%s\t%s\n' "npm run lint"      "run lint checks"
+    _almanac_loop_npm_has_script "$root/package.json" test \
+      && printf '%s\t%s\n' "npm run test"      "run npm tests"
+    _almanac_loop_npm_has_script "$root/package.json" typecheck \
+      && printf '%s\t%s\n' "npm run typecheck" "run TypeScript type checks"
+    _almanac_loop_npm_has_script "$root/package.json" lint \
+      && printf '%s\t%s\n' "npm run lint"      "run lint checks"
   fi
 
   if [ -f "$root/Makefile" ]; then

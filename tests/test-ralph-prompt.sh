@@ -55,7 +55,9 @@ test_generates_prompt_with_shared_feedback_commands() {
 
   mkdir -p "$tmp/docs/plans/demo" "$tmp/tests"
   printf '%s\n' '# Demo PRD' > "$tmp/docs/plans/demo/prd.md"
-  touch "$tmp/package.json"
+  # Define the npm `test` script so the shared detector emits it (a package.json
+  # without the script is no longer assumed to have it — see lib/feedback.sh).
+  printf '%s\n' '{"scripts":{"test":"node --test"}}' > "$tmp/package.json"
   touch "$tmp/tests/test-skills.sh"
   touch "$tmp/tests/test-structure.sh"
 

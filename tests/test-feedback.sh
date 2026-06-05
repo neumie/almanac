@@ -62,7 +62,9 @@ test_detects_project_marker_commands() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  touch "$tmp/package.json"
+  # package.json must define the npm scripts to emit them (a missing script is no
+  # longer run — see test_npm_feedback_skips_undefined_scripts).
+  printf '%s\n' '{"scripts":{"test":"x","typecheck":"tsc --noEmit","lint":"eslint ."}}' > "$tmp/package.json"
   touch "$tmp/Makefile"
   touch "$tmp/Cargo.toml"
   touch "$tmp/go.mod"
@@ -86,6 +88,29 @@ EOF
 
   assert_eq "$expected" "$actual" "marker files should map to feedback commands"
   echo "  PASS: detects project marker commands"
+}
+
+# Regression: a package.json that omits a feedback script must NOT emit it — else
+# `npm run <missing>` exits "Missing script" every round, a phantom FAIL that jams
+# the harden convergence gate. Only the scripts that actually exist are run.
+test_npm_feedback_skips_undefined_scripts() {
+  local tmp expected actual
+  command -v node >/dev/null 2>&1 || { echo "  SKIP: node absent (gate falls back to emit-all)"; return 0; }
+  new_tmpdir
+  tmp="$NEW_TMPDIR"
+
+  # Has `lint` + `test`, but NO `typecheck` (mirrors a real biome/tsc-build repo).
+  printf '%s\n' '{"scripts":{"test":"node --test","lint":"biome lint .","build":"tsc --build"}}' > "$tmp/package.json"
+
+  expected=$(cat <<'EOF'
+npm run test
+npm run lint
+EOF
+)
+  actual="$(almanac_loop_feedback_commands "$tmp")"
+
+  assert_eq "$expected" "$actual" "only npm scripts defined in package.json should be emitted"
+  echo "  PASS: npm feedback skips scripts not defined in package.json"
 }
 
 test_dedupes_python_markers() {
@@ -179,6 +204,7 @@ test_feedback_run_passes_when_all_green() {
 }
 
 test_detects_project_marker_commands
+test_npm_feedback_skips_undefined_scripts
 test_dedupes_python_markers
 test_detects_repo_test_scripts
 test_no_markers_yields_no_commands
