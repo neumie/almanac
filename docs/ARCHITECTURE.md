@@ -30,6 +30,10 @@ Full local plugin:
 ### `providers/{opencode,cursor,codex}/`
 Setup stubs with symlink instructions for each provider's skill discovery path. Codex also has a first-class installer that links skill directories into `~/.agents/skills/almanac/<name>` for `$skill` invocation and `/skills` browsing.
 
+### Agent instruction files (`AGENTS.md` / `CLAUDE.md`)
+
+In-repo guidance follows the `agents-md-map` convention: `AGENTS.md` is the canonical file, `CLAUDE.md` a symlink to it (`ln -s AGENTS.md CLAUDE.md`). The repo **root** carries project-wide rules; **`lib/AGENTS.md`** points agents at the non-auto-loading `CONTEXT.md` domain model and the loop-engine seam rules (adapters are added as files, never central `case` branches). Separately, **`providers/_shared/AGENTS.md`** is the *distributable* global-config payload the installer links to `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` — a shipped artifact, not navigation guidance, so it never gets a `CLAUDE.md` sibling.
+
 ## CLI (`bin/almanac`)
 
 Dispatcher pattern: `bin/almanac` resolves `ALMANAC_HOME`, sources `lib/core.sh`, routes to `cmd/<command>.sh`. Commands: install, uninstall, list, update, sync, ralph, harden, converge, hub, doctor, help. **Bare `almanac` is TTY-gated**: run interactively (stdin *and* stdout are TTYs) it opens the interactive hub (`cmd/hub.sh`); piped or non-interactive it prints help, so scripts that call bare `almanac` keep working and never block on a menu.

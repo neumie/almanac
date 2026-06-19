@@ -64,6 +64,8 @@ check "lib/feedback.sh"
 check "lib/loop-launcher.sh"
 check "lib/harden-core.sh"
 check "lib/converge-core.sh"
+check "lib/AGENTS.md"
+check "lib/CLAUDE.md"
 
 # Claude Code adapter
 check "providers/claude-code/.claude-plugin/plugin.json"
@@ -106,6 +108,7 @@ check "docs/CONTRIBUTING.md"
 
 # Root files
 check "CLAUDE.md"
+check "AGENTS.md"
 check "README.md"
 check "LICENSE"
 check ".gitignore"

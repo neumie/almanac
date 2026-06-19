@@ -31,7 +31,7 @@ if [[ -d "$COMMANDS_DIR" ]]; then
   done
 
   # Sync global CLAUDE.md (only if already ours or missing)
-  local_claude_md="$ALMANAC_ROOT/providers/claude-code/CLAUDE.md"
+  local_claude_md="$ALMANAC_ROOT/providers/_shared/AGENTS.md"  # canonical global-config source (same file cmd/install.sh symlinks)
   claude_target="$HOME/.claude/CLAUDE.md"
   if [[ -f "$local_claude_md" ]]; then
     if [[ ! -e "$claude_target" && ! -L "$claude_target" ]]; then
