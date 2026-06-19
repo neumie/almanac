@@ -35,13 +35,63 @@ almanac_loop_ui_has_gum_interactive() {
   return 0
 }
 
+# Usable terminal width (columns), clamped to a sane floor and defaulted to 80
+# when it can't be read (no TTY, no tput). The single source of truth for every
+# width decision in this seam.
+almanac_loop_ui_cols() {
+  local cols
+  cols="$(tput cols 2>/dev/null || printf '%s' 80)"
+  case "$cols" in ''|*[!0-9]*) cols=80 ;; esac
+  [ "$cols" -ge 24 ] || cols=24
+  printf '%s\n' "$cols"
+}
+
+# Clip each stdin line to MAX display columns, appending "…" when it overflows,
+# so a long row stays on ONE line instead of wrapping. This keeps columnar
+# dashboards aligned and the redraw height stable. Char-count is the display
+# width here: the dashboards emit only plain text + width-1 glyphs (no ANSI
+# color, no CJK), and bash counts characters (not bytes) under a UTF-8 locale.
+almanac_loop_ui_fit() {
+  local max="$1" line
+  [ "$max" -ge 1 ] 2>/dev/null || max=1
+  while IFS= read -r line; do
+    if [ "${#line}" -gt "$max" ]; then
+      printf '%s…\n' "${line:0:$((max - 1))}"
+    else
+      printf '%s\n' "$line"
+    fi
+  done
+}
+
 # Style a block of text read from stdin: a rounded gum panel when gum styling is
 # available, otherwise the text passed straight through. Presentation only; the
 # content is identical either way, so the dashboard degrades gracefully and stays
 # assertable.
+#
+# Overflow handling (the reason a long row no longer breaks the layout):
+#  - The gum box is constrained to the terminal width (`--width`). Without it gum
+#    sizes the box to the longest content line, so one long row pushes the box
+#    past the terminal, the terminal wraps the box itself, and the rounded border
+#    is shredded across rows.
+#  - Each line is also clipped to the box's text area (almanac_loop_ui_fit) so
+#    rows stay one-per-line and columns stay aligned instead of wrapping inside
+#    the border.
+# Width math (calibrated against gum 0.17): `--width W` renders a box W+2 columns
+# wide (the rounded border adds 1 each side) whose printable text area is W-2
+# (the "0 1" padding takes 1 each side). So to fill the terminal exactly: pass
+# W = cols-2 (box = cols) and clip text to W-2 = cols-4.
+# Truncation applies only when stdout is a TTY (interactive viewing); piped or
+# captured output (tests, `almanac hub | cat`, scripts) passes through in full so
+# no data is lost and assertions still see complete lines.
 almanac_loop_ui_render() {
   if almanac_loop_ui_has_gum; then
-    gum style --border rounded --padding "0 1" "$(cat)"
+    local cols box text
+    cols="$(almanac_loop_ui_cols)"
+    box=$((cols - 2))
+    text=$((box - 2))
+    almanac_loop_ui_fit "$text" | gum style --border rounded --padding "0 1" --width "$box"
+  elif [ -t 1 ]; then
+    almanac_loop_ui_fit "$(almanac_loop_ui_cols)"
   else
     cat
   fi
