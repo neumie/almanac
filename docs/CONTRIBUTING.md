@@ -35,6 +35,32 @@ Step-by-step instructions for the agent...
 
 When renaming a skill, update dependent `metadata.dependencies` entries plus README and architecture references in the same change.
 
+## Adding a CLI Command
+
+The `almanac` CLI is registry-driven — a command is valid iff `cmd/<name>.sh` exists. There is **no command list to edit**: `bin/almanac` dispatch, `almanac help`, and `tests/test-cli.sh` all derive from `almanac_list_commands` (globs `cmd/*.sh`). To add `almanac foo`:
+
+1. Create `cmd/foo.sh` with the self-describing header (read by `almanac help`):
+
+```bash
+#!/usr/bin/env bash
+# foo.sh — one-line description.
+# summary: What `almanac help` shows for it
+# usage: almanac foo <arg> [--flag]
+# group: loops | providers | maintenance | other
+
+set -euo pipefail
+source "$ALMANAC_HOME/lib/core.sh"
+
+case "${1:-}" in
+  -h|--help) printf '%s\n' "Usage: almanac foo <arg> [--flag]"; exit 0 ;;
+esac
+# … guard required values with `_need_value --flag "$#"`; _die terse on errors …
+```
+
+2. **Contract** (enforced by `bash tests/test-cli.sh`): the three `# summary:`/`# usage:`/`# group:` headers, `set -euo pipefail`, a `lib/` source, and a `-h|--help` arm that prints to stdout and exits 0. Commands are *sourced* into `bin/almanac` (not exec'd) — finish with `exit`, not `return`; `$ALMANAC_HOME` is already exported.
+3. Put heavy logic in `lib/foo-core.sh` (mirror `hub-core.sh`) so the `cmd/` file stays a thin, testable parse+dispatch shim.
+4. Add `cmd/foo.sh` to `tests/test-structure.sh` and run `bash tests/test-cli.sh && bash tests/test-structure.sh`.
+
 ## Adapting an Upstream Skill
 
 When adapting from upstream sources (e.g. [mattpocock/skills](https://github.com/mattpocock/skills), [contember/agent-canvas](https://github.com/contember/agent-canvas)):

@@ -13,23 +13,30 @@ source "$ALMANAC_HOME/lib/core.sh"
 COMMAND="${1:-}"
 [[ -n "$COMMAND" ]] && shift
 
-case "$COMMAND" in
-  install|uninstall|update|list|sync|ralph|harden|converge|hub|doctor|help)
-    source "$ALMANAC_HOME/cmd/${COMMAND}.sh"
-    ;;
-  "")
-    # Bare `almanac`: open the interactive hub when run in a TTY; otherwise
-    # (piped / non-interactive) print help so scripts that call bare almanac
-    # don't break and never block on a menu.
-    if [ -t 0 ] && [ -t 1 ]; then
-      source "$ALMANAC_HOME/cmd/hub.sh"
-    else
-      source "$ALMANAC_HOME/cmd/help.sh"
-    fi
-    ;;
-  *)
-    _error "Unknown command: $COMMAND"
+# Dispatch is registry-driven: a command is valid iff cmd/<name>.sh exists (see
+# almanac_list_commands in lib/core.sh). Adding a command is one new file — no
+# edit here, in help, or in the docs. The name is guarded to a safe shape before
+# it touches the filesystem so a command can never path-traverse out of cmd/.
+#
+# Contract for cmd/*.sh: they are SOURCED into this process (not exec'd), so they
+# run under this file's `set -euo pipefail`, use `exit` (not `return`) to finish,
+# and may assume $ALMANAC_HOME is exported. Each still sources lib/core.sh and
+# sets its own strict mode so it is self-describing and testable in isolation.
+if [[ -z "$COMMAND" ]]; then
+  # Bare `almanac`: open the interactive hub on a TTY; otherwise (piped /
+  # non-interactive) print help so scripts calling bare almanac never block.
+  if [ -t 0 ] && [ -t 1 ]; then
+    source "$ALMANAC_HOME/cmd/hub.sh"
+  else
     source "$ALMANAC_HOME/cmd/help.sh"
-    exit 1
-    ;;
-esac
+  fi
+elif [[ "$COMMAND" == "-h" || "$COMMAND" == "--help" ]]; then
+  # Top-level help flag is an alias for `almanac help` (stdout, exit 0).
+  source "$ALMANAC_HOME/cmd/help.sh"
+elif [[ "$COMMAND" =~ ^[a-z][a-z-]*$ && -f "$ALMANAC_HOME/cmd/$COMMAND.sh" ]]; then
+  source "$ALMANAC_HOME/cmd/$COMMAND.sh"
+else
+  _error "Unknown command: $COMMAND"
+  source "$ALMANAC_HOME/cmd/help.sh" >&2
+  exit 1
+fi

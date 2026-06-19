@@ -1,27 +1,40 @@
 #!/usr/bin/env bash
-# help.sh — Show almanac CLI usage
+# help.sh — Show almanac CLI usage, generated from the command registry.
+# summary: Show this help
+# usage: almanac help
+# group: other
+#
+# Nothing here hard-codes the command list: it walks almanac_list_commands and
+# reads each command's self-declared `# summary:` and `# group:` header, so the
+# printed help can never drift from cmd/. For full per-command detail and flags,
+# `almanac <command> --help`.
 
-echo -e "${_BOLD}almanac${_RESET} — agent toolkit CLI"
-echo ""
-echo "Usage: almanac <command> [args]"
-echo ""
-echo "Commands:"
-echo "  (no command)           Open the interactive loop hub (in a TTY); else this help"
-echo "  hub                    Open the interactive loop hub (list/watch/launch loops)"
-echo "  install <provider>     Install almanac for a provider (e.g. claude-code)"
-echo "  uninstall <provider>   Remove almanac from a provider"
-echo "  list                   List available providers"
-echo "  ralph                  Launch the interactive Ralph loop CLI"
-echo "  harden <target>        Fan out read-only reviewers (one per lens), aggregate findings"
-echo "  harden <target> --goal Draft a harden-loop rubric for a target"
-echo "  harden <target> --fix  Run one sequential fixer over open blocking findings + feedback loops"
-echo "  harden <target> --loop Run the convergence loop (rounds) until converged or budget hit"
-echo "                         (HITL checkpoint each round: ship / continue / steer)"
-echo "  harden <target> --watch  Redraw the live supervision dashboard for the latest run"
-echo "  harden <target> --watch-worker <lens>  Stream one reviewer's live event log"
-echo "  converge --goal <goal> (--prompt <text>|--exec <cmd>) [--rounds N]"
-echo "                         Run a generic convergence loop"
-echo "  update                 Update almanac (git pull)"
-echo "  sync                   Check adapted skills for upstream changes"
-echo "  doctor                 Report optional-dependency status (gum, gh, jq)"
-echo "  help                   Show this help"
+set -euo pipefail
+source "$ALMANAC_HOME/lib/core.sh"
+
+# Print every command tagged with GROUP under LABEL, aligned. Silent if the
+# group is empty, so the section only appears when it has members.
+_help_print_group() {
+  local want="$1" label="$2" name group summary shown=0
+  while IFS= read -r name; do
+    group="$(almanac_command_meta "$name" group || true)"
+    [ "${group:-other}" = "$want" ] || continue
+    [ "$shown" -eq 0 ] && { printf '%s\n' "$label"; shown=1; }
+    summary="$(almanac_command_meta "$name" summary || true)"
+    printf '  %-24s %s\n' "$name" "$summary"
+  done < <(almanac_list_commands)
+  [ "$shown" -eq 1 ] && printf '\n'
+  return 0
+}
+
+_heading "almanac — agent toolkit CLI"
+printf '\n'
+printf 'Usage: almanac <command> [args]\n'
+printf "Run 'almanac <command> --help' for details and flags on any command.\n\n"
+printf '  %-24s %s\n\n' "(no command)" "Open the loop hub on a TTY; else print this help"
+
+# Section order is curated; the members of each section are not.
+_help_print_group loops       "Loops:"
+_help_print_group providers   "Providers:"
+_help_print_group maintenance "Maintenance:"
+_help_print_group other       "Other:"

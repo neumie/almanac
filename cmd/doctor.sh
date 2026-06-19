@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
-# doctor.sh — Report almanac's optional-dependency status
+# doctor.sh — Report almanac's optional-dependency status.
+# summary: Report optional-dependency status (gum, gh, jq)
+# usage: almanac doctor
+# group: maintenance
 
+set -euo pipefail
 source "$ALMANAC_HOME/lib/core.sh"
 
-echo -e "${_BOLD}almanac doctor${_RESET} — environment check"
-echo ""
+case "${1:-}" in
+  -h|--help) printf '%s\n' "Usage: almanac doctor"; exit 0 ;;
+  "")        ;;
+  *)         _die "Unknown doctor option: $1" ;;
+esac
+
+_heading "almanac doctor — environment check"
+printf '\n'
 
 # gum (Charm) — optional, styles loop dashboards + HITL prompts.
 # Absent is fine: the CLI degrades to plain output (near-zero-dependency promise).

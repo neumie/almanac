@@ -19,6 +19,25 @@ _warn()    { echo -e "${_YELLOW}[warn]${_RESET} $*"; }
 _error()   { echo -e "${_RED}[error]${_RESET} $*" >&2; }
 _die()     { _error "$@"; exit 1; }
 
+# Bold section heading for human-facing listings (help, doctor, list). Use this
+# instead of `echo -e "${_BOLD}…${_RESET}"`; colors auto-disable off a TTY (see
+# the color block above) so piped/captured output stays clean.
+_heading() { printf '%b\n' "${_BOLD}$*${_RESET}"; }
+
+# --- Arg parsing: required-value guard -------------------------------------
+# DRY replacement for the repeated `shift; [ $# -gt 0 ] || _die …` dance in the
+# cmd/*.sh option loops. Call it the moment a `--flag VALUE` option matches,
+# BEFORE shifting, passing the loop's current arg count ($#) — which still
+# includes the flag, so a present value means count >= 2. _die runs in the
+# current shell (never a subshell), so its exit actually aborts the command:
+#   --goal) _need_value --goal "$#"; GOAL="$2"; shift 2 ;;
+# It does not reject values that begin with '-' — free-text flags (--prompt,
+# --goal) legitimately take leading-dash values; that is the parser's job.
+_need_value() {
+  local flag="$1" remaining="${2:-0}"
+  [ "$remaining" -ge 2 ] || _die "Missing value for $flag"
+}
+
 # --- ALMANAC_HOME resolution -----------------------------------------------
 # Canonical resolver and single source of truth for locating the real repo root
 # from an entry point. Prefer an already-exported ALMANAC_HOME; otherwise resolve
@@ -85,6 +104,35 @@ almanac_providers() {
     [[ "$provider" == _* ]] && continue
     printf '%s\n' "$provider"
   done
+}
+
+# --- Command registry ------------------------------------------------------
+# The CLI command set is the set of files in cmd/ — single source of truth for
+# dispatch (bin/almanac), help generation (cmd/help.sh), and the CLI tests.
+# Mirrors almanac_providers globbing providers/: adding a command is one new
+# file in cmd/, no edits to the dispatcher or help text. One name per line,
+# alphabetical (glob order).
+almanac_list_commands() {
+  local f name
+  for f in "$ALMANAC_HOME"/cmd/*.sh; do
+    [[ -f "$f" ]] || continue
+    name="$(basename "$f" .sh)"
+    printf '%s\n' "$name"
+  done
+}
+
+# Read one metadata field from a command file's self-describing header. Each
+# cmd/<name>.sh declares `# summary:`, `# usage:`, and `# group:` comment lines
+# near the top; help generation and tests read them so the printed help can
+# never drift from the actual command. Echoes the first match (empty if absent).
+almanac_command_meta() {
+  # Split the dependent assignment: bash 3.2 (macOS stock) evaluates every RHS in
+  # a single `local` before binding any name, so `$name` in a combined
+  # `local name=… file=…$name…` would resolve to the *caller's* name, not "$1".
+  local name="$1" field="$2"
+  local file="$ALMANAC_HOME/cmd/$name.sh"
+  [[ -f "$file" ]] || return 1
+  sed -n "s/^# ${field}:[[:space:]]*//p" "$file" | head -1
 }
 
 # Optional-dependency detection. `gum` (Charm) styles loop

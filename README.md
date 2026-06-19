@@ -69,46 +69,19 @@ almanac install codex                        # same, for ~/.codex/AGENTS.md
 
 ## CLI
 
-```
-almanac                      Open the interactive loop hub (in a TTY); else print help
-almanac hub                  Open the interactive loop hub (launch / list / watch loops)
-almanac hub --new <type>     Launch a new ralph|harden|converge run (add --dry-run to preview)
-almanac install <provider>   Install for a provider
-almanac uninstall <provider> Remove from a provider
-almanac list                 List available providers and install status
-almanac ralph                Launch the interactive Ralph loop CLI
-almanac harden <target>      Fan out read-only reviewers (one per lens) and aggregate findings
-                             (lens set via HARDEN_LENSES; default: correctness security perf edge-cases contracts)
-                             <target> is free-form: a path, a PR ref ("PR 47"), or a description —
-                             reviewers locate the code themselves (no filesystem check)
-almanac harden <target> --goal "<goal>"
-                             Draft a harden-loop rubric for a target
-almanac harden <target> --approve
-                             Approve an edited harden-loop rubric
-almanac harden <target> --fix
-                             Run one sequential fixer over open blocking findings + feedback loops
-almanac harden <target> --loop [--rounds N]
-                             Run the convergence loop until converged or budget hit
-                             (HITL checkpoint each round: ship / continue / steer)
-                             (git target: each round commits its changes — set
-                             HARDEN_AUTOCOMMIT=0 to leave fixes uncommitted)
-almanac harden <target> --watch
-                             Redraw the live supervision dashboard for the latest run
-almanac harden <target> --watch-worker <lens>
-                             Stream one reviewer's live event log
-almanac converge --goal "<goal>" --prompt "<text>" [--rounds N]
-                             Run a generic convergence loop with one agent prompt per round
-almanac converge --goal "<goal>" --exec "<cmd>" [--rounds N]
-                             Run a generic convergence loop with one custom exec per round
-almanac converge <slug>      Print a converge run status summary
-almanac converge <slug> --watch
-                             Redraw the live converge dashboard
-almanac converge <slug> --stop
-                             Request a graceful stop at the next round boundary
-almanac update               Update almanac (git pull + re-install)
-almanac sync                 Check adapted skills for upstream changes
-almanac doctor               Report optional-dependency status (gum, gh, jq)
-almanac help                 Show help
+`almanac help` lists every command and `almanac <command> --help` shows its flags. Dispatch and help are registry-driven (one file per command under `cmd/`), so the listing never drifts from what's installed.
+
+- **Loops** — `ralph`, `harden`, `converge`, and `hub` (the interactive front door: list / watch / launch loops)
+- **Providers** — `install`, `uninstall`, `list`
+- **Maintenance** — `update`, `sync`, `doctor`
+
+```bash
+almanac                                     # loop hub on a TTY, else this help
+almanac harden <target>                     # fan out reviewers; --loop to converge, --watch to supervise
+almanac harden <target> --help              # full flag list (--goal/--approve/--fix/--loop/…)
+almanac converge --goal "…" --prompt "…"    # generic convergence loop (--exec for a shell command)
+almanac hub --new <ralph|harden|converge>   # launch a run (add --dry-run to preview)
+almanac install claude-code                 # install skills for an agent
 ```
 
 ### Loop examples

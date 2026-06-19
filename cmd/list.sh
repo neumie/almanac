@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
-# list.sh — List available providers
+# list.sh — List available providers and their install status.
+# summary: List available providers + install status
+# usage: almanac list
+# group: providers
 
+set -euo pipefail
 source "$ALMANAC_HOME/lib/core.sh"
 
-echo "Available providers:"
-for provider in $(almanac_providers); do
+case "${1:-}" in
+  -h|--help) printf '%s\n' "Usage: almanac list"; exit 0 ;;
+  "")        ;;
+  *)         _die "Unknown list option: $1" ;;
+esac
+
+_heading "Available providers"
+while IFS= read -r provider; do
   if _is_installed "$provider"; then
-    echo -e "  ${_GREEN}$provider${_RESET}  (installed)"
+    printf '  %b%s%b  (installed)\n' "$_GREEN" "$provider" "$_RESET"
   else
-    echo "  $provider"
+    printf '  %s\n' "$provider"
   fi
-done
+done < <(almanac_providers)

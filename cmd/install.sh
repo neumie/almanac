@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-# install.sh — Install almanac for a specific provider
+# install.sh — Install almanac for a specific provider.
+# summary: Install almanac for a provider (e.g. claude-code)
+# usage: almanac install <provider> [--global-config]
+# group: providers
 
+set -euo pipefail
+source "$ALMANAC_HOME/lib/core.sh"
 source "$ALMANAC_HOME/lib/almanac-core.sh"
 
 _install_claude_code() {
@@ -92,7 +97,7 @@ _install_symlink() {
   local readme="$ALMANAC_HOME/providers/$provider/README.md"
   if [[ -f "$readme" ]]; then
     _info "Follow the setup instructions:"
-    echo ""
+    printf '\n'
     cat "$readme"
   else
     _warn "No setup instructions for $provider"
@@ -185,13 +190,17 @@ GLOBAL_CONFIG=false
 PROVIDER=""
 for arg in "$@"; do
   case "$arg" in
+    -h|--help) printf '%s\n' "Usage: almanac install <provider> [--global-config]"; exit 0 ;;
     --global-config) GLOBAL_CONFIG=true ;;
-    -*) _die "Unknown flag: $arg" ;;
-    *) PROVIDER="$arg" ;;
+    -*) _die "Unknown install option: $arg" ;;
+    *)
+      [[ -z "$PROVIDER" ]] || _die "Unexpected argument: $arg (one provider at a time)"
+      PROVIDER="$arg"
+      ;;
   esac
 done
 
-[[ -z "$PROVIDER" ]] && _die "Usage: almanac install <provider> [--global-config]"
+[[ -n "$PROVIDER" ]] || _die "Usage: almanac install <provider> [--global-config]"
 
 PROVIDER_DIR="$ALMANAC_HOME/providers/$PROVIDER"
 [[ -d "$PROVIDER_DIR" ]] || _die "Unknown provider: $PROVIDER (run 'almanac list')"

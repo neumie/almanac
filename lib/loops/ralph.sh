@@ -192,17 +192,20 @@ almanac_loop_ralph_launch_backed() {
 }
 
 # --help text for `almanac ralph` / `almanac_loop_launch ralph`. Stays inside
-# the adapter so adding a loop is a one-file change.
+# the adapter so adding a loop is a one-file change. Prints to stdout: this is
+# only reached on the explicit --help path (the launch verb returns 0 right
+# after), so it is a requested output, not run noise.
 almanac_loop_ralph_launch_usage() {
-  cat >&2 <<'EOF'
+  cat <<'EOF'
 Usage: almanac ralph [options]   (also: bash ralph.sh [options])
-  --prd <name>        PRD under docs/plans/<name>/
-  --mode <once|afk>   one iteration, or autonomous
-  --provider <p>      codex | claude
-  --model <m>         model name ("default" = provider default)
-  --effort <l>        thinking level ("default" = provider default)
-  --iterations <n>    afk iteration count
-  --no-oversee        disable the afk overseer
+  --prd <name>          PRD under docs/plans/<name>/
+  --mode <once|afk>     one iteration, or autonomous
+  --provider <p>        codex | claude
+  --model <m>           model name ("default" = provider default)
+  --effort|--thinking <l>  thinking level ("default" = provider default)
+  --iterations <n>      afk iteration count
+  --no-oversee          disable the afk overseer
+  --yes, -y             skip the confirm prompt (launch immediately)
 Any option not given is prompted interactively.
 EOF
 }

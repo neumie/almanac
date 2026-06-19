@@ -1,11 +1,25 @@
 #!/usr/bin/env bash
-# sync.sh — Check adapted skills for upstream changes
+# sync.sh — Check adapted skills for upstream changes.
+# summary: Check adapted skills for upstream changes
+# usage: almanac sync [--diff]
+# group: maintenance
+#
+# Exit status is actionable: 0 = all tracked skills up to date, 1 = at least one
+# upstream changed (run with --diff for links/SHAs), 2 = a fetch error occurred.
 
+set -euo pipefail
 source "$ALMANAC_HOME/lib/core.sh"
 source "$ALMANAC_HOME/lib/almanac-core.sh"
 
 SHOW_DIFF=false
-[ "${1:-}" = "--diff" ] && SHOW_DIFF=true
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -h|--help) printf '%s\n' "Usage: almanac sync [--diff]"; exit 0 ;;
+    --diff)    SHOW_DIFF=true ;;
+    *)         _die "Unknown sync option: $1" ;;
+  esac
+  shift
+done
 
 # Fetch SHA of a file from GitHub.
 # Emits ONLY a valid 40-char git blob SHA. On 404 / rate-limit, `gh api` prints
@@ -86,9 +100,18 @@ done < <(almanac_list_skills)
 
 if [ "$found" -eq 0 ]; then
   _info "No skills with upstream tracking found"
-else
-  _info "Results: $found tracked, $up_to_date up to date, $changed changed, $unbaselined unbaselined, $errors errors"
-  if [ "$changed" -gt 0 ] && [ "$SHOW_DIFF" = false ]; then
-    _warn "Run 'almanac sync --diff' to see details"
-  fi
+  exit 0
 fi
+
+_info "Results: $found tracked, $up_to_date up to date, $changed changed, $unbaselined unbaselined, $errors errors"
+if [ "$changed" -gt 0 ] && [ "$SHOW_DIFF" = false ]; then
+  _warn "Run 'almanac sync --diff' to see details"
+fi
+
+# Actionable exit status (see header): fetch errors dominate, then drift.
+if [ "$errors" -gt 0 ]; then
+  exit 2
+elif [ "$changed" -gt 0 ]; then
+  exit 1
+fi
+exit 0
