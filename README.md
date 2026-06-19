@@ -19,6 +19,9 @@ Skills are organized by category in the repo (`skills/git/`, `skills/productivit
 | `ralph-loop` | Build a PRD slice queue task-by-task, with each iteration committed. |
 | `harden-loop` | Harden one target through reviewers, ratification, fixer, and feedback gates. |
 | `converge-loop` | Repeat one custom exec command toward a mutable `goal.md` until an overseer says done. |
+| `codebase-design` | Shared vocabulary for deep modules, interfaces, seams, adapters, and testability. |
+| `domain-model` | Maintain `CONTEXT.md` domain language and ADRs while design decisions crystallize. |
+| `prototype-build` | Build throwaway logic or UI prototypes to answer design questions before production code. |
 
 ## Install
 
@@ -143,19 +146,33 @@ skills/
       SKILL.md
     ralph-loop/
       SKILL.md
+  other/
+    codebase-design/
+      SKILL.md
+      references/
+    domain-model/
+      SKILL.md
+      references/
+    prototype-build/
+      SKILL.md
+      references/
 ```
 
 ### Upstream sync
 
-Seven skills are adapted from upstream repositories:
+Eleven skills are adapted from upstream repositories:
 
 | Skill | Upstream |
 |-------|----------|
+| codebase-design | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | codebase-improve | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | diagnose | [mattpocock/skills](https://github.com/mattpocock/skills) |
+| domain-model | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | grill-me | [mattpocock/skills](https://github.com/mattpocock/skills) |
-| grill-plan | [mattpocock/skills](https://github.com/mattpocock/skills) |
+| grill-with-docs | [mattpocock/skills](https://github.com/mattpocock/skills) |
+| grilling | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | issues-create | [mattpocock/skills](https://github.com/mattpocock/skills) |
+| prototype-build | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | prd-create | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | tdd | [mattpocock/skills](https://github.com/mattpocock/skills) |
 
@@ -163,7 +180,7 @@ Run `almanac sync` to check for updates.
 
 ## Adding a skill
 
-1. Create `skills/<name>/SKILL.md` with YAML frontmatter
+1. Create `skills/<category>/<name>/SKILL.md` with YAML frontmatter
 2. Use `noun-verb` naming (e.g. `pr-create`, `ci-fix`) — lowercase, hyphens only
 3. Description starts with "Use when..."
 4. Run `bash tests/test-skills.sh` to validate

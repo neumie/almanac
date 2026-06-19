@@ -2,9 +2,11 @@
 name: tdd
 description: "Use when writing code test-first via red-green-refactor. Vertical-slice TDD: one failing test, then minimal code to pass. Triggers: TDD, test-first, red-green-refactor."
 metadata:
+  dependencies:
+    - codebase-design
   upstream: mattpocock/skills/skills/engineering/tdd
-  upstream-sha: 7a989411eb3c4d0879cb33b2d7d05831add27b84
-  adapted-date: "2026-05-25"
+  upstream-sha: 1ce5d21249e255bc4472ffaa577aff810f5459ab
+  adapted-date: "2026-06-19"
 ---
 
 # Test-Driven Development
@@ -54,8 +56,8 @@ Before writing any code:
 
 - [ ] Confirm with user what interface changes are needed
 - [ ] Confirm with user which behaviors to test (prioritize)
-- [ ] Identify opportunities for deep modules — see `~/.claude/skills/almanac/tdd/references/deep-modules.md`
-- [ ] Design interfaces for testability — see `~/.claude/skills/almanac/tdd/references/interface-design.md`
+- [ ] Identify opportunities for deep modules — follow the `codebase-design` skill
+- [ ] Design interfaces for testability — follow the `codebase-design` skill
 - [ ] List the behaviors to test (not implementation steps)
 - [ ] Get user approval on the plan
 

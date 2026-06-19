@@ -3,14 +3,16 @@ name: grill-me
 description: Use when stress-testing a plan, design, or architecture through relentless questioning. Walks each branch of the decision tree, writes crystallized decisions to docs/plans/<name>/brief.md.
 disable-model-invocation: true
 metadata:
+  dependencies:
+    - grilling
   upstream: mattpocock/skills/skills/productivity/grill-me
-  upstream-sha: bd04394c675ee54173a093c50eb74da01a2940fa
-  adapted-date: "2026-05-25"
+  upstream-sha: 9470cfcfe231a35e46494cddbacdd395991afb1e
+  adapted-date: "2026-06-19"
 ---
 
 # Grill Me
 
-Interview the user relentlessly about every aspect of their plan until reaching shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one.
+Use the `grilling` skill for the interview loop. This wrapper adds feature-name detection and persistent `docs/plans/<name>/brief.md` capture.
 
 ## Setup
 
@@ -46,17 +48,11 @@ Create the directory before the first write:
 mkdir -p docs/plans/<name>
 ```
 
-## Rules
+## Interview
 
-- For each question, provide your recommended answer
-- If a question can be answered by exploring the codebase, explore the codebase instead of asking
-- Don't accept vague answers — push for specifics
-- Track which branches of the decision tree are resolved vs. open
-- Ask one question at a time, wait for the answer before continuing
+Follow the `grilling` skill. After each decision is resolved, update `docs/plans/<name>/brief.md` immediately. Don't batch — capture as you go.
 
 ## Writing the Brief
-
-After each decision is resolved, update `docs/plans/<name>/brief.md` immediately. Don't batch — capture as you go.
 
 Use the format in `~/.claude/skills/almanac/grill-me/references/brief-format.md`.
 

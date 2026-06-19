@@ -3,9 +3,11 @@ name: prd-create
 description: Use when turning a conversation or idea into docs/plans/<name>/prd.md. Synthesizes existing context into user stories, module design, testing decisions. Do NOT interview — just synthesize.
 disable-model-invocation: true
 metadata:
+  dependencies:
+    - codebase-design
   upstream: mattpocock/skills/skills/engineering/to-prd
-  upstream-sha: 47a01d4e63cb4ba5b1ab020fd7efe6ab2a2c1d69
-  adapted-date: "2026-05-25"
+  upstream-sha: e5f11413b09c19f59150dac52125536ccda34e2d
+  adapted-date: "2026-06-19"
 ---
 
 Synthesize the current conversation context and codebase understanding into a PRD. Do NOT interview the user — just synthesize what you already know.
@@ -31,11 +33,11 @@ Then load any existing brief from a previous grilling session:
 cat docs/plans/<name>/brief.md 2>/dev/null || true
 ```
 
-If that brief has content, those are decisions from a grilling session — use them. If `CONTEXT.md` content is present, use its vocabulary throughout the PRD. Also explore the repo to understand the current state of the codebase, if you haven't already.
+If that brief has content, those are decisions from a grilling session — use them. If `CONTEXT.md` content is present, use its vocabulary throughout the PRD. Respect ADRs in the area you're touching. Also explore the repo to understand the current state of the codebase, if you haven't already.
 
-1. Sketch out the major modules you will need to build or modify to complete the implementation. Actively look for opportunities to extract deep modules that can be tested in isolation.
+1. Sketch out the seams where the feature should be tested. Prefer existing seams to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can. Fewer seams are better; one seam is ideal.
 
-A deep module (as opposed to a shallow module) is one which encapsulates a lot of functionality in a simple, testable interface which rarely changes.
+Also sketch the major modules you will need to build or modify to complete the implementation. Follow the `codebase-design` skill for seam, interface, and deep-module vocabulary.
 
 Check with the user that these modules match their expectations. Check with the user which modules they want tests written for.
 
@@ -79,6 +81,8 @@ A list of implementation decisions that were made. This can include:
 - Specific interactions
 
 Do NOT include specific file paths or code snippets. They may end up being outdated very quickly.
+
+Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it within the relevant decision and note briefly that it came from a prototype. Trim to the decision-rich parts — not a working demo.
 
 ## Testing Decisions
 

@@ -7,7 +7,7 @@ Two-layer design: provider-agnostic core + provider-specific adapters.
 ### `skills/`
 The open standard. Each skill is a directory with a `SKILL.md` file following the [Agent Skills Open Standard](https://agentskills.io/specification). Skills are natively discovered by Claude Code, OpenCode, Cursor, Codex, and 25+ compatible agents.
 
-Skills are organized by category — `git/`, `agents-md/`, `loop/`, `comms/`, `other/` — for filesystem hygiene. The category is purely organizational; install-time symlinks flatten everything to `~/.claude/skills/almanac/<name>` because Claude Code's skill discovery only scans direct children of the skills root. Names must be unique across the whole tree (validator enforces).
+Skills are organized by category — `git/`, `agents-md/`, `loop/`, `comms/`, `productivity/`, `other/` — for filesystem hygiene. The category is purely organizational; install-time symlinks flatten everything to `~/.claude/skills/almanac/<name>` because Claude Code's skill discovery only scans direct children of the skills root. Names must be unique across the whole tree (validator enforces).
 
 Skills use progressive disclosure:
 1. **Metadata** (~100 tokens) — name + description, loaded at startup
@@ -16,7 +16,7 @@ Skills use progressive disclosure:
 
 Some skills are adapted from upstream sources ([mattpocock/skills](https://github.com/mattpocock/skills), [contember/agent-canvas](https://github.com/contember/agent-canvas)) and track their upstream via `metadata.upstream-sha` in frontmatter. Run `almanac sync` to check for updates.
 
-Reference material (templates, patterns, guardrails) lives in `skills/*/references/` directories, loaded on demand by the skills that use them.
+Reference material (templates, patterns, guardrails) lives in `skills/<category>/<name>/references/` directories, loaded on demand by the skills that use them. Shared design/domain/interview skills (`codebase-design`, `domain-model`, `grilling`) own reusable vocabulary, decision-record rules, and interview mechanics; consumer skills such as `codebase-improve`, `tdd`, `prd-create`, `grill-me`, and `grill-with-docs` declare `metadata.dependencies` and delegate rather than copying those rules.
 
 ## Layer 2: Adapters (provider-specific)
 

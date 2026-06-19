@@ -2,7 +2,7 @@
 
 ## Adding a Skill
 
-1. Pick a category — `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (PRD/issues/autonomous loops — ralph-loop, harden-loop, converge-loop), `comms/` (client/team-facing comms), or `other/`. Add a new category freely if none fit. Create `skills/<category>/<name>/SKILL.md`:
+1. Pick a category — `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (PRD/issues/autonomous loops — ralph-loop, harden-loop, converge-loop), `comms/` (client/team-facing comms), `productivity/`, or `other/`. Add a new category freely if none fit. Create `skills/<category>/<name>/SKILL.md`:
 
 ```yaml
 ---
@@ -33,6 +33,8 @@ Step-by-step instructions for the agent...
 
 8. **Validate**: `bash tests/test-skills.sh`
 
+When renaming a skill, update dependent `metadata.dependencies` entries plus README and architecture references in the same change.
+
 ## Adapting an Upstream Skill
 
 When adapting from upstream sources (e.g. [mattpocock/skills](https://github.com/mattpocock/skills), [contember/agent-canvas](https://github.com/contember/agent-canvas)):
@@ -51,7 +53,7 @@ metadata:
 
 ## Adding Reference Material
 
-Add reference docs as markdown files in `skills/<name>/references/`. These are loaded on demand when the skill needs them. Keep them focused and actionable.
+Add reference docs as markdown files in `skills/<category>/<name>/references/`. These are loaded on demand when the skill needs them. Keep them focused and actionable.
 
 ## Testing
 

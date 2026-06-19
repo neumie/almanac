@@ -2,35 +2,19 @@
 name: codebase-improve
 description: Use when finding architectural friction in a codebase. Surfaces shallow modules, proposes refactors for testability/AI-navigability, grills the design. Uses CONTEXT.md + ADRs.
 metadata:
+  dependencies:
+    - codebase-design
+    - domain-model
   upstream: mattpocock/skills/skills/engineering/improve-codebase-architecture
-  upstream-sha: c12b263bed311d85cbcedcda7e36867eda541ddc
-  adapted-date: "2026-05-25"
+  upstream-sha: a79b493ea386d537208beacc41ad26336da257eb
+  adapted-date: "2026-06-19"
 ---
 
 # Improve Codebase Architecture
 
-Surface architectural friction and propose **deepening opportunities** — refactors that turn shallow modules into deep ones. The aim is testability and AI-navigability.
+Surface architectural friction and propose **deepening opportunities**: refactors that turn shallow modules into deep ones. The aim is testability and AI-navigability.
 
-## Glossary
-
-Use these terms exactly in every suggestion. Consistent language is the point — don't drift into "component," "service," "API," or "boundary." Full definitions in `~/.claude/skills/almanac/codebase-improve/LANGUAGE.md`.
-
-- **Module** — anything with an interface and an implementation (function, class, package, slice).
-- **Interface** — everything a caller must know to use the module: types, invariants, error modes, ordering, config. Not just the type signature.
-- **Implementation** — the code inside.
-- **Depth** — leverage at the interface: a lot of behaviour behind a small interface. **Deep** = high leverage. **Shallow** = interface nearly as complex as the implementation.
-- **Seam** — where an interface lives; a place behaviour can be altered without editing in place.
-- **Adapter** — a concrete thing satisfying an interface at a seam.
-- **Leverage** — what callers get from depth.
-- **Locality** — what maintainers get from depth: change, bugs, knowledge concentrated in one place.
-
-Key principles (see `~/.claude/skills/almanac/codebase-improve/LANGUAGE.md` for the full list):
-
-- **Deletion test**: imagine deleting the module. If complexity vanishes, it was a pass-through. If complexity reappears across N callers, it was earning its keep.
-- **The interface is the test surface.**
-- **One adapter = hypothetical seam. Two adapters = real seam.**
-
-This skill is _informed_ by the project's domain model. The domain language gives names to good seams; ADRs record decisions the skill should not re-litigate.
+Follow the `codebase-design` skill for design vocabulary and principles. Follow the `domain-model` skill when maintaining `CONTEXT.md` or ADRs.
 
 ## Process
 
@@ -53,20 +37,30 @@ Then use the Agent tool with `subagent_type=Explore` to walk the codebase. Don't
 
 Apply the **deletion test** to anything you suspect is shallow: would deleting it concentrate complexity, or just move it? A "yes, concentrates" is the signal you want.
 
-### 2. Present candidates
+### 2. Present candidates as an HTML report
 
-Present a numbered list of deepening opportunities. For each candidate:
+Write a self-contained HTML file to the OS temp directory so nothing lands in the repo. Resolve the temp dir from `$TMPDIR`, falling back to `/tmp` (or `%TEMP%` on Windows), and write to `<tmpdir>/architecture-review-<timestamp>.html` so each run gets a fresh file. Open it for the user — `xdg-open <path>` on Linux, `open <path>` on macOS, `start <path>` on Windows — and tell them the absolute path.
+
+The report uses Tailwind via CDN for layout and Mermaid via CDN for diagrams where a graph, flow, or sequence reliably communicates the structure. Mix Mermaid with hand-crafted CSS/SVG visuals: use Mermaid when relationships are graph-shaped, and hand-built divs/SVG for mass diagrams, cross-sections, and collapse diagrams. Each candidate gets a before/after visualization.
+
+See `~/.claude/skills/almanac/codebase-improve/HTML-REPORT.md` for the full HTML scaffold, diagram patterns, and styling guidance.
+
+For each candidate, render a card with:
 
 - **Files** — which files/modules are involved
 - **Problem** — why the current architecture is causing friction
 - **Solution** — plain English description of what would change
 - **Benefits** — explained in terms of locality and leverage, and also in how tests would improve
+- **Before / After diagram** — side-by-side, custom-drawn, illustrating the shallowness and the deepening
+- **Recommendation strength** — one of `Strong`, `Worth exploring`, `Speculative`, rendered as a badge
 
-**Use CONTEXT.md vocabulary for the domain, and `~/.claude/skills/almanac/codebase-improve/LANGUAGE.md` vocabulary for the architecture.**
+End the report with a Top recommendation section: which candidate you'd tackle first and why.
+
+**Use CONTEXT.md vocabulary for the domain, and `codebase-design` vocabulary for architecture.**
 
 **ADR conflicts**: if a candidate contradicts an existing ADR, only surface it when the friction is real enough to warrant revisiting the ADR. Mark it clearly (e.g. _"contradicts ADR-0007 — but worth reopening because…"_).
 
-Do NOT propose interfaces yet. Ask the user: "Which of these would you like to explore?"
+Do NOT propose interfaces yet. After the file is written, ask the user: "Which of these would you like to explore?"
 
 ### 3. Grilling loop
 
@@ -77,4 +71,4 @@ Side effects happen inline as decisions crystallize:
 - **Naming a deepened module after a concept not in `CONTEXT.md`?** Add the term to `CONTEXT.md`. Create the file lazily if it doesn't exist.
 - **Sharpening a fuzzy term during the conversation?** Update `CONTEXT.md` right there.
 - **User rejects the candidate with a load-bearing reason?** Offer an ADR so future reviews don't re-suggest it. Only offer when the reason would actually be needed by a future explorer.
-- **Want to explore alternative interfaces for the deepened module?** See `~/.claude/skills/almanac/codebase-improve/INTERFACE-DESIGN.md`.
+- **Want to explore alternative interfaces for the deepened module?** Follow `~/.claude/skills/almanac/codebase-design/references/design-it-twice.md`.

@@ -4,8 +4,8 @@ description: Use when breaking a plan, spec, or PRD into independently-grabbable
 disable-model-invocation: true
 metadata:
   upstream: mattpocock/skills/skills/engineering/to-issues
-  upstream-sha: 9f6efbfe5fb5fcb9a751482e333d2f54da173102
-  adapted-date: "2026-05-25"
+  upstream-sha: 333f1ee2b5b16e0dac7fbc1cd543874bf829b21b
+  adapted-date: "2026-06-19"
 ---
 
 Break a plan into independently-grabbable GitHub issues using vertical slices (tracer bullets).
@@ -23,6 +23,8 @@ Work from whatever is already in the conversation context. If the user passes a 
 - CONTEXT.md: !`cat CONTEXT.md 2>/dev/null || true`
 
 If content is present above, use its vocabulary in issue titles and descriptions. If you have not already explored the codebase, do so to understand the current state of the code.
+
+Respect ADRs in the area you're touching. Look for opportunities to prefactor the code to make implementation easier: make the change easy, then make the easy change.
 
 ### 3. Draft vertical slices
 
@@ -77,6 +79,8 @@ Create issues in dependency order (blockers first) so you can reference real iss
 ## What to build
 
 A concise description of this vertical slice. Describe the end-to-end behavior, not layer-by-layer implementation.
+
+Avoid specific file paths or code snippets -- they go stale fast. Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline only the decision-rich parts and note that it came from a prototype.
 
 ## Acceptance criteria
 

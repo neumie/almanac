@@ -2,9 +2,9 @@
 name: diagnose
 description: "Use when debugging hard bugs or perf regressions. Disciplined loop — reproduce, minimise, hypothesise, instrument, fix, regression-test. Triggers: debug this, broken, throwing, failing."
 metadata:
-  upstream: mattpocock/skills/skills/engineering/diagnose
-  upstream-sha: ed55bda2fdb0d690ea3b80a1cf28bf848c5ad2b5
-  adapted-date: "2026-05-25"
+  upstream: mattpocock/skills/skills/engineering/diagnosing-bugs
+  upstream-sha: f400de7c1937377fec7ff9bae3b0c072670f1e81
+  adapted-date: "2026-06-19"
 ---
 
 # Diagnose
@@ -57,9 +57,18 @@ Goal is not clean repro but **higher reproduction rate**. Loop trigger 100×, pa
 
 Stop and say so explicitly. List what you tried. Ask user for: (a) access to whatever environment reproduces it, (b) captured artifact (HAR file, log dump, core dump, screen recording with timestamps), or (c) permission to add temporary production instrumentation. Do **not** proceed to hypothesise without a loop.
 
+### Completion criterion — a tight loop that goes red
+
+Phase 1 is done when the loop is **tight** and **red-capable**: you can name **one command** — a script path, a test invocation, a curl — that you have **already run at least once** (paste the invocation and its output), and that is:
+
+- [ ] **Red-capable** — it drives the actual bug code path and asserts the **user's exact symptom**, so it can go red on this bug and green once fixed. Not "runs without erroring" — it must catch this specific bug.
+- [ ] **Deterministic** — same verdict every run (flaky bugs: a pinned, high reproduction rate, per above).
+- [ ] **Fast** — seconds, not minutes.
+- [ ] **Agent-runnable** — you can run it unattended; a human in the loop only via `~/.claude/skills/almanac/diagnose/scripts/hitl-loop.template.sh`.
+
 Do not proceed to Phase 2 until you have a loop you believe in.
 
-## Phase 2 — Reproduce
+## Phase 2 — Reproduce + minimise
 
 Run the loop. Watch bug appear.
 
@@ -70,6 +79,16 @@ Confirm:
 - [ ] Exact symptom captured (error message, wrong output, slow timing) so later phases can verify fix addresses it.
 
 Do not proceed until you reproduce the bug.
+
+### Minimise
+
+Once it's red, shrink the repro to the **smallest scenario that still goes red**. Cut inputs, callers, config, data, and steps **one at a time**, re-running the loop after each cut. Keep only what's load-bearing for the failure.
+
+Why bother: a minimal repro shrinks the hypothesis space in Phase 3 and becomes the clean regression test in Phase 5.
+
+Done when **every remaining element is load-bearing** — removing any one of them makes the loop go green.
+
+Do not proceed until you have reproduced **and** minimised.
 
 ## Phase 3 — Hypothesise
 
