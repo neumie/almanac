@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # harden.sh - Bootstrap a harden-loop rubric for one target
+# summary: Fan out reviewers over a target, aggregate findings
+# usage: almanac harden <target> [--goal G | --approve | --fix | --loop [--rounds N] | --watch | --watch-worker LENS]
+# group: loops
 
 set -euo pipefail
 
+source "$ALMANAC_HOME/lib/core.sh"
 source "$ALMANAC_HOME/lib/harden-core.sh"
 
 usage() {
@@ -57,33 +61,13 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    -g|--goal)
-      shift
-      [ "$#" -gt 0 ] || _die "Missing value for --goal"
-      GOAL="$1"
-      ;;
-    --approve)
-      APPROVE=1
-      ;;
-    --fix)
-      FIX=1
-      ;;
-    --loop)
-      LOOP=1
-      ;;
-    --watch)
-      WATCH=1
-      ;;
-    --watch-worker)
-      shift
-      [ "$#" -gt 0 ] || _die "Missing value for --watch-worker"
-      WATCH_WORKER="$1"
-      ;;
-    --rounds)
-      shift
-      [ "$#" -gt 0 ] || _die "Missing value for --rounds"
-      ROUNDS="$1"
-      ;;
+    -g|--goal)          _need_value --goal "$#";          GOAL="$2";         shift ;;
+    --approve)          APPROVE=1 ;;
+    --fix)              FIX=1 ;;
+    --loop)             LOOP=1 ;;
+    --watch)            WATCH=1 ;;
+    --watch-worker)     _need_value --watch-worker "$#";  WATCH_WORKER="$2"; shift ;;
+    --rounds)           _need_value --rounds "$#";        ROUNDS="$2";       shift ;;
     --)
       shift
       break
@@ -102,10 +86,7 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
-[ -n "$TARGET" ] || {
-  usage
-  _die "Missing harden target"
-}
+[ -n "$TARGET" ] || _die "Missing harden target — see 'almanac harden --help'"
 
 # Live supervision modes (read-only): watch the dashboard or a single worker's
 # event stream for the target's most recent run. Mutually exclusive with the

@@ -250,14 +250,16 @@ test_cli_requires_goal_and_action() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
+  # Parse errors are terse (no full usage dump — that's what --help is for),
+  # consistent with every other almanac command. The missing-required-arg case
+  # points at --help; conflicting/incomplete actions are self-explanatory.
   output="$(run_converge "$tmp" --exec "true" 2>&1)" && rc=0 || rc=$?
   [ "$rc" -ne 0 ] || fail "missing --goal should exit non-zero"
-  assert_contains "$output" "Usage: almanac converge" "missing --goal should show usage hint"
+  assert_contains "$output" "almanac converge --help" "missing --goal should point at --help"
   assert_contains "$output" "Missing required --goal" "missing --goal should name the missing arg"
 
   output="$(run_converge "$tmp" --goal "say hello" 2>&1)" && rc=0 || rc=$?
   [ "$rc" -ne 0 ] || fail "missing both --prompt and --exec should exit non-zero"
-  assert_contains "$output" "Usage: almanac converge" "missing action should show usage hint"
   assert_contains "$output" "One of --prompt or --exec is required" \
     "missing action should name both alternatives"
 

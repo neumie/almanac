@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # hub.sh — interactive front door to almanac loops.
+# summary: Open the loop hub (list / watch / launch loops)
+# usage: almanac hub [--watch ID | --stop ID | --steer ID … | --new LOOP … | --resume ID | --clone ID | --stats]
+# group: loops
 #
 # Bare `almanac` routes here on a TTY (and `almanac hub` always does). The hub
 # reads the run registry under the caller's repo ($PWD/.almanac/runs) and shows
@@ -25,195 +28,14 @@
 
 set -euo pipefail
 
-source "$ALMANAC_HOME/lib/ui.sh"
-source "$ALMANAC_HOME/lib/run.sh"
-source "$ALMANAC_HOME/lib/loop-launcher.sh"
+# cmd/hub.sh is the parse+dispatch shim; all the composable hub logic lives in
+# lib/hub-core.sh (testable in isolation). hub-core sources its own siblings
+# (run.sh / ui.sh / loop-launcher.sh) idempotently; core.sh is sourced here too
+# since dispatch uses _die/_success directly.
+source "$ALMANAC_HOME/lib/core.sh"
+source "$ALMANAC_HOME/lib/hub-core.sh"
 
 ROOT="$PWD"
-
-almanac_hub_loop_names_inline() {
-  local names=() name
-  while IFS= read -r name; do
-    [ -n "$name" ] || continue
-    names+=("$name")
-  done < <(almanac_loop_adapter_list)
-  (IFS='|'; printf '%s\n' "${names[*]}")
-}
-
-almanac_hub_new_run_config_hint() {
-  local type="$1" hint
-  hint="$(almanac_loop_adapter_call "$type" new_run_usage 2>/dev/null || true)"
-  if [ -n "$hint" ]; then
-    printf '%s\n' "$hint"
-  else
-    printf '%s\n' "check this loop adapter's required config"
-  fi
-}
-
-hub_usage() {
-  printf '%s\n' "Usage:"
-  printf '%s\n' "  almanac hub                      open the hub (interactive on a TTY, overview otherwise)"
-  printf '%s\n' "  almanac hub --watch <run-id>     tail a run's live status"
-  printf '%s\n' "  almanac hub --stop  <run-id>     signal a run to stop"
-  printf '%s\n' "  almanac hub --steer <run-id> …   queue a steer directive for the next round"
-  printf '%s\n' "  almanac hub --new <$(almanac_hub_loop_names_inline)> [config…] [--dry-run]"
-  printf '%s\n' "                                  launch a new run (--dry-run previews it)"
-  printf '%s\n' "  almanac hub --resume <run-id>    re-launch a finished run with the same config"
-  printf '%s\n' "  almanac hub --clone  <run-id>    start the launcher pre-filled from a finished run"
-  printf '%s\n' "  almanac hub --stats              summarise finished runs (runs + success rate per provider/model)"
-}
-
-# Launch (or, with dry_run=1, preview) a composed new run. env_raw/argv_raw are
-# the newline-token streams from almanac_loop_new_run_env / almanac_loop_new_run_argv.
-# Dry-run prints the resolved `ENV… almanac <argv>` command and returns — the
-# non-interactive, scripts-safe preview tests and the gum confirm both use.
-# Otherwise it exports the env lines and execs the launcher, handing over the
-# terminal to the new run.
-almanac_hub_launch_new() {
-  local dry_run="$1" env_raw="$2" argv_raw="$3"
-  local line display="" argv=()
-
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    argv+=("$line")
-  done <<< "$argv_raw"
-  [ "${#argv[@]}" -gt 0 ] || _die "Nothing to launch"
-
-  if [ "$dry_run" = "1" ]; then
-    while IFS= read -r line; do
-      [ -n "$line" ] || continue
-      display+="$line "
-    done <<< "$env_raw"
-    display+="almanac"
-    for line in "${argv[@]}"; do
-      display+=" $line"
-    done
-    printf '%s\n' "$display"
-    return 0
-  fi
-
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    export "$line"
-  done <<< "$env_raw"
-
-  exec bash "$ALMANAC_HOME/bin/almanac" "${argv[@]}"
-}
-
-# Interactive New-run flow: pick the loop type, then hand off to the shared
-# almanac launcher (almanac_loop_launch), which gathers that loop's config
-# through the same gum seam, summarises, confirms, and execs the runner. No
-# config logic lives here — one launcher, one UX, shared with direct loop CLIs.
-# On confirm the launcher execs (hands over the terminal);
-# if the operator cancels first it returns here and the menu loop continues.
-almanac_hub_new_run() {
-  local type loop loops=()
-  while IFS= read -r loop; do
-    [ -n "$loop" ] || continue
-    loops+=("$loop")
-  done < <(almanac_loop_adapter_list)
-  [ "${#loops[@]}" -gt 0 ] || _die "No loop adapters found"
-  type="$(almanac_loop_ui_choose "New run — pick a loop" "${loops[@]}")" || return 0
-  almanac_loop_launch "$type"
-}
-
-almanac_hub_menu() {
-  local root="$1"
-  local running line choice run_id action directive
-  local options
-
-  while :; do
-    almanac_loop_ui_clear
-    almanac_loop_hub_overview "$root"
-
-    running="$(almanac_loop_hub_render "$root" running 2>/dev/null || true)"
-
-    # Top-level menu: New run is always available (even with an empty registry);
-    # each running loop is an actionable row carrying its "[id]"; quit exits.
-    options=("+ New run")
-    if [ -n "$running" ]; then
-      while IFS= read -r line; do
-        [ -n "$line" ] || continue
-        options+=("$line")
-      done <<< "$running"
-    fi
-    options+=("quit")
-
-    choice="$(almanac_loop_ui_choose "Almanac hub" "${options[@]}")" || return 0
-    case "$choice" in
-      "+ New run") almanac_hub_new_run "$root"; continue ;;
-      quit) return 0 ;;
-    esac
-    run_id="$(printf '%s\n' "$choice" | sed -n 's/.*\[\([^]]*\)\].*/\1/p')"
-    [ -n "$run_id" ] || continue
-
-    action="$(almanac_loop_ui_choose "Run $run_id" watch stop steer back)" || continue
-    case "$action" in
-      watch)
-        almanac_loop_run_watch "$root" "$run_id" follow || _warn "No status for run: $run_id"
-        ;;
-      stop)
-        if almanac_loop_ui_confirm "Stop $run_id?"; then
-          if almanac_loop_run_stop "$root" "$run_id"; then
-            _success "Stop requested for $run_id"
-          else
-            _warn "Could not stop $run_id"
-          fi
-        fi
-        ;;
-      steer)
-        directive="$(almanac_loop_ui_input "Steer $run_id")" || continue
-        if almanac_loop_run_steer "$root" "$run_id" "$directive"; then
-          _success "Steer queued for $run_id"
-        else
-          _warn "Empty or unsupported steer for $run_id"
-        fi
-        ;;
-      back) : ;;
-    esac
-  done
-}
-
-# Re-build a finished run's launch command from its registry blob and either
-# launch it auto-confirmed (resume) or hand it to the launcher for review/edit
-# (clone). The composer + exec path is the same one `--new` uses, so a resumed/
-# cloned run goes through every layer a fresh launch does. The hub is fully
-# loop-agnostic: the adapter's `status_to_opts` verb inverts its own status
-# schema into key=val pairs the new_run composers consume; the `launch_backed`
-# verb signals whether `--yes` (a launcher-only flag) is safe to append on
-# resume — direct-runner loops (harden, converge) leave it undefined and never
-# get the suffix.
-almanac_hub_resume_or_clone() {
-  local mode="$1" run_id="$2"
-  local status_file run_type argv env_raw opts_raw
-  local -a opts=()
-  local line
-
-  status_file="$(almanac_loop_run_status_file "$ROOT" "$run_id")"
-  [ -f "$status_file" ] || _die "Unknown run: $run_id"
-  run_type="$(almanac_loop_status_field "$status_file" type || true)"
-  [ -n "$run_type" ] || _die "Run '$run_id' has no recorded type"
-
-  opts_raw="$(almanac_loop_adapter_call "$run_type" status_to_opts "$status_file")" \
-    || _die "Cannot $mode run of unknown type: $run_type"
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    opts+=("$line")
-  done <<< "$opts_raw"
-
-  argv="$(almanac_loop_new_run_argv "$run_type" "${opts[@]}")" \
-    || _die "Could not compose $mode for $run_id"
-  env_raw="$(almanac_loop_new_run_env "$run_type" "${opts[@]}")" || env_raw=""
-
-  # resume auto-confirms launcher-backed loops (ralph) via --yes; loops whose
-  # adapter doesn't implement `launch_backed` exec their direct runner and would
-  # reject the launcher-only flag, so they get no suffix. clone leaves confirm
-  # in place where a launcher is used.
-  if [ "$mode" = "resume" ] && almanac_loop_adapter_call "$run_type" launch_backed 2>/dev/null; then
-    argv="${argv}"$'\n''--yes'
-  fi
-  almanac_hub_launch_new 0 "$env_raw" "$argv"
-}
 
 ACTION=""
 ACTION_ID=""
@@ -225,7 +47,7 @@ NEW_OPTS=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -h|--help)
-      hub_usage
+      almanac_hub_usage
       exit 0
       ;;
     --new)

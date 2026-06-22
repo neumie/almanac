@@ -36,7 +36,11 @@ In-repo guidance follows the `agents-md-map` convention: `AGENTS.md` is the cano
 
 ## CLI (`bin/almanac`)
 
-Dispatcher pattern: `bin/almanac` resolves `ALMANAC_HOME`, sources `lib/core.sh`, routes to `cmd/<command>.sh`. Commands: install, uninstall, list, update, sync, ralph, harden, converge, hub, doctor, help. **Bare `almanac` is TTY-gated**: run interactively (stdin *and* stdout are TTYs) it opens the interactive hub (`cmd/hub.sh`); piped or non-interactive it prints help, so scripts that call bare `almanac` keep working and never block on a menu.
+**Registry-driven dispatcher.** `bin/almanac` resolves `ALMANAC_HOME`, sources `lib/core.sh`, and routes to `cmd/<command>.sh` — a command is valid *iff that file exists* (`almanac_list_commands` globs `cmd/*.sh`, mirroring `almanac_providers`). There is no hard-coded command list anywhere: dispatch, `almanac help`, and `tests/test-cli.sh` all derive from the registry, so adding a command is one new file in `cmd/` with no edit to the dispatcher, the help text, or the docs. The command name is guarded to `^[a-z][a-z-]*$` before it touches the filesystem (path-traversal safe); unknown commands print help to stderr and exit 1. Current commands: install, uninstall, list, update, sync, ralph, harden, converge, hub, doctor, help.
+
+**Command contract** (enforced by `tests/test-cli.sh`). Each `cmd/<name>.sh` is *sourced* into `bin/almanac` (runs under its `set -euo pipefail`; finishes with `exit`, not `return`) and self-describes via three header comments — `# summary:`, `# usage:`, `# group:` (`loops`/`providers`/`maintenance`/`other`). `cmd/help.sh` reads those (`almanac_command_meta`) to **generate** the grouped help, so printed help can never drift from the installed command set. Commands set their own strict mode, source a `lib/` file, route `-h|--help` to stdout (exit 0), guard required option values with `_need_value`, and emit terse `_die` errors (no usage dump) on parse failure. Heavy command logic lives in a `lib/<cmd>-core.sh` so the `cmd/` file stays a parse+dispatch shim.
+
+**Bare `almanac` is TTY-gated**: run interactively (stdin *and* stdout are TTYs) it opens the interactive hub (`cmd/hub.sh`); piped or non-interactive it prints help, so scripts that call bare `almanac` keep working and never block on a menu.
 
 **Module map.**
 
@@ -45,8 +49,10 @@ Dispatcher pattern: `bin/almanac` resolves `ALMANAC_HOME`, sources `lib/core.sh`
 | `cmd/ralph.sh` | Ralph launcher entrypoint. |
 | `cmd/harden.sh` | Harden CLI surface and loop modes. |
 | `cmd/converge.sh` | Generic converge launch plus slug status/watch/stop. |
+| `cmd/hub.sh` | Hub parse+dispatch shim (TTY menu / non-interactive actions). |
 | `lib/harden-core.sh` | Harden rubric, fan-out, ratification, fixer, dashboard, and gate. |
 | `lib/converge-core.sh` | Converge goal state, worker/overseer prompts, verdict handling, dashboard, and run lifecycle. |
+| `lib/hub-core.sh` | Hub composable logic: loop listing, new-run composer, interactive menu, resume/clone inverter. |
 | `lib/loops/ralph.sh` | Ralph loop adapter contract. |
 | `lib/loops/harden.sh` | Harden loop adapter contract. |
 | `lib/loops/converge.sh` | Converge loop control contract for hub stop/steer signals. |

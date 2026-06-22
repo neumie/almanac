@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-# uninstall.sh — Remove almanac from a specific provider
+# uninstall.sh — Remove almanac from a specific provider.
+# summary: Remove almanac from a provider
+# usage: almanac uninstall <provider>
+# group: providers
 
+set -euo pipefail
+source "$ALMANAC_HOME/lib/core.sh"
 source "$ALMANAC_HOME/lib/almanac-core.sh"
 
 _uninstall_claude_code() {
@@ -193,8 +198,13 @@ _uninstall_codex() {
 
 # --- main ---
 
+case "${1:-}" in
+  -h|--help) printf '%s\n' "Usage: almanac uninstall <provider>"; exit 0 ;;
+esac
+
 PROVIDER="${1:-}"
-[[ -z "$PROVIDER" ]] && _die "Usage: almanac uninstall <provider>"
+[[ -n "$PROVIDER" ]] || _die "Usage: almanac uninstall <provider>"
+[[ "$#" -le 1 ]] || _die "Unexpected argument: $2 (one provider at a time)"
 
 PROVIDER_DIR="$ALMANAC_HOME/providers/$PROVIDER"
 [[ -d "$PROVIDER_DIR" ]] || _die "Unknown provider: $PROVIDER (run 'almanac list')"

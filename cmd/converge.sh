@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # converge.sh - Run a generic convergence loop
+# summary: Run a generic convergence loop
+# usage: almanac converge --goal G (--prompt T | --exec C) [--rounds N] | almanac converge <slug> [--watch | --stop]
+# group: loops
 
 set -euo pipefail
 
+source "$ALMANAC_HOME/lib/core.sh"
 source "$ALMANAC_HOME/lib/converge-core.sh"
 
 usage() {
@@ -29,72 +33,19 @@ STOP=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    --goal)
-      shift
-      [ "$#" -gt 0 ] || {
-        usage >&2
-        _die "Missing value for --goal"
-      }
-      GOAL="$1"
-      ;;
-    --exec)
-      shift
-      [ "$#" -gt 0 ] || {
-        usage >&2
-        _die "Missing value for --exec"
-      }
-      EXEC_CMD="$1"
-      ;;
-    --prompt)
-      shift
-      [ "$#" -gt 0 ] || {
-        usage >&2
-        _die "Missing value for --prompt"
-      }
-      PROMPT="$1"
-      ;;
-    --rounds)
-      shift
-      [ "$#" -gt 0 ] || {
-        usage >&2
-        _die "Missing value for --rounds"
-      }
-      ROUNDS="$1"
-      ;;
-    --no-oversee)
-      NO_OVERSEE=1
-      ;;
-    --oversee-every)
-      shift
-      [ "$#" -gt 0 ] || {
-        usage >&2
-        _die "Missing value for --oversee-every"
-      }
-      OVERSEE_EVERY="$1"
-      ;;
-    --watch)
-      WATCH=1
-      ;;
-    --stop)
-      STOP=1
-      ;;
-    --)
-      shift
-      break
-      ;;
-    -*)
-      usage >&2
-      _die "Unknown converge option: $1"
-      ;;
+    -h|--help)       usage; exit 0 ;;
+    --goal)          _need_value --goal "$#";          GOAL="$2";          shift ;;
+    --exec)          _need_value --exec "$#";          EXEC_CMD="$2";      shift ;;
+    --prompt)        _need_value --prompt "$#";        PROMPT="$2";        shift ;;
+    --rounds)        _need_value --rounds "$#";        ROUNDS="$2";        shift ;;
+    --no-oversee)    NO_OVERSEE=1 ;;
+    --oversee-every) _need_value --oversee-every "$#"; OVERSEE_EVERY="$2"; shift ;;
+    --watch)         WATCH=1 ;;
+    --stop)          STOP=1 ;;
+    --)              shift; break ;;
+    -*)              _die "Unknown converge option: $1" ;;
     *)
-      [ -z "$TARGET_SLUG" ] || {
-        usage >&2
-        _die "Unexpected converge argument: $1"
-      }
+      [ -z "$TARGET_SLUG" ] || _die "Unexpected converge argument: $1"
       TARGET_SLUG="$1"
       ;;
   esac
@@ -126,20 +77,15 @@ fi
 [ "$WATCH" -eq 0 ] || _die "--watch requires a converge slug"
 [ "$STOP" -eq 0 ] || _die "--stop requires a converge slug"
 
-[ -n "$GOAL" ] || {
-  usage >&2
-  _die "Missing required --goal"
-}
+[ -n "$GOAL" ] || _die "Missing required --goal — see 'almanac converge --help'"
 # Exactly one of --prompt / --exec is required. --prompt is the dominant mode
 # (agent invocation; takes slash commands, chains, or free-form text). --exec is
 # the escape hatch for non-agent shell workflows. Mutex enforced here so the
 # round-dispatch in lib/converge-core.sh has a clean two-way fork.
 if [ -n "$PROMPT" ] && [ -n "$EXEC_CMD" ]; then
-  usage >&2
   _die "--prompt and --exec are mutually exclusive — pick one"
 fi
 if [ -z "$PROMPT" ] && [ -z "$EXEC_CMD" ]; then
-  usage >&2
   _die "One of --prompt or --exec is required"
 fi
 

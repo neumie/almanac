@@ -47,6 +47,36 @@ test_ui_render_degrades_without_gum() {
   echo "  PASS: ui render degrades without gum"
 }
 
+test_ui_fit_keeps_rows_on_one_line() {
+  local out
+  out="$(printf 'short row\n' | almanac_loop_ui_fit 20)"
+  assert_eq "short row" "$out" "fit leaves a line within the width unchanged"
+
+  out="$(printf 'twenty-char-line-xx\n' | almanac_loop_ui_fit 20)"
+  assert_eq "twenty-char-line-xx" "$out" "fit leaves an at-width line unchanged"
+
+  # A line wider than max is clipped to one line and flagged with an ellipsis,
+  # so a long row can never wrap and shift the columns / box border.
+  out="$(printf 'this row is definitely much longer than twenty columns\n' | almanac_loop_ui_fit 20)"
+  assert_contains "$out" "…" "fit marks a clipped row with an ellipsis"
+  case "$out" in
+    "this row is "*) ;;
+    *) fail "fit preserves the clipped row's prefix" ;;
+  esac
+  [ "${#out}" -lt 54 ] || fail "fit actually shortened the long row"
+  echo "  PASS: ui fit keeps rows on one line"
+}
+
+test_ui_cols_returns_sane_width() {
+  local cols
+  cols="$(almanac_loop_ui_cols)"
+  case "$cols" in
+    ''|*[!0-9]*) fail "cols must be numeric (got '$cols')" ;;
+  esac
+  [ "$cols" -ge 24 ] || fail "cols must respect the floor (got $cols)"
+  echo "  PASS: ui cols returns a sane width"
+}
+
 test_ui_status_glyph_maps_states() {
   assert_eq "●" "$(almanac_loop_ui_status_glyph running)" "running maps to its glyph"
   assert_eq "✔" "$(almanac_loop_ui_status_glyph done)" "done maps to its glyph"
@@ -119,6 +149,8 @@ test_ui_confirm_degrades_to_read() {
 
 echo "=== UI Seam Tests ==="
 test_ui_render_degrades_without_gum
+test_ui_fit_keeps_rows_on_one_line
+test_ui_cols_returns_sane_width
 test_ui_status_glyph_maps_states
 test_ui_menu_render_numbers_options
 test_ui_menu_pick_maps_and_rejects

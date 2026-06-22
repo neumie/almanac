@@ -35,9 +35,25 @@ Delegate with "Follow the `<skill-name>` skill" — never duplicate. Declare har
 
 **Test split.** `tests/test-structure.sh` validates layout (skill dirs, required files, CLI scripts present); `tests/test-skills.sh` validates skill *contents* via `almanac_validate_skill()`. Extend the right one — layout rules go in structure, content/format rules go in skills.
 
-**CLI helpers.** `cmd/*.sh` scripts must source `lib/core.sh` and use `_die`/`_info`/`_success`/`_warn`/`_error` — never `echo` errors directly or roll new helpers. Existing offenders to NOT pattern-match from: `cmd/list.sh` and `cmd/sync.sh` both predate this rule and still use raw `echo`.
+**CLI helpers.** `cmd/*.sh` scripts must source `lib/core.sh` and use `_die`/`_info`/`_success`/`_warn`/`_error`/`_heading` — never `echo`/`echo -e` for output or roll new helpers. Full command contract: **CLI Commands** below.
 
-**Where helpers go.** Skill-format helpers (frontmatter parsing, `almanac_validate_skill`, anything `tests/test-skills.sh` calls) in `lib/almanac-core.sh`; CLI/output helpers (`_die`/`_info`/colors, anything `cmd/*.sh` or `install.sh` calls) in `lib/core.sh`. If unclear, ask whether non-skill code (CLI, install, sync) needs it — yes → `core.sh`; no → `almanac-core.sh`. Don't cross-contaminate.
+**Portability: target bash 3.2.** macOS ships bash 3.2.57 as both `/bin/bash` and (usually) `/usr/bin/env bash`, so all shell here must run on it — no bash 4+ features (associative arrays, `${var,,}`, `mapfile`/`readarray`, `&>>`). Notably, a single `local a="$1" b="…$a…"` evaluates **every** RHS before binding, so `$a` resolves to the *caller's* `a`, not `$1` — split dependent `local` assignments onto separate lines (see `almanac_command_meta`, `lib/core.sh`).
+
+**Where helpers go.** Skill-format helpers (frontmatter parsing, `almanac_validate_skill`, anything `tests/test-skills.sh` calls) in `lib/almanac-core.sh`; CLI/output helpers (`_die`/`_info`/`_heading`/colors, the arg-guard `_need_value`, the command registry `almanac_list_commands`/`almanac_command_meta`, anything `cmd/*.sh` or `install.sh` calls) in `lib/core.sh`. If unclear, ask whether non-skill code (CLI, install, sync) needs it — yes → `core.sh`; no → `almanac-core.sh`. Don't cross-contaminate.
+
+## CLI Commands
+
+The `almanac` CLI is **registry-driven**: a command is valid iff `cmd/<name>.sh` exists. `almanac_list_commands` (in `lib/core.sh`, globbing `cmd/*.sh` — mirrors `almanac_providers`) is the single source of truth for the command set; `bin/almanac` dispatch, `cmd/help.sh`, and `tests/test-cli.sh` all derive from it. **Adding a command is one new file in `cmd/` — never edit the dispatcher or hand-maintain a command list anywhere.** The dispatcher guards the name to `^[a-z][a-z-]*$` before touching the filesystem (path-traversal safe).
+
+**Command file contract** (enforced by `tests/test-cli.sh` — it fails the build if a command skips any of this):
+- Declares three header comment lines, read by help generation via `almanac_command_meta`: `# summary:` (one line for `almanac help`), `# usage:` (synopsis), `# group:` (`loops` | `providers` | `maintenance` | `other`).
+- Sets `set -euo pipefail` and sources at least one `lib/` file (`core.sh` for the `_` helpers, or a `*-core.sh` that loads it).
+- Handles `-h|--help` → prints usage to **stdout**, `exit 0`.
+- Is **sourced** into `bin/almanac` (not exec'd): finish with `exit` (not `return`), and assume `$ALMANAC_HOME` is exported — `bin/almanac` owns the `ALMANAC_HOME` bootstrap, so don't re-add the snippet to a cmd file.
+
+**`almanac help` is generated** — it walks `almanac_list_commands` and prints each command's `# summary:` under its `# group:` section. Never hand-edit a command list into it.
+
+**Arg parsing.** Guard a required `--flag VALUE` option with `_need_value <flag> "$#"` (call it the moment the flag matches, before shifting). Parse errors are **terse** `_die` one-liners to stderr — no usage dump (that's what `--help` is for); the missing-required-arg case may add a `see 'almanac <cmd> --help'` pointer. Use `_heading` for section titles, never `echo -e "${_BOLD}…"`. `cmd/hub.sh` keeps its own per-flag messages (more specific than `_need_value`'s generic text) — acceptable, still terse. Heavy command logic lives in a `lib/<cmd>-core.sh` (see `hub-core.sh`/`harden-core.sh`); the `cmd/` file stays a parse+dispatch shim so the logic is unit-testable.
 
 ## Symlink Map
 
