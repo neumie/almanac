@@ -19,7 +19,7 @@ These commands run automatically when the skill loads — output replaces each l
 - Current branch: !`git branch --show-current 2>/dev/null || true`
 - CONTEXT.md: !`cat CONTEXT.md 2>/dev/null || true`
 
-### 0. Determine `<name>` and load the brief
+### 0. Determine `<name>`
 
 Before anything else:
 
@@ -27,13 +27,7 @@ Before anything else:
 2. Otherwise derive `<name>` from the current branch above by stripping a leading type prefix (`feat/`, `fix/`, `chore/`, `docs/`, `refactor/`, `test/`, `ci/`, `perf/`). Example: `feat/auth-system` → `auth-system`.
 3. If on `main`/`master`/`develop` with no argument passed, ask the user for an explicit name before continuing.
 
-Then load any existing brief from a previous grilling session:
-
-```bash
-cat docs/plans/<name>/brief.md 2>/dev/null || true
-```
-
-If that brief has content, those are decisions from a grilling session — use them. If `CONTEXT.md` content is present, use its vocabulary throughout the PRD. Respect ADRs in the area you're touching. Also explore the repo to understand the current state of the codebase, if you haven't already.
+If this session included a `/grill-me` grilling, those crystallized decisions are in the conversation — use them. If `CONTEXT.md` content is present, use its vocabulary throughout the PRD. Respect ADRs in the area you're touching. Also explore the repo to understand the current state of the codebase, if you haven't already.
 
 1. Sketch out the seams where the feature should be tested. Prefer existing seams to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can. Fewer seams are better; one seam is ideal.
 

@@ -97,7 +97,6 @@ No subagents, no shared memory. Each iteration is a separate OS process with fre
 ```
 docs/plans/
 ├── auth-system/
-│   ├── brief.md           ← from /grill-me (optional)
 │   ├── prd.md             ← from /prd-create (the PRD)
 │   ├── prompt.md          ← from /ralph-loop setup
 │   ├── agent-reports.log  ← appended each iteration
