@@ -67,9 +67,7 @@ Changes to install symlink layout go in `cmd/install.sh` — don't fork the logi
 
 ## Skill Resources (scripts/, references/)
 
-**Always print absolute paths under `~/.claude/skills/almanac/<name>/scripts/...` in user-facing instructions. Never use `${CLAUDE_SKILL_DIR}/scripts/...`** — the commands path is a single-file symlink and won't resolve subdirs. Only the per-skill directory symlinks at `~/.claude/skills/almanac/<name>` resolve.
-
-Existing offenders to NOT pattern-match from: `codebase-improve`, `diagnose`, `tdd`, `task-start`, `grill-me`, `agents-md-audit`, `ralph-loop` — all still reference `${CLAUDE_SKILL_DIR}/...`.
+**Always print absolute paths under `~/.claude/skills/almanac/<name>/scripts/...` in user-facing instructions. Never use `${CLAUDE_SKILL_DIR}/scripts/...`** — the commands path is a single-file symlink and won't resolve subdirs. Only the per-skill directory symlinks at `~/.claude/skills/almanac/<name>` resolve. No skill references `${CLAUDE_SKILL_DIR}` anymore — keep it that way.
 
 ## Doc Sync
 
