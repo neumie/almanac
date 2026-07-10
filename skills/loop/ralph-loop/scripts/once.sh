@@ -37,18 +37,18 @@ if ! declare -F almanac_loop_role_field >/dev/null 2>&1; then
 fi
 
 if [ -z "$1" ]; then
-  echo "Usage: $0 <prd-name>"
+  echo "Usage: $0 <spec-name>"
   echo "Example: $0 auth-system"
   echo ""
-  echo "Available PRDs:"
+  echo "Available specs:"
   for d in docs/plans/*/; do
-    [ -f "$d/prd.md" ] && basename "$d"
+    { [ -f "$d/spec.md" ] || [ -f "$d/prd.md" ]; } && basename "$d"
   done 2>/dev/null | sed 's/^/  /'
   exit 1
 fi
 
-PRD_NAME="$1"
-PROMPT="docs/plans/${PRD_NAME}/prompt.md"
+SPEC_NAME="$1"
+PROMPT="docs/plans/${SPEC_NAME}/prompt.md"
 
 # Iteration-agent role config resolves through the shared engine helper
 # (almanac_loop_role_field): RALPH_AGENT_<FIELD> -> RALPH_<FIELD> -> default, the
@@ -78,7 +78,7 @@ AGENT_MODEL="$(almanac_loop_role_field ralph agent "" model "")"
 AGENT_EFFORT="$(almanac_loop_role_field ralph agent "" effort "")"
 
 if [ ! -f "$PROMPT" ]; then
-  echo "Error: $PROMPT not found. Run /ralph-loop $PRD_NAME to set up first."
+  echo "Error: $PROMPT not found. Run /ralph-loop $SPEC_NAME to set up first."
   exit 1
 fi
 
@@ -105,7 +105,7 @@ case "$PROVIDER" in
     ;;
 esac
 
-ralph_register_run "$PRD_NAME"
+ralph_register_run "$SPEC_NAME"
 # Stamp launch config onto the run so `almanac hub --resume <id>` can rebuild it.
 ralph_set_run_config \
   "provider=$PROVIDER" \
@@ -114,7 +114,7 @@ ralph_set_run_config \
 trap 'ralph_finish_run "$?"; rm -f "${RALPH_SNAP_FILE:-}"' EXIT
 
 echo "======= RALPH ONCE ======="
-echo "PRD:         $PRD_NAME"
+echo "Spec:        $SPEC_NAME"
 echo "Prompt:      $PROMPT"
 echo "Run ID:      $RALPH_RUN_ID"
 echo "Provider:    $PROVIDER_DISPLAY"
@@ -126,7 +126,7 @@ echo ""
 
 ralph_update_run_progress 1 "provider=$PROVIDER iteration=1/1"
 
-ralph_commits=$(git log --grep="RALPH($PRD_NAME)" -n 10 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No RALPH commits found")
+ralph_commits=$(git log --grep="RALPH($SPEC_NAME)" -n 10 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No RALPH commits found")
 
 case "$PROVIDER" in
   claude)
@@ -160,8 +160,8 @@ $(cat "$PROMPT")
 
 Previous RALPH commits:
 $ralph_commits"
-    mkdir -p "docs/plans/${PRD_NAME}"
-    codex_log="docs/plans/${PRD_NAME}/ralph-codex-once.log"
+    mkdir -p "docs/plans/${SPEC_NAME}"
+    codex_log="docs/plans/${SPEC_NAME}/ralph-codex-once.log"
     codex_result=$(mktemp)
     echo "Codex session log: $codex_log"
     if [ "${RALPH_CODEX_VERBOSE:-}" = "1" ]; then

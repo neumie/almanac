@@ -1,6 +1,6 @@
 ---
-name: prd-create
-description: Use when turning a conversation or idea into docs/plans/<name>/prd.md. Synthesizes existing context into user stories, module design, testing decisions. Do NOT interview — just synthesize.
+name: spec-create
+description: Use when turning a conversation or idea into docs/plans/<name>/spec.md. Synthesizes existing context into user stories, module design, testing decisions. Do NOT interview — just synthesize.
 disable-model-invocation: true
 metadata:
   dependencies:
@@ -10,7 +10,7 @@ metadata:
   adapted-date: "2026-07-10"
 ---
 
-Synthesize the current conversation context and codebase understanding into a PRD. Do NOT interview the user — just synthesize what you already know.
+Synthesize the current conversation context and codebase understanding into a spec (you may know this document as a PRD). Do NOT interview the user — just synthesize what you already know.
 
 ## Process
 
@@ -23,11 +23,11 @@ These commands run automatically when the skill loads — output replaces each l
 
 Before anything else:
 
-1. If the user passed a name as an argument (e.g. `/prd-create auth-system`), use that as `<name>`.
+1. If the user passed a name as an argument (e.g. `/spec-create auth-system`), use that as `<name>`.
 2. Otherwise derive `<name>` from the current branch above by stripping a leading type prefix (`feat/`, `fix/`, `chore/`, `docs/`, `refactor/`, `test/`, `ci/`, `perf/`). Example: `feat/auth-system` → `auth-system`.
 3. If on `main`/`master`/`develop` with no argument passed, ask the user for an explicit name before continuing.
 
-If this session included a `/grill-me` grilling, those crystallized decisions are in the conversation — use them. If `CONTEXT.md` content is present, use its vocabulary throughout the PRD. Respect ADRs in the area you're touching. Also explore the repo to understand the current state of the codebase, if you haven't already.
+If this session included a `/grill-me` grilling, those crystallized decisions are in the conversation — use them. If `CONTEXT.md` content is present, use its vocabulary throughout the spec. Respect ADRs in the area you're touching. Also explore the repo to understand the current state of the codebase, if you haven't already.
 
 1. Sketch out the seams where the feature should be tested. Prefer existing seams to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can. Fewer seams are better; one seam is ideal.
 
@@ -35,15 +35,15 @@ Also sketch the major modules you will need to build or modify to complete the i
 
 Check with the user that these modules match their expectations. Check with the user which modules they want tests written for.
 
-2. Write the PRD using the template below and save it to `docs/plans/<name>/prd.md`:
+2. Write the spec using the template below and save it to `docs/plans/<name>/spec.md`:
 
 ```bash
 mkdir -p docs/plans/<name>
 ```
 
-Report the file path (`docs/plans/<name>/prd.md`) so the user knows which PRD to pass to `/ralph-loop`.
+Report the file path (`docs/plans/<name>/spec.md`) so the user knows which spec to pass to `/ralph-loop`.
 
-## PRD Template
+## Spec Template
 
 ```markdown
 ## Problem Statement
@@ -88,7 +88,7 @@ A list of testing decisions that were made. Include:
 
 ## Out of Scope
 
-A description of the things that are out of scope for this PRD.
+A description of the things that are out of scope for this spec.
 
 ## Further Notes
 

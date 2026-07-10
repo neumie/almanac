@@ -9,7 +9,7 @@
 #                   dispatch (no central case-statement on loop type).
 #   launch_usage  — the --help text printed for this loop's launcher.
 #   exec_argv     — populate _ALMANAC_LOOP_ARGV with the runner exec tokens
-#                   for a given mode/prd/iterations. The ralph runner path lives
+#                   for a given mode/spec/iterations. The ralph runner path lives
 #                   HERE (not hard-coded in the launcher).
 #   new_run_argv  — emit the hub's "new run" launcher argv (one token per line,
 #                   starting with the `almanac` subcommand) from key=val pairs.
@@ -28,17 +28,17 @@
 # dispatching, so the adapter need not source them itself.
 
 # Build ralph's runner exec command into _ALMANAC_LOOP_ARGV (the launcher execs
-# it). MODE selects the runner: `once` runs a single iteration (once.sh PRD),
-# `afk` runs autonomously (afk.sh PRD ITERATIONS). The ralph runner scripts live
+# it). MODE selects the runner: `once` runs a single iteration (once.sh SPEC),
+# `afk` runs autonomously (afk.sh SPEC ITERATIONS). The ralph runner scripts live
 # under the ralph-loop skill — this adapter is the single place that path is
 # named, so the launcher no longer hard-codes …/ralph-loop/scripts/…. Returns 2
 # for an unknown mode. Requires $ALMANAC_HOME (set by every entry point).
 almanac_loop_ralph_exec_argv() {
-  local mode="$1" prd="$2" iterations="${3:-}"
+  local mode="$1" spec="$2" iterations="${3:-}"
   local scripts="$ALMANAC_HOME/skills/loop/ralph-loop/scripts"
   case "$mode" in
-    once) _ALMANAC_LOOP_ARGV=(bash "$scripts/once.sh" "$prd") ;;
-    afk)  _ALMANAC_LOOP_ARGV=(bash "$scripts/afk.sh" "$prd" "$iterations") ;;
+    once) _ALMANAC_LOOP_ARGV=(bash "$scripts/once.sh" "$spec") ;;
+    afk)  _ALMANAC_LOOP_ARGV=(bash "$scripts/afk.sh" "$spec" "$iterations") ;;
     *) return 2 ;;
   esac
   return 0
@@ -49,10 +49,10 @@ almanac_loop_ralph_exec_argv() {
 # and execs the runner via the exec_argv verb. Called by lib/loop-launcher.sh's
 # adapter dispatch — no central code branches on loop type.
 almanac_loop_ralph_launch() {
-  local prd="" mode="" provider="" model="" effort="" iterations="" no_oversee="" yes=""
+  local spec="" mode="" provider="" model="" effort="" iterations="" no_oversee="" yes=""
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --prd)        shift; prd="${1:-}";        [ -n "$prd" ] || _die "--prd requires a value" ;;
+      --spec|--prd) shift; spec="${1:-}";       [ -n "$spec" ] || _die "--spec requires a value" ;;
       --mode)       shift; mode="${1:-}";       [ -n "$mode" ] || _die "--mode requires a value" ;;
       --provider)   shift; provider="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"; [ -n "$provider" ] || _die "--provider requires a value" ;;
       --model)      shift; model="${1:-}";      [ -n "$model" ] || _die "--model requires a value" ;;
@@ -68,17 +68,18 @@ almanac_loop_ralph_launch() {
 
   [ -d docs/plans ] || _die "docs/plans/ not found. Run from the project root."
 
-  # PRD
-  if [ -z "$prd" ]; then
-    local prds=() dir
+  # Spec (spec.md preferred; legacy plan dirs still carry prd.md)
+  if [ -z "$spec" ]; then
+    local specs=() dir
     for dir in docs/plans/*/; do
-      [ -f "${dir}prd.md" ] && prds+=("$(basename "$dir")")
+      if [ -f "${dir}spec.md" ] || [ -f "${dir}prd.md" ]; then specs+=("$(basename "$dir")"); fi
     done
-    [ "${#prds[@]}" -gt 0 ] || _die "No PRDs in docs/plans/. Run /prd-create first."
-    if [ "${#prds[@]}" -eq 1 ]; then prd="${prds[0]}"; else prd="$(almanac_loop_ui_choose "Select PRD" "${prds[@]}")" || return 1; fi
+    [ "${#specs[@]}" -gt 0 ] || _die "No specs in docs/plans/. Run /spec-create first."
+    if [ "${#specs[@]}" -eq 1 ]; then spec="${specs[0]}"; else spec="$(almanac_loop_ui_choose "Select spec" "${specs[@]}")" || return 1; fi
   fi
-  [ -f "docs/plans/${prd}/prd.md" ]    || _die "docs/plans/${prd}/prd.md not found."
-  [ -f "docs/plans/${prd}/prompt.md" ] || _die "docs/plans/${prd}/prompt.md not found. Run /ralph-loop ${prd} first."
+  [ -f "docs/plans/${spec}/spec.md" ] || [ -f "docs/plans/${spec}/prd.md" ] \
+    || _die "docs/plans/${spec}/spec.md not found."
+  [ -f "docs/plans/${spec}/prompt.md" ] || _die "docs/plans/${spec}/prompt.md not found. Run /ralph-loop ${spec} first."
 
   # Mode
   [ -n "$mode" ] || mode="$(almanac_loop_ui_choose "Mode" once afk)" || return 1
@@ -101,7 +102,7 @@ almanac_loop_ralph_launch() {
 
   # Summary + confirm
   almanac_loop_launch_summary "ralph" \
-    "PRD:$prd" "Mode:$mode" "Provider:$provider" \
+    "Spec:$spec" "Mode:$mode" "Provider:$provider" \
     "Model:${model:-provider default}" "Thinking:${effort:-provider default}" \
     $([ "$mode" = "afk" ] && printf '%s\n%s' "Iterations:$iterations" "Overseer:$([ -n "$no_oversee" ] && echo off || echo on)")
   [ -n "$yes" ] || almanac_loop_ui_confirm "Launch this run?" || { _info "Cancelled."; return 0; }
@@ -112,7 +113,7 @@ almanac_loop_ralph_launch() {
 
   # Exec the runner via the ralph adapter (no hard-coded …/ralph-loop/scripts/…
   # path lives here any more — the adapter owns it).
-  almanac_loop_adapter_call ralph exec_argv "$mode" "$prd" "$iterations" \
+  almanac_loop_adapter_call ralph exec_argv "$mode" "$spec" "$iterations" \
     || _die "ralph adapter could not build a runner for mode: $mode"
   exec "${_ALMANAC_LOOP_ARGV[@]}"
 }
@@ -120,12 +121,14 @@ almanac_loop_ralph_launch() {
 # Compose the hub's new-run launcher argv for ralph (one token per line, starting
 # with the `almanac` subcommand). Accepts key=val pairs (the hub's lingua franca
 # for new-run config) so the dispatcher in lib/run.sh never has to know ralph's
-# flag shape. Returns 2 when a required field (prd) is missing. ralph takes all
+# flag shape. Returns 2 when the required spec field is missing. ralph takes all
 # its config as flags — no env lines — so it has no new_run_env counterpart with
 # real work to do, but it still implements one (below) for contract uniformity.
 almanac_loop_ralph_new_run_argv() {
-  local prd mode provider model effort iterations oversee
-  prd="$(_almanac_loop_kv_get prd "$@")"
+  local spec mode provider model effort iterations oversee
+  # "prd=" is the legacy wire key for the spec name (status blobs and hub opts
+  # still speak it) — kept until the whole key=val protocol is migrated.
+  spec="$(_almanac_loop_kv_get prd "$@")"
   mode="$(_almanac_loop_kv_get mode "$@")"
   provider="$(_almanac_loop_kv_get provider "$@")"
   model="$(_almanac_loop_kv_get model "$@")"
@@ -133,9 +136,11 @@ almanac_loop_ralph_new_run_argv() {
   iterations="$(_almanac_loop_kv_get iterations "$@")"
   oversee="$(_almanac_loop_kv_get oversee "$@")"
 
-  [ -n "$prd" ] || return 2
+  [ -n "$spec" ] || return 2
   printf '%s\n' ralph
-  printf '%s\n%s\n' --prd "$prd"
+  # --prd is the legacy alias of --spec; emitted here so composed argv keeps
+  # matching what older tooling expects on the wire.
+  printf '%s\n%s\n' --prd "$spec"
   [ -n "$mode" ]       && printf '%s\n%s\n' --mode "$mode"
   [ -n "$provider" ]   && printf '%s\n%s\n' --provider "$provider"
   [ -n "$model" ]      && printf '%s\n%s\n' --model "$model"
@@ -153,7 +158,7 @@ almanac_loop_ralph_new_run_env() {
 }
 
 almanac_loop_ralph_new_run_usage() {
-  printf '%s\n' "requires --prd <name>"
+  printf '%s\n' "requires --spec <name> (--prd is a legacy alias)"
 }
 
 # Read a ralph run's status blob and emit the key=val pairs that
@@ -162,14 +167,15 @@ almanac_loop_ralph_new_run_usage() {
 # hub never has to know ralph's status schema (it used to; this verb is the
 # deepening that makes the hub loop-agnostic).
 almanac_loop_ralph_status_to_opts() {
-  local status_file="$1" target iterations oversee prd
-  # target → prd (derive from dirname) and iterations → mode are ralph's per-field
+  local status_file="$1" target iterations oversee spec
+  # target → spec (derive from dirname) and iterations → mode are ralph's per-field
   # transforms — neither passes through verbatim, so they read the status fields
   # directly. The rest are passthrough.
   target="$(almanac_loop_status_field "$status_file" target || true)"
   iterations="$(almanac_loop_status_field "$status_file" iterations || true)"
-  prd="$(basename "$(dirname "$target")")"
-  printf '%s\n' "prd=$prd"
+  spec="$(basename "$(dirname "$target")")"
+  # "prd=" is the legacy wire key for the spec name — must match new_run_argv.
+  printf '%s\n' "prd=$spec"
   if [ -n "$iterations" ]; then
     printf '%s\n' "mode=afk" "iterations=$iterations"
   else
@@ -198,7 +204,7 @@ almanac_loop_ralph_launch_backed() {
 almanac_loop_ralph_launch_usage() {
   cat <<'EOF'
 Usage: almanac ralph [options]   (also: bash ralph.sh [options])
-  --prd <name>          PRD under docs/plans/<name>/
+  --spec <name>         spec under docs/plans/<name>/
   --mode <once|afk>     one iteration, or autonomous
   --provider <p>        codex | claude
   --model <m>           model name ("default" = provider default)

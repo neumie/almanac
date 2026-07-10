@@ -16,7 +16,7 @@ records a structured self-report. Between rounds, a read-only overseer judges
 progress against the current goal and can stop, steer the next worker, or update
 the goal directly.
 
-Use it when the iteration action is not a PRD slice queue and not harden's
+Use it when the iteration action is not a spec slice queue and not harden's
 review/fix pipeline. Examples: repeat `/almanac:codebase-improve` until no major
 architecture issue remains, run a custom migration check until clean, or keep a
 refactor command moving while an overseer narrows the target.
@@ -195,7 +195,7 @@ default provider/model/effort
 
 | Loop | Use when | Convergence signal |
 |------|----------|--------------------|
-| `ralph-loop` | You have a PRD and slice queue under `docs/plans/<name>/issues/`. | Queue empty or slice work complete. |
+| `ralph-loop` | You have a spec and slice queue under `docs/plans/<name>/issues/`. | Queue empty or slice work complete. |
 | `harden-loop` | You need parallel reviewers, ratify-by-execution, and a single fixer against a target. | Acceptance met and zero open blocking findings. |
 | `converge-loop` | You already know the per-round command and want an overseer to judge a mutable goal. | Overseer verdict against current `goal.md`. |
 

@@ -18,7 +18,7 @@ source "$ALMANAC_HOME/lib/feedback.sh"
 
 usage() {
   cat <<'EOF'
-Usage: prompt.sh <prd-name>
+Usage: prompt.sh <spec-name>
 Example: prompt.sh auth-system
 EOF
 }
@@ -28,58 +28,60 @@ if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
   exit 0
 fi
 
-PRD_NAME="${1:-}"
-[ -n "$PRD_NAME" ] || {
+SPEC_NAME="${1:-}"
+[ -n "$SPEC_NAME" ] || {
   usage >&2
   exit 1
 }
 
-case "$PRD_NAME" in
+case "$SPEC_NAME" in
   *[!A-Za-z0-9._-]*)
-    echo "Error: PRD name may only contain letters, numbers, dot, underscore, and hyphen." >&2
+    echo "Error: spec name may only contain letters, numbers, dot, underscore, and hyphen." >&2
     exit 1
     ;;
 esac
 
 PROJECT_ROOT="${RALPH_PROJECT_ROOT:-$PWD}"
-PRD_FILE="docs/plans/${PRD_NAME}/prd.md"
-PROMPT_FILE="$PROJECT_ROOT/docs/plans/${PRD_NAME}/prompt.md"
+# Prefer spec.md; fall back to legacy prd.md so old plan dirs keep working.
+SPEC_FILE="docs/plans/${SPEC_NAME}/spec.md"
+[ -f "$PROJECT_ROOT/$SPEC_FILE" ] || SPEC_FILE="docs/plans/${SPEC_NAME}/prd.md"
+PROMPT_FILE="$PROJECT_ROOT/docs/plans/${SPEC_NAME}/prompt.md"
 
-if [ ! -f "$PROJECT_ROOT/$PRD_FILE" ]; then
-  echo "Error: $PRD_FILE not found. Run /prd-create first." >&2
+if [ ! -f "$PROJECT_ROOT/$SPEC_FILE" ]; then
+  echo "Error: docs/plans/${SPEC_NAME}/spec.md not found (no legacy prd.md either). Run /spec-create first." >&2
   exit 1
 fi
 
-mkdir -p "$PROJECT_ROOT/docs/plans/${PRD_NAME}"
+mkdir -p "$PROJECT_ROOT/docs/plans/${SPEC_NAME}"
 
 render_intro() {
-  cat <<'EOF' | sed -e "s|{{PRD_FILE}}|$PRD_FILE|g" -e "s|{{PRD_NAME}}|$PRD_NAME|g"
+  cat <<'EOF' | sed -e "s|{{SPEC_FILE}}|$SPEC_FILE|g" -e "s|{{SPEC_NAME}}|$SPEC_NAME|g"
 # INPUTS
 
-Pull @{{PRD_FILE}} into your context.
+Pull @{{SPEC_FILE}} into your context.
 
 You've been passed the last 10 RALPH commits (SHA, date, full message). Review these to understand what work has been done.
 
 # TASK QUEUE
 
-Before decomposing the PRD, check whether an explicit queue exists. Detect in this order:
+Before decomposing the spec, check whether an explicit queue exists. Detect in this order:
 
-1. **Local slice files.** If `docs/plans/{{PRD_NAME}}/issues/` contains `*.md` files, that directory is your queue. Each file has frontmatter (`status`, `blocked-by`, `type`) and an `## Acceptance criteria` checklist of `- [ ]` items.
-2. **GitHub issues.** Else if `gh issue list --search 'label:"ralph({{PRD_NAME}})" state:open'` returns at least one issue, that's your queue. (Use `--search`, not `--label` — the parenthesised label name breaks the `--label` filter.) Each issue body contains an `## Acceptance criteria` section with `- [ ]` items.
-3. **No queue.** Skip to TASK BREAKDOWN below and decompose the PRD yourself.
+1. **Local slice files.** If `docs/plans/{{SPEC_NAME}}/issues/` contains `*.md` files, that directory is your queue. Each file has frontmatter (`status`, `blocked-by`, `type`) and an `## Acceptance criteria` checklist of `- [ ]` items.
+2. **GitHub issues.** Else if `gh issue list --search 'label:"ralph({{SPEC_NAME}})" state:open'` returns at least one issue, that's your queue. (Use `--search`, not `--label` — the parenthesised label name breaks the `--label` filter.) Each issue body contains an `## Acceptance criteria` section with `- [ ]` items.
+3. **No queue.** Skip to TASK BREAKDOWN below and decompose the spec yourself.
 
 If a queue is present:
 
 - Pick the **lowest-numbered** open slice file (or **oldest** open issue) whose `blocked-by` references are all `status: done` (or closed). That slice/issue is your task.
-- Its `## What to build` and `## Acceptance criteria` define your scope. The PRD is reference; the slice/issue is the spec.
-- Do NOT decompose the PRD again — TASK BREAKDOWN below is for the no-queue case only.
+- Its `## What to build` and `## Acceptance criteria` define your scope. The spec is reference; the slice/issue is authoritative.
+- Do NOT decompose the spec again — TASK BREAKDOWN below is for the no-queue case only.
 - If every queued task is blocked by something incomplete, output `<promise>ABORT</promise>`.
 
 # TASK BREAKDOWN
 
 (Run this section ONLY if TASK QUEUE found no queue. Otherwise the slice/issue you picked IS your task; skip ahead to EXPLORATION.)
 
-Break down the PRD into tasks.
+Break down the spec into tasks.
 
 Pick the smallest unit of work that pins one meaningful behavior. Don't outrun your headlights — but don't underrun them either.
 
@@ -118,7 +120,7 @@ EOF
 }
 
 render_tail() {
-  cat <<'EOF' | sed -e "s|{{PRD_NAME}}|$PRD_NAME|g"
+  cat <<'EOF' | sed -e "s|{{SPEC_NAME}}|$SPEC_NAME|g"
 
 # COMMIT
 
@@ -143,8 +145,8 @@ If you used a queued task, update the queue using the **strict checkbox protocol
 
 Then make the git commit. The commit message must:
 
-1. Start with `RALPH({{PRD_NAME}}):` prefix
-2. Include task completed + PRD reference
+1. Start with `RALPH({{SPEC_NAME}}):` prefix
+2. Include task completed + spec reference
 3. Key decisions made
 4. Files changed
 5. Blockers or notes for next iteration
@@ -153,7 +155,7 @@ Keep it concise but informative for the next iteration.
 
 # REPORT
 
-After committing, append a self-report to `docs/plans/{{PRD_NAME}}/agent-reports.log`. The overseer reads recent reports each tick and may emit steering directives based on what you flag. Be honest — concerns and uncertainties are more useful than reassurance.
+After committing, append a self-report to `docs/plans/{{SPEC_NAME}}/agent-reports.log`. The overseer reads recent reports each tick and may emit steering directives based on what you flag. Be honest — concerns and uncertainties are more useful than reassurance.
 
 Append exactly this block (replace `<HEAD-sha>` with the SHA of the commit you just made, e.g. `git rev-parse HEAD`):
 
@@ -164,7 +166,7 @@ Append exactly this block (replace `<HEAD-sha>` with the SHA of the commit you j
 ## errors
 - <runtime errors, test failures, lint issues, or retries you hit; or "(none)">
 ## uncertainties
-- <PRD ambiguities, missing context, or assumptions you made and want validated; or "(none)">
+- <spec ambiguities, missing context, or assumptions you made and want validated; or "(none)">
 ```
 
 If the iteration was a CI fix or a steered iteration, mention that in concerns so the overseer has context.

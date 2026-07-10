@@ -4,6 +4,7 @@ description: "Use when writing code test-first via the red-green loop. Vertical-
 metadata:
   dependencies:
     - codebase-design
+    - code-review
   upstream: mattpocock/skills/skills/engineering/tdd
   upstream-sha: 9a2e1d2a1ad856b0d5903dd002209ff8c32c9a48
   adapted-date: "2026-07-10"
@@ -39,4 +40,4 @@ Ask: "What's the public interface, and which seams should we test?"
 
 - **Red before green.** Write the failing test first, then only enough code to pass it. Don't anticipate future tests or add speculative features.
 - **One slice at a time.** One seam, one test, one minimal implementation per cycle.
-- **Refactoring is not part of the loop.** It belongs to the review stage after the cycles are done, not the red -> green implementation cycle. When you get there, see `~/.claude/skills/almanac/tdd/references/refactoring.md` for candidates. Never refactor while RED.
+- **Refactoring is not part of the loop.** It belongs to the review stage after the cycles are done, not the red -> green implementation cycle — follow the `code-review` skill there. See `~/.claude/skills/almanac/tdd/references/refactoring.md` for candidates. Never refactor while RED.

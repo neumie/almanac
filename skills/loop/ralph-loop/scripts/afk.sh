@@ -38,19 +38,19 @@ if ! declare -F almanac_loop_role_field >/dev/null 2>&1; then
 fi
 
 if [ -z "$1" ] || [ -z "$2" ]; then
-  echo "Usage: $0 <prd-name> <iterations>"
+  echo "Usage: $0 <spec-name> <iterations>"
   echo "Example: $0 auth-system 10"
   echo ""
-  echo "Available PRDs:"
+  echo "Available specs:"
   for d in docs/plans/*/; do
-    [ -f "$d/prd.md" ] && basename "$d"
+    { [ -f "$d/spec.md" ] || [ -f "$d/prd.md" ]; } && basename "$d"
   done 2>/dev/null | sed 's/^/  /'
   exit 1
 fi
 
-PRD_NAME="$1"
+SPEC_NAME="$1"
 ITERATIONS="$2"
-PROMPT="docs/plans/${PRD_NAME}/prompt.md"
+PROMPT="docs/plans/${SPEC_NAME}/prompt.md"
 
 # Iteration-agent role config resolves through the shared engine helper
 # (almanac_loop_role_field): RALPH_AGENT_<FIELD> -> RALPH_<FIELD> -> default, the
@@ -81,7 +81,7 @@ AGENT_MODEL="$(almanac_loop_role_field ralph agent "" model "")"
 AGENT_EFFORT="$(almanac_loop_role_field ralph agent "" effort "")"
 
 if [ ! -f "$PROMPT" ]; then
-  echo "Error: $PROMPT not found. Run /ralph-loop $PRD_NAME to set up first."
+  echo "Error: $PROMPT not found. Run /ralph-loop $SPEC_NAME to set up first."
   exit 1
 fi
 
@@ -278,7 +278,7 @@ build_prompt_prefix() {
     cat <<'EOF'
 # CI FAILURE — FIX BEFORE ANY NEW TASK WORK
 
-The previous push broke CI. Do NOT pick a new PRD task this iteration.
+The previous push broke CI. Do NOT pick a new spec task this iteration.
 
 1. Read `.ralph-ci-failed` in the working directory for the failing run URL, workflow name, and run ID.
 2. Run `gh run view <run-id> --log-failed` to read the failure logs.
@@ -316,13 +316,13 @@ EOF
 # .ralph-stop so the next iteration exits gracefully. Set RALPH_NO_OVERSEE=1 to
 # disable.
 OVERSEE_INTERVAL="${RALPH_OVERSEE_INTERVAL:-900}"
-OVERSEE_LOG="docs/plans/${PRD_NAME}/overseer.log"
-REPORTS_LOG="docs/plans/${PRD_NAME}/agent-reports.log"
+OVERSEE_LOG="docs/plans/${SPEC_NAME}/overseer.log"
+REPORTS_LOG="docs/plans/${SPEC_NAME}/agent-reports.log"
 OVERSEER_PID=""
 
 run_overseer_once() {
   local recent_commits recent_reports
-  recent_commits=$(git log --grep="RALPH(${PRD_NAME})" -n 10 --format="%h %ad %s%n%b---" --date=short 2>/dev/null || echo "No RALPH commits yet")
+  recent_commits=$(git log --grep="RALPH(${SPEC_NAME})" -n 10 --format="%h %ad %s%n%b---" --date=short 2>/dev/null || echo "No RALPH commits yet")
   # Tail the last ~8KB of agent reports — bounded so the overseer prompt
   # doesn't balloon. Reports are appended by iteration agents under headers
   # like `===== sha=<sha> ts=<iso> =====`.
@@ -333,7 +333,7 @@ run_overseer_once() {
   fi
 
   local overseer_prompt
-  overseer_prompt="Read the PRD context at @${PROMPT}. You are an overseer watching an autonomous coding loop named ralph(${PRD_NAME}).
+  overseer_prompt="Read the spec context at @${PROMPT}. You are an overseer watching an autonomous coding loop named ralph(${SPEC_NAME}).
 
 Recent RALPH commits (last 10):
 ${recent_commits}
@@ -343,15 +343,15 @@ ${recent_reports}
 
 Detect drift. Drift includes (non-exhaustive):
 - Repeated tasks or task ping-pong
-- Off-PRD topics — work unrelated to the PRD
+- Off-spec topics — work unrelated to the spec
 - ABORT loops — repeated aborts on the same blocker
 - Vague 'no real progress' commits
-- Scope creep beyond the PRD
+- Scope creep beyond the spec
 - Test rot or growing failures
 - Recurring concerns or errors in agent self-reports that indicate confusion, wrong assumptions, or a blocker the agents aren't solving on their own
 - Anything else that suggests wasted effort
 
-Decide whether the next iteration would benefit from a steering directive — concrete advice that redirects the agent (e.g. 'the assumption about X in the last 3 iterations is wrong, see file Y', 'stop adding tests for Z, the PRD scopes that out', 'try approach A instead of B'). Only emit a steer if you have specific, actionable advice grounded in the commits or reports — vague encouragement is not a steer.
+Decide whether the next iteration would benefit from a steering directive — concrete advice that redirects the agent (e.g. 'the assumption about X in the last 3 iterations is wrong, see file Y', 'stop adding tests for Z, the spec scopes that out', 'try approach A instead of B'). Only emit a steer if you have specific, actionable advice grounded in the commits or reports — vague encouragement is not a steer.
 
 Output exactly in this format, no preamble:
 DRIFT_LEVEL: <low|medium|high>
@@ -376,9 +376,9 @@ Be conservative on DRIFT_LEVEL — only 'high' with clear evidence (the loop sto
       overseer_full_prompt="$overseer_prompt"
       ;;
     codex)
-      # codex exec does not resolve @-references, so inline the PRD/iteration
+      # codex exec does not resolve @-references, so inline the spec/iteration
       # prompt contents the same way the inline codex overseer call did.
-      overseer_full_prompt="PRD/iteration prompt contents from ${PROMPT}:
+      overseer_full_prompt="Spec/iteration prompt contents from ${PROMPT}:
 $(cat "$PROMPT")
 
 ${overseer_prompt}"
@@ -475,7 +475,7 @@ CI_POLL="${RALPH_CI_POLL_INTERVAL:-30}"
 CI_TIMEOUT="${RALPH_CI_WAIT_TIMEOUT:-1800}"
 
 echo "======= RALPH AFK ======="
-echo "PRD:         $PRD_NAME"
+echo "Spec:        $SPEC_NAME"
 echo "Iterations:  $ITERATIONS"
 echo "Prompt:      $PROMPT"
 echo "Provider:    $PROVIDER_DISPLAY"
@@ -488,7 +488,7 @@ echo "Reports log: $REPORTS_LOG"
 echo "========================="
 echo ""
 
-ralph_register_run "$PRD_NAME"
+ralph_register_run "$SPEC_NAME"
 # Stamp launch config onto the run so `almanac hub --resume <id>` can rebuild it.
 ralph_set_run_config \
   "provider=$PROVIDER" \
@@ -518,12 +518,12 @@ for ((i=1; i<=$ITERATIONS; i++)); do
   tmpfile=$(mktemp)
 
   echo ""
-  echo "======= ITERATION $i of $ITERATIONS ($PRD_NAME) ======="
+  echo "======= ITERATION $i of $ITERATIONS ($SPEC_NAME) ======="
   echo ""
 
   ralph_update_run_progress "$i" "provider=$PROVIDER iteration=$i/$ITERATIONS"
 
-  ralph_commits=$(git log --grep="RALPH($PRD_NAME)" -n 10 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No RALPH commits found")
+  ralph_commits=$(git log --grep="RALPH($SPEC_NAME)" -n 10 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No RALPH commits found")
 
   prompt_prefix=$(build_prompt_prefix)
 
@@ -567,8 +567,8 @@ $(cat "$PROMPT")
 
 Previous RALPH commits:
 $ralph_commits"
-      mkdir -p "docs/plans/${PRD_NAME}"
-      codex_log="docs/plans/${PRD_NAME}/ralph-codex-iteration-${i}.log"
+      mkdir -p "docs/plans/${SPEC_NAME}"
+      codex_log="docs/plans/${SPEC_NAME}/ralph-codex-iteration-${i}.log"
       echo "Codex session log: $codex_log"
       if [ "${RALPH_CODEX_VERBOSE:-}" = "1" ]; then
         # Raw-output mode now routes through the shared agent_run seam too, via its
@@ -638,5 +638,5 @@ $ralph_commits"
 done
 
 echo ""
-echo "Ralph finished $ITERATIONS iterations. Tasks may remain — check with: git log --grep='RALPH($PRD_NAME)' --oneline"
+echo "Ralph finished $ITERATIONS iterations. Tasks may remain — check with: git log --grep='RALPH($SPEC_NAME)' --oneline"
 push_ralph_commits

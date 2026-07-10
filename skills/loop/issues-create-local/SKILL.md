@@ -1,9 +1,9 @@
 ---
 name: issues-create-local
-description: Use when breaking a plan, spec, or PRD into local markdown task files as vertical-slice tracer bullets. No GitHub. Each slice gets its own file with status/blocked-by/type frontmatter.
+description: Use when breaking a plan or spec into local markdown task files as vertical-slice tracer bullets. No GitHub. Each slice gets its own file with status/blocked-by/type frontmatter.
 ---
 
-Break a plan into local markdown task files using vertical slices (tracer bullets). Same vertical-slice discipline as `issues-create`, but writes files to `docs/plans/<prd>/issues/` instead of calling `gh issue create`.
+Break a plan into local markdown task files using vertical slices (tracer bullets). Same vertical-slice discipline as `issues-create`, but writes files to `docs/plans/<spec>/issues/` instead of calling `gh issue create`.
 
 ## When to use this vs `issues-create`
 
@@ -14,15 +14,15 @@ Break a plan into local markdown task files using vertical slices (tracer bullet
 
 ### 1. Gather context
 
-Work from whatever is already in the conversation. If the user passes a PRD name (e.g. `auth-system`), read `docs/plans/auth-system/prd.md`. Otherwise scan `docs/plans/` for feature directories that contain `prd.md`:
+Work from whatever is already in the conversation. If the user passes a spec name (e.g. `auth-system`), read `docs/plans/auth-system/spec.md` (falling back to legacy `docs/plans/auth-system/prd.md` if `spec.md` is missing). Otherwise scan `docs/plans/` for feature directories that contain a spec (`spec.md`, or legacy `prd.md`):
 
 ```bash
-for d in docs/plans/*/; do [ -f "$d/prd.md" ] && echo "$d"; done
+for d in docs/plans/*/; do { [ -f "${d}spec.md" ] || [ -f "${d}prd.md" ]; } && echo "$d"; done
 ```
 
-If exactly one directory has a `prd.md`, use it. If none, tell the user to run `/prd-create` first. If multiple, ask which.
+If exactly one directory has a spec, use it. If none, tell the user to run `/spec-create` first. If multiple, ask which.
 
-Derive `<prd>` from the directory name (e.g. `docs/plans/auth-system/prd.md` → `auth-system`). All issue files for this PRD go under `docs/plans/<prd>/issues/`.
+Derive `<spec>` from the directory name (e.g. `docs/plans/auth-system/spec.md` → `auth-system`). All issue files for this spec go under `docs/plans/<spec>/issues/`.
 
 ### 2. Explore the codebase (optional)
 
@@ -70,13 +70,13 @@ Iterate until the user approves the breakdown.
 
 ### 5. Write the markdown files
 
-For each approved slice, write one file to `docs/plans/<prd>/issues/NN-<slug>.md`.
+For each approved slice, write one file to `docs/plans/<spec>/issues/NN-<slug>.md`.
 
 - `NN` — two-digit zero-padded ordinal in dependency order (blockers first): `01`, `02`, …
 - `<slug>` — kebab-case version of the title (lowercase, hyphens, no punctuation), e.g. `add-login-form`
 
 ```bash
-mkdir -p docs/plans/<prd>/issues
+mkdir -p docs/plans/<spec>/issues
 ```
 
 Use the file template below. Reference blockers by their filename basename (e.g. `01-add-login-form`) — that survives renames inside this directory better than absolute paths.
@@ -87,7 +87,7 @@ title: <Short descriptive title>
 status: open
 type: AFK            # or HITL
 blocked-by: []       # or [01-add-login-form, 02-add-session-store]
-user-stories: []     # or [1, 4, 7] — story numbers from the PRD
+user-stories: []     # or [1, 4, 7] — story numbers from the spec
 ---
 
 ## What to build
@@ -118,12 +118,12 @@ Wrote 5 slices to docs/plans/auth-system/issues/:
   05-session-expiry-design.md   (HITL)
 ```
 
-Then point the user at `/ralph-loop <prd>` to start working through them. ralph-loop reads these files as its task queue: it picks the lowest-numbered open slice whose blockers are all `status: done`, uses the slice's acceptance criteria as the task spec, flips checkboxes commit-by-commit (strict — only criteria fulfilled by that commit), and flips `status: open → done` automatically when the last `- [ ]` becomes `- [x]`. The overseer audits each flip against the diff and rolls back overclaims.
+Then point the user at `/ralph-loop <spec>` to start working through them. ralph-loop reads these files as its task queue: it picks the lowest-numbered open slice whose blockers are all `status: done`, uses the slice's acceptance criteria as the task spec, flips checkboxes commit-by-commit (strict — only criteria fulfilled by that commit), and flips `status: open → done` automatically when the last `- [ ]` becomes `- [x]`. The overseer audits each flip against the diff and rolls back overclaims.
 
 ## Status updates
 
 ralph-loop iterations maintain `status` and acceptance-criteria checkboxes automatically under the strict checkbox protocol — no manual flips needed during AFK runs. The overseer reconciles overclaims and stale checkboxes on its tick. To list remaining work at a glance:
 
 ```bash
-grep -L "status: done" docs/plans/<prd>/issues/*.md
+grep -L "status: done" docs/plans/<spec>/issues/*.md
 ```

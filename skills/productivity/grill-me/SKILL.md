@@ -1,6 +1,6 @@
 ---
 name: grill-me
-description: Use when stress-testing a plan, design, or architecture through relentless questioning. Walks each branch of the decision tree one question at a time; hand the resolved decisions to /prd-create to persist.
+description: Use when stress-testing a plan, design, or architecture through relentless questioning. Walks each branch of the decision tree one question at a time; hand the resolved decisions to /spec-create to persist.
 disable-model-invocation: true
 metadata:
   dependencies:
@@ -16,12 +16,12 @@ Run the interactive interview using the `grilling` skill: walk every branch of t
 decision tree, one question at a time, until no open questions remain.
 
 Keep the crystallized decisions in the conversation — do **not** write a file. The
-decisions live in this session; `/prd-create` synthesizes them into the PRD.
+decisions live in this session; `/spec-create` synthesizes them into the spec.
 
 ## Finishing
 
 When all branches are resolved (no open questions remain), tell the user:
 
 ```
-Grilling complete. Next step: /prd-create — it synthesizes these decisions into docs/plans/<name>/prd.md.
+Grilling complete. Next step: /spec-create — it synthesizes these decisions into docs/plans/<name>/spec.md.
 ```

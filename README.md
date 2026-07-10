@@ -16,9 +16,11 @@ Skills are organized by category in the repo (`skills/git/`, `skills/productivit
 
 | Skill | Use |
 |-------|-----|
-| `ralph-loop` | Build a PRD slice queue task-by-task, with each iteration committed. |
+| `ralph-loop` | Build a spec slice queue task-by-task, with each iteration committed. |
 | `harden-loop` | Harden one target through reviewers, ratification, fixer, and feedback gates. |
 | `converge-loop` | Repeat one custom exec command toward a mutable `goal.md` until an overseer says done. |
+| `spec-create` | Synthesize a conversation or idea into `docs/plans/<name>/spec.md` for the loops to consume. |
+| `code-review` | Review changes since a fixed point on two parallel axes — repo standards and spec conformance. |
 | `codebase-design` | Shared vocabulary for deep modules, interfaces, seams, adapters, and testability. |
 | `domain-model` | Maintain `CONTEXT.md` domain language and ADRs while design decisions crystallize. |
 | `prototype-build` | Build throwaway logic or UI prototypes to answer design questions before production code. |
@@ -119,7 +121,11 @@ skills/
       SKILL.md
     ralph-loop/
       SKILL.md
+    spec-create/
+      SKILL.md
   other/
+    code-review/
+      SKILL.md
     codebase-design/
       SKILL.md
       references/
@@ -133,10 +139,11 @@ skills/
 
 ### Upstream sync
 
-Eleven skills are adapted from upstream repositories:
+Twelve skills are adapted from upstream repositories:
 
 | Skill | Upstream |
 |-------|----------|
+| code-review | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | codebase-design | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | codebase-improve | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | diagnose | [mattpocock/skills](https://github.com/mattpocock/skills) |
@@ -146,7 +153,7 @@ Eleven skills are adapted from upstream repositories:
 | grilling | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | issues-create | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | prototype-build | [mattpocock/skills](https://github.com/mattpocock/skills) |
-| prd-create | [mattpocock/skills](https://github.com/mattpocock/skills) |
+| spec-create | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | tdd | [mattpocock/skills](https://github.com/mattpocock/skills) |
 
 Run `almanac sync` to check for updates.

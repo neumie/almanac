@@ -2,7 +2,7 @@
 
 ## Adding a Skill
 
-1. Pick a category — `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (PRD/issues/autonomous loops — ralph-loop, harden-loop, converge-loop), `comms/` (client/team-facing comms), `productivity/`, or `other/`. Add a new category freely if none fit. Create `skills/<category>/<name>/SKILL.md`:
+1. Pick a category — `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (spec/issues/autonomous loops — spec-create, ralph-loop, harden-loop, converge-loop), `comms/` (client/team-facing comms), `productivity/`, or `other/`. Add a new category freely if none fit. Create `skills/<category>/<name>/SKILL.md`:
 
 ```yaml
 ---

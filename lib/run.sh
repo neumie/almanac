@@ -299,7 +299,8 @@ almanac_loop_status_field() {
 # status_to_opts verb — collapses the `field=$(...); [ -n "$field" ] && printf
 # '%s\n' "key=$field"` pair into one call so passthrough fields are a single
 # line each. A fourth loop's status_to_opts is now a sequence of these emits
-# plus any per-field transforms (e.g. ralph deriving prd from target dirname).
+# plus any per-field transforms (e.g. ralph deriving the spec name from the
+# target dirname).
 almanac_loop_status_emit_opt() {
   local status_file="$1" field="$2" out_key="${3:-$2}" val
   val="$(almanac_loop_status_field "$status_file" "$field" || true)"
@@ -1174,7 +1175,8 @@ almanac_loop_run_watch() {
 # --new … [--dry-run]` both drive: menu choices in, launch tokens out.
 #
 # Config arrives as `key=value` pairs (the keys the gum menu / --new flags
-# collect): ralph takes prd, mode, provider, model, effort, iterations, oversee;
+# collect): ralph takes the spec name (legacy wire key `prd`), mode, provider,
+# model, effort, iterations, oversee;
 # harden takes target, rounds, lenses, provider, model, effort; converge takes
 # goal, prompt/exec, rounds, provider, model, effort, oversee, oversee_every.
 

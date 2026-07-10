@@ -61,7 +61,8 @@ while [ "$#" -gt 0 ]; do
       while [ "$#" -gt 0 ]; do
         case "$1" in
           --dry-run)    NEW_DRY_RUN=1 ;;
-          --prd)        shift; [ "$#" -gt 0 ] || _die "Missing value for --prd";        NEW_OPTS+=("prd=$1") ;;
+          # "prd=" is the legacy wire key for the spec name (adapters + tests still speak it).
+          --spec|--prd) shift; [ "$#" -gt 0 ] || _die "Missing value for --spec";       NEW_OPTS+=("prd=$1") ;;
           --mode)       shift; [ "$#" -gt 0 ] || _die "Missing value for --mode";       NEW_OPTS+=("mode=$1") ;;
           --provider)   shift; [ "$#" -gt 0 ] || _die "Missing value for --provider";   NEW_OPTS+=("provider=$1") ;;
           --model)      shift; [ "$#" -gt 0 ] || _die "Missing value for --model";      NEW_OPTS+=("model=$1") ;;

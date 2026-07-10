@@ -3,8 +3,8 @@
 # shared almanac launcher (lib/loop-launcher.sh). Flags pre-fill; any missing
 # field is prompted. One launcher backs `almanac ralph`, the ralph skill
 # launcher, and the hub's New-run flow — so the config UX is identical.
-# summary: Launch a Ralph PRD-slice loop (interactive)
-# usage: almanac ralph [--prd N] [--mode once|afk] [--provider P] [--model M] [--effort L] [--iterations N] [--no-oversee] [--yes]
+# summary: Launch a Ralph spec-slice loop (interactive)
+# usage: almanac ralph [--spec N] [--mode once|afk] [--provider P] [--model M] [--effort L] [--iterations N] [--no-oversee] [--yes]
 # group: loops
 
 set -euo pipefail

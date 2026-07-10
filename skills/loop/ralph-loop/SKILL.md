@@ -1,6 +1,6 @@
 ---
 name: ralph-loop
-description: "Use when autonomously implementing a PRD task-by-task. Each loop iteration picks one task, TDDs it, commits, exits. Progress persists in git. Triggers: ralph, AFK mode, autonomous loop."
+description: "Use when autonomously implementing a spec task-by-task. Each loop iteration picks one task, TDDs it, commits, exits. Progress persists in git. Triggers: ralph, AFK mode, autonomous loop."
 disable-model-invocation: true
 metadata:
   source: mattpocock/ralph-workshop-repo-001 (technique only — no canonical SKILL.md to SHA-sync)
@@ -9,26 +9,26 @@ metadata:
 
 # Ralph Loop
 
-Autonomous implementation loop. Each iteration gets fresh context, picks one task from the PRD, implements it, runs feedback loops, commits, and exits. Progress lives in git history, not conversation memory.
+Autonomous implementation loop. Each iteration gets fresh context, picks one task from the spec, implements it, runs feedback loops, commits, and exits. Progress lives in git history, not conversation memory.
 
 ## Setup
 
 These commands run automatically when the skill loads — output replaces each line below:
 
-- Available PRDs: !`for d in docs/plans/*/; do [ -f "$d/prd.md" ] && basename "$d"; done 2>/dev/null || true`
+- Available specs: !`for d in docs/plans/*/; do { [ -f "$d/spec.md" ] || [ -f "$d/prd.md" ]; } && basename "$d"; done 2>/dev/null || true`
 - Project files: !`ls package.json Makefile Cargo.toml go.mod pyproject.toml setup.py 2>/dev/null || true`
 - Tests directory: !`ls tests/ 2>/dev/null || true`
 
-### 1. Select a PRD
+### 1. Select a spec
 
-From the PRD list:
+From the spec list:
 
-- If the user passed a name (e.g. `/ralph-loop auth-system`), use `docs/plans/auth-system/prd.md`
-- If there's exactly one PRD, use it
+- If the user passed a name (e.g. `/ralph-loop auth-system`), use `docs/plans/auth-system/spec.md` (fall back to `prd.md` when `spec.md` is missing — legacy plan dirs)
+- If there's exactly one spec, use it
 - If there are multiple, ask the user which one to use
-- If there are none, tell the user to run `/prd-create` first
+- If there are none, tell the user to run `/spec-create` first
 
-Store the selected PRD path as `PRD_FILE` for use in the prompt template.
+Store the selected spec path as `SPEC_FILE` for use in the prompt template.
 
 ### 2. Detect feedback loops
 
@@ -65,35 +65,35 @@ The script writes `docs/plans/<name>/prompt.md`, sources `lib/feedback.sh`,
 and renders feedback commands from `almanac_loop_feedback_markdown()`.
 Use the template below only as a fallback when the script is unavailable.
 
-Write `docs/plans/<name>/prompt.md` (e.g. `docs/plans/auth-system/prompt.md`) using the template below, filling in the detected feedback loops and the PRD path:
+Write `docs/plans/<name>/prompt.md` (e.g. `docs/plans/auth-system/prompt.md`) using the template below, filling in the detected feedback loops and the spec path:
 
 ```markdown
 # INPUTS
 
-Pull @{{PRD_FILE}} into your context.
+Pull @{{SPEC_FILE}} into your context.
 
 You've been passed the last 10 RALPH commits (SHA, date, full message). Review these to understand what work has been done.
 
 # TASK QUEUE
 
-Before decomposing the PRD, check whether an explicit queue exists. Detect in this order:
+Before decomposing the spec, check whether an explicit queue exists. Detect in this order:
 
 1. **Local slice files.** If `docs/plans/<name>/issues/` contains `*.md` files, that directory is your queue. Each file has frontmatter (`status`, `blocked-by`, `type`) and an `## Acceptance criteria` checklist of `- [ ]` items.
 2. **GitHub issues.** Else if `gh issue list --search 'label:"ralph(<name>)" state:open'` returns at least one issue, that's your queue. (Use `--search`, not `--label` — the parenthesised label name breaks the `--label` filter.) Each issue body contains an `## Acceptance criteria` section with `- [ ]` items.
-3. **No queue.** Skip to TASK BREAKDOWN below and decompose the PRD yourself.
+3. **No queue.** Skip to TASK BREAKDOWN below and decompose the spec yourself.
 
 If a queue is present:
 
 - Pick the **lowest-numbered** open slice file (or **oldest** open issue) whose `blocked-by` references are all `status: done` (or closed). That slice/issue is your task.
-- Its `## What to build` and `## Acceptance criteria` define your scope. The PRD is reference; the slice/issue is the spec.
-- Do NOT decompose the PRD again — TASK BREAKDOWN below is for the no-queue case only.
+- Its `## What to build` and `## Acceptance criteria` define your scope. The spec is reference; the slice/issue is authoritative.
+- Do NOT decompose the spec again — TASK BREAKDOWN below is for the no-queue case only.
 - If every queued task is blocked by something incomplete, output `<promise>ABORT</promise>`.
 
 # TASK BREAKDOWN
 
 (Run this section ONLY if TASK QUEUE found no queue. Otherwise the slice/issue you picked IS your task; skip ahead to EXPLORATION.)
 
-Break down the PRD into tasks.
+Break down the spec into tasks.
 
 Pick the smallest unit of work that pins one meaningful behavior. Don't outrun your headlights — but don't underrun them either.
 
@@ -154,7 +154,7 @@ If you used a queued task, update the queue using the **strict checkbox protocol
 Then make the git commit. The commit message must:
 
 1. Start with `RALPH(<name>):` prefix (e.g. `RALPH(auth-system):`)
-2. Include task completed + PRD reference
+2. Include task completed + spec reference
 3. Key decisions made
 4. Files changed
 5. Blockers or notes for next iteration
@@ -174,7 +174,7 @@ Append exactly this block (replace `<HEAD-sha>` with the SHA of the commit you j
 ## errors
 - <runtime errors, test failures, lint issues, or retries you hit; or "(none)">
 ## uncertainties
-- <PRD ambiguities, missing context, or assumptions you made and want validated; or "(none)">
+- <spec ambiguities, missing context, or assumptions you made and want validated; or "(none)">
 ```
 
 If the iteration was a CI fix or a steered iteration, mention that in concerns so the overseer has context.
@@ -239,7 +239,7 @@ Fully autonomous. Runs N iterations, each in a fresh agent context. Stops when:
 
 **Codex output:** Codex raw session output is quiet by default and written to `docs/plans/<name>/ralph-codex-*.log`; the terminal shows concise agent progress messages, the final assistant message, and the log path. Set `RALPH_CODEX_VERBOSE=1` to stream Codex's full session output.
 
-**Interactive launcher:** run `almanac ralph` (or `ralph.sh` directly) to select PRD, mode, provider, model, thinking level, iteration count, and overseer behavior from prompts. It delegates to `once.sh` or `afk.sh` with the corresponding `RALPH_PROVIDER`, `RALPH_MODEL`, `RALPH_EFFORT`, and `RALPH_NO_OVERSEE` environment values.
+**Interactive launcher:** run `almanac ralph` (or `ralph.sh` directly) to select spec, mode, provider, model, thinking level, iteration count, and overseer behavior from prompts. It delegates to `once.sh` or `afk.sh` with the corresponding `RALPH_PROVIDER`, `RALPH_MODEL`, `RALPH_EFFORT`, and `RALPH_NO_OVERSEE` environment values.
 
 **Auto-push:** the overseer pushes any unpushed RALPH commits to `origin` at the start of each tick (default 15 min, configurable via `RALPH_OVERSEE_INTERVAL`). This batches commits so CI runs at overseer cadence rather than per-iteration — avoids clogging CI when iterations are minutes apart. End-of-loop also pushes as a safety net. Sets upstream automatically on first push and repairs mismatched upstreams such as `origin/main`.
 
@@ -251,9 +251,9 @@ Fully autonomous. Runs N iterations, each in a fresh agent context. Stops when:
 
 3. **CI verdict** (shell, no Claude call). Reads `gh run list --limit 1`. On `conclusion=failure|cancelled|timed_out|action_required|startup_failure`, writes `.ralph-ci-failed` (run URL, ID, workflow name, branch, timestamp). On `conclusion=success`, clears the marker. Also runs once at script start to pick up pre-existing failures from prior sessions or manual pushes.
 
-4. **Drift review** (selected agent call). Reviews recent `RALPH(<name>)` commits, **the tail of `docs/plans/<name>/agent-reports.log`** (last ~8KB of agent self-reports — concerns, errors, uncertainties), **and any task queue** (slice files in `docs/plans/<name>/issues/` or open GitHub issues with the `ralph(<name>)` label) against the PRD. Detects:
+4. **Drift review** (selected agent call). Reviews recent `RALPH(<name>)` commits, **the tail of `docs/plans/<name>/agent-reports.log`** (last ~8KB of agent self-reports — concerns, errors, uncertainties), **and any task queue** (slice files in `docs/plans/<name>/issues/` or open GitHub issues with the `ralph(<name>)` label) against the spec. Detects:
 
-   - Repeated tasks, off-PRD work, ABORT loops, vague commits, scope creep, test rot, recurring concerns the agents aren't solving on their own.
+   - Repeated tasks, off-spec work, ABORT loops, vague commits, scope creep, test rot, recurring concerns the agents aren't solving on their own.
    - **Queue overclaim** — checkboxes flipped to `[x]` (or `status: done` set, or issues closed) without the corresponding code in those commits. For each recently-flipped checkbox, the overseer reads the slice/issue criterion and the commits that flipped it, and judges whether the diff actually fulfills the criterion. If not, the steer directs the next iteration to roll back the checkbox / status / issue closure.
    - **Queue staleness** — criteria clearly fulfilled by recent commits but checkbox still `[ ]`.
 
@@ -287,7 +287,7 @@ While AFK mode runs, you can watch progress:
 git log --grep="RALPH(auth-system)" --oneline
 ```
 
-Each `RALPH(<name>):` commit message contains what was done and notes for the next iteration. The name prefix means multiple PRDs can run against the same repo without confusing each other's progress.
+Each `RALPH(<name>):` commit message contains what was done and notes for the next iteration. The name prefix means multiple specs can run against the same repo without confusing each other's progress.
 
 ## When to stop
 
