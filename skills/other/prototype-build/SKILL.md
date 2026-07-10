@@ -3,8 +3,8 @@ name: prototype-build
 description: Use when building throwaway logic or UI prototypes to answer design questions before production implementation; terminal state app or UI variants.
 metadata:
   upstream: mattpocock/skills/skills/engineering/prototype
-  upstream-sha: ddebc187ed68bae0e90f3aa6dab3f9a8740ced3a
-  adapted-date: "2026-06-19"
+  upstream-sha: 9425f7dbc7665029c72ba4ae22ad303df039a5e5
+  adapted-date: "2026-07-10"
 ---
 
 # Prototype Build

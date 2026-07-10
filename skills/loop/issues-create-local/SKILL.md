@@ -45,7 +45,10 @@ Prefer AFK over HITL where possible.
 **Vertical slice rules:**
 - Each slice delivers a narrow but COMPLETE path through every layer (schema, API, UI, tests)
 - A completed slice is demoable or verifiable on its own
+- Each slice is sized to fit in a single fresh context window
 - Prefer many thin slices over few thick ones
+
+**Wide refactors are the exception to vertical slicing.** A **wide refactor** is one mechanical change — rename a column, retype a shared symbol — whose **blast radius** fans across the whole codebase, so a single edit breaks thousands of call sites at once and no vertical slice can land green. Don't force it into a tracer bullet; sequence it as **expand–contract**. First expand: add the new form beside the old so nothing breaks. Then migrate the call sites over in batches sized by blast radius (per package, per directory), each batch its own slice blocked by the expand, keeping CI green batch to batch because the old form still exists. Finally contract: delete the old form once no caller remains, in a slice blocked by every migrate batch.
 
 ### 4. Quiz the user
 
@@ -54,12 +57,12 @@ Present the proposed breakdown as a numbered list. For each slice, show:
 - **Title**: short descriptive name
 - **Type**: HITL / AFK
 - **Blocked by**: which other slices (if any) must complete first
-- **User stories covered**: which user stories this addresses (if the source material has them)
+- **What it delivers**: the end-to-end behavior this slice makes work
 
 Ask the user:
 
 - Does the granularity feel right? (too coarse / too fine)
-- Are the dependency relationships correct?
+- Are the blocking edges correct — does each slice only depend on slices that genuinely gate it?
 - Should any slices be merged or split further?
 - Are the correct slices marked HITL / AFK?
 
@@ -89,7 +92,7 @@ user-stories: []     # or [1, 4, 7] — story numbers from the PRD
 
 ## What to build
 
-A concise description of this vertical slice. Describe the end-to-end behavior, not layer-by-layer implementation.
+The end-to-end behavior this slice makes work, from the user's perspective — not layer-by-layer implementation.
 
 ## Acceptance criteria
 

@@ -5,9 +5,9 @@ disable-model-invocation: true
 metadata:
   dependencies:
     - codebase-design
-  upstream: mattpocock/skills/skills/engineering/to-prd
-  upstream-sha: e5f11413b09c19f59150dac52125536ccda34e2d
-  adapted-date: "2026-06-19"
+  upstream: mattpocock/skills/skills/engineering/to-spec
+  upstream-sha: f3cca8d3dbdb7c22e11447f1d13011a78ca6efba
+  adapted-date: "2026-07-10"
 ---
 
 Synthesize the current conversation context and codebase understanding into a PRD. Do NOT interview the user — just synthesize what you already know.
