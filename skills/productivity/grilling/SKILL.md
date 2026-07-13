@@ -1,22 +1,20 @@
 ---
 name: grilling
-description: Use when stress-testing a plan or design through a relentless one-question-at-a-time interview before building.
+description: Use when stress-testing a plan, decision, or idea through relentless one-question-at-a-time grilling, especially for explicit "grill" requests.
 metadata:
   upstream: mattpocock/skills/skills/productivity/grilling
-  upstream-sha: 219930f78b238d0980f5036af7d7736b855bbaea
-  adapted-date: "2026-07-10"
+  upstream-sha: 52d8eb3cadd2dca62634d5dccfa73ea6b725b117
+  adapted-date: "2026-07-13"
 ---
 
 # Grilling
 
-Interview the user relentlessly about every aspect of a plan until reaching shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one by one.
+Interview the user relentlessly about every aspect of a plan, decision, or idea until reaching shared understanding. Walk down each branch of the decision tree, resolving dependencies one by one.
 
 ## Rules
 
 - Ask one question at a time and wait for feedback before continuing.
-- For each question, provide your recommended answer.
-- If a *fact* can be found by exploring the codebase, look it up instead of asking. The *decisions* are the user's — put each one to them and wait for the answer.
-- Do not accept vague answers; push for specifics.
-- Track which branches of the decision tree are resolved vs open.
-- Stop when no open questions remain.
-- Do not enact the plan until the user confirms shared understanding has been reached.
+- Provide a recommended answer for each question.
+- Find discoverable *facts* by exploring the environment instead of asking.
+- Put each *decision* to the user and wait for their answer.
+- Do not act until the user confirms shared understanding has been reached.
