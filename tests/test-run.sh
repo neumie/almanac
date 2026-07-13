@@ -10,7 +10,7 @@
 #   - WORKER HEALTH: the pure classifier + the gather wrapper
 #   - the HUB read-views: running/recent render, overview, per-run detail/watch
 #   - CONTROL: stop/steer signal-file dispatch (via the loop adapter)
-#   - the NEW-RUN composer: argv/env for ralph + harden
+#   - the NEW-RUN composer: argv/env for loop + harden
 # The worker ORCHESTRATION (background fan-out) lives in lib/worker.sh and is
 # tested in tests/test-worker.sh.
 
@@ -96,13 +96,13 @@ test_record_set_initialises_full_key_set() {
   new_tmpdir; tmp="$NEW_TMPDIR"; file="$tmp/status.tsv"
 
   # Name only a subset; the record must still carry EVERY canonical key in order.
-  almanac_loop_record_set "$file" "id=r1" "type=ralph" "status=running"
+  almanac_loop_record_set "$file" "id=r1" "type=loop" "status=running"
 
   keys="$(cut -f1 "$file")"
   expected="$(almanac_loop_record_fields)"
   assert_eq "$expected" "$keys" "a fresh record must carry every canonical key in order"
   assert_eq "r1" "$(almanac_loop_record_get "$file" id)" "supplied id must be set"
-  assert_eq "ralph" "$(almanac_loop_record_get "$file" type)" "supplied type must be set"
+  assert_eq "loop" "$(almanac_loop_record_get "$file" type)" "supplied type must be set"
   assert_eq "running" "$(almanac_loop_record_get "$file" status)" "supplied status must be set"
   assert_eq "" "$(almanac_loop_record_get "$file" summary)" "an unsupplied field must be present but blank"
   echo "  PASS: record_set initialises the full canonical key set"
@@ -162,22 +162,22 @@ test_record_set_requires_file_arg() {
 }
 
 test_records_share_identical_key_set_by_construction() {
-  local tmp ralph harden ralph_keys harden_keys
+  local tmp loop harden loop_keys harden_keys
   new_tmpdir; tmp="$NEW_TMPDIR"
-  ralph="$tmp/ralph.tsv"; harden="$tmp/harden.tsv"
+  loop="$tmp/loop.tsv"; harden="$tmp/harden.tsv"
 
   # Two loops set DIFFERENT subsets — the key set must still be identical because
   # both writes iterate the one canonical field list.
-  almanac_loop_record_set "$ralph" \
-    "id=a" "type=ralph" "target=prd.md" "status=running"
+  almanac_loop_record_set "$loop" \
+    "id=a" "type=loop" "target=prd.md" "status=running"
   almanac_loop_record_set "$harden" \
     "id=b" "type=harden" "target=src/x.js" "status=running" "round=1" "summary=lenses=security"
 
-  ralph_keys="$(cut -f1 "$ralph")"
+  loop_keys="$(cut -f1 "$loop")"
   harden_keys="$(cut -f1 "$harden")"
-  assert_eq "$ralph_keys" "$harden_keys" \
-    "ralph and harden records must carry an identical key set by construction"
-  assert_eq "$(almanac_loop_record_fields)" "$ralph_keys" \
+  assert_eq "$loop_keys" "$harden_keys" \
+    "loop and harden records must carry an identical key set by construction"
+  assert_eq "$(almanac_loop_record_fields)" "$loop_keys" \
     "the shared key set must be the canonical schema"
   echo "  PASS: records share an identical key set by construction"
 }
@@ -257,15 +257,15 @@ test_marks_registered_run_done() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/demo/prd.md" "31337" "ralph-demo-001" "2026-05-25T12:00:00Z" >/dev/null
-  almanac_loop_mark_run_status "$tmp" "ralph-demo-001" "done" "2026-05-25T12:10:00Z"
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/demo/prd.md" "31337" "loop-demo-001" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_mark_run_status "$tmp" "loop-demo-001" "done" "2026-05-25T12:10:00Z"
 
-  status_file="$tmp/.almanac/runs/ralph-demo-001/status.tsv"
+  status_file="$tmp/.almanac/runs/loop-demo-001/status.tsv"
   index_file="$tmp/.almanac/runs/index.tsv"
 
   assert_file_contains "$status_file" $'status\tdone' "status file should mark run done"
   assert_file_contains "$status_file" $'finished_at\t2026-05-25T12:10:00Z' "status file should record finish time"
-  assert_file_contains "$index_file" $'ralph-demo-001\tralph\tdocs/plans/demo/prd.md\t31337\t.almanac/runs/ralph-demo-001/status.tsv\t2026-05-25T12:00:00Z\tdone' "index should mark run done"
+  assert_file_contains "$index_file" $'loop-demo-001\tloop\tdocs/plans/demo/prd.md\t31337\t.almanac/runs/loop-demo-001/status.tsv\t2026-05-25T12:00:00Z\tdone' "index should mark run done"
   echo "  PASS: marks registered run done"
 }
 
@@ -310,10 +310,10 @@ test_mark_run_failed_records_failure_reason() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "9999" "ralph-fail-001" "2026-05-25T12:00:00Z" >/dev/null
-  almanac_loop_mark_run_status "$tmp" "ralph-fail-001" "failed" "2026-05-25T12:15:00Z" "exit=1; Codex failed mid-iteration"
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/x/prd.md" "9999" "loop-fail-001" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_mark_run_status "$tmp" "loop-fail-001" "failed" "2026-05-25T12:15:00Z" "exit=1; Codex failed mid-iteration"
 
-  status_file="$tmp/.almanac/runs/ralph-fail-001/status.tsv"
+  status_file="$tmp/.almanac/runs/loop-fail-001/status.tsv"
   assert_file_contains "$status_file" $'status\tfailed' "failed is the recorded status"
   assert_file_contains "$status_file" $'failure_reason\texit=1; Codex failed mid-iteration' "a failure reason passed to mark must be persisted on the record so the hub can show *why*"
   echo "  PASS: mark run failed records failure_reason"
@@ -324,11 +324,11 @@ test_set_run_config_writes_provider_model_effort() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "9999" "ralph-cfg" "2026-05-26T12:00:00Z" >/dev/null
-  almanac_loop_set_run_config "$tmp" "ralph-cfg" \
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/x/prd.md" "9999" "loop-cfg" "2026-05-26T12:00:00Z" >/dev/null
+  almanac_loop_set_run_config "$tmp" "loop-cfg" \
     "provider=claude" "model=opus" "effort=xhigh" "iterations=20" "oversee=on"
 
-  status_file="$tmp/.almanac/runs/ralph-cfg/status.tsv"
+  status_file="$tmp/.almanac/runs/loop-cfg/status.tsv"
   assert_file_contains "$status_file" $'provider\tclaude' "set_run_config writes provider so hub --resume can read it back"
   assert_file_contains "$status_file" $'model\topus' "set_run_config writes model"
   assert_file_contains "$status_file" $'effort\txhigh' "set_run_config writes effort"
@@ -342,12 +342,12 @@ test_notify_run_end_writes_to_sink_on_terminal_transition() {
   new_tmpdir; tmp="$NEW_TMPDIR"
   sink="$tmp/notify.log"
 
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "9999" "ralph-notify" "2026-05-26T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/x/prd.md" "9999" "loop-notify" "2026-05-26T12:00:00Z" >/dev/null
   ALMANAC_NOTIFY_TEST_SINK="$sink" \
-    almanac_loop_mark_run_status "$tmp" "ralph-notify" "done" "2026-05-26T12:05:00Z"
+    almanac_loop_mark_run_status "$tmp" "loop-notify" "done" "2026-05-26T12:05:00Z"
 
   [ -f "$sink" ] || fail "notify sink should have been written on terminal transition"
-  assert_file_contains "$sink" "almanac · ralph done" "notify title carries type + status"
+  assert_file_contains "$sink" "almanac · loop done" "notify title carries type + status"
   assert_file_contains "$sink" "docs/plans/x/prd.md" "notify body carries target"
   echo "  PASS: notify_run_end fires on mark-status terminal transition"
 }
@@ -357,9 +357,9 @@ test_notify_run_end_respects_opt_out() {
   new_tmpdir; tmp="$NEW_TMPDIR"
   sink="$tmp/notify.log"
 
-  almanac_loop_register_run "$tmp" "ralph" "x" "9999" "ralph-quiet" "2026-05-26T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "x" "9999" "loop-quiet" "2026-05-26T12:00:00Z" >/dev/null
   ALMANAC_NO_NOTIFY=1 ALMANAC_NOTIFY_TEST_SINK="$sink" \
-    almanac_loop_mark_run_status "$tmp" "ralph-quiet" "done" "2026-05-26T12:05:00Z"
+    almanac_loop_mark_run_status "$tmp" "loop-quiet" "done" "2026-05-26T12:05:00Z"
 
   [ ! -f "$sink" ] || fail "ALMANAC_NO_NOTIFY=1 must suppress notification entirely (sink must stay unwritten)"
   echo "  PASS: notify_run_end honors ALMANAC_NO_NOTIFY"
@@ -370,11 +370,11 @@ test_notify_run_end_carries_failure_reason() {
   new_tmpdir; tmp="$NEW_TMPDIR"
   sink="$tmp/notify.log"
 
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "9999" "ralph-bad" "2026-05-26T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/x/prd.md" "9999" "loop-bad" "2026-05-26T12:00:00Z" >/dev/null
   ALMANAC_NOTIFY_TEST_SINK="$sink" \
-    almanac_loop_mark_run_status "$tmp" "ralph-bad" "failed" "2026-05-26T12:05:00Z" "exit=1; Codex failed"
+    almanac_loop_mark_run_status "$tmp" "loop-bad" "failed" "2026-05-26T12:05:00Z" "exit=1; Codex failed"
 
-  assert_file_contains "$sink" "almanac · ralph failed" "failed notification carries failed status"
+  assert_file_contains "$sink" "almanac · loop failed" "failed notification carries failed status"
   assert_file_contains "$sink" "exit=1; Codex failed" "failed notification body includes failure_reason"
   echo "  PASS: notify_run_end carries failure_reason on failed runs"
 }
@@ -412,12 +412,12 @@ test_list_runs_returns_all_registered_runs() {
   [ "$rc" -ne 0 ] || fail "listing runs with no registry should report no runs"
 
   almanac_loop_register_run "$tmp" "harden" "src/app.js" "11" "harden-a" "2026-05-25T12:00:00Z" >/dev/null
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/demo/prd.md" "22" "ralph-b" "2026-05-25T12:01:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/demo/prd.md" "22" "loop-b" "2026-05-25T12:01:00Z" >/dev/null
 
   out="$(almanac_loop_list_runs "$tmp")"
   assert_eq "2" "$(printf '%s\n' "$out" | grep -c '[^[:space:]]')" "list should return one row per run, no header"
   assert_contains "$out" "harden-a" "list should include the harden run"
-  assert_contains "$out" "ralph-b" "list should include the ralph run"
+  assert_contains "$out" "loop-b" "list should include the loop run"
   case "$out" in
     id*) fail "list should not include the index header row" ;;
   esac
@@ -497,7 +497,7 @@ test_hub_render_lists_running_with_live_status() {
   # a finished run.
   almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "harden-live" "2026-05-25T12:00:00Z" >/dev/null
   almanac_loop_update_run_progress "$tmp" "harden-live" "2" "reviewers: security,perf"
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "2147483647" "ralph-dead" "2026-05-25T12:01:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/x/prd.md" "2147483647" "loop-dead" "2026-05-25T12:01:00Z" >/dev/null
   almanac_loop_register_run "$tmp" "harden" "src/old.js" "$$" "harden-fin" "2026-05-25T11:00:00Z" >/dev/null
   almanac_loop_mark_run_status "$tmp" "harden-fin" "done" "2026-05-25T11:30:00Z"
 
@@ -506,7 +506,7 @@ test_hub_render_lists_running_with_live_status() {
   assert_contains "$out" "round 2" "running list shows the live round"
   assert_contains "$out" "reviewers: security,perf" "running list shows the live summary"
   assert_contains "$out" "running" "live run is shown running"
-  assert_contains "$out" "ralph-dead" "running list includes the crashed run"
+  assert_contains "$out" "loop-dead" "running list includes the crashed run"
   assert_contains "$out" "stale" "a running entry with a dead pid is surfaced as stale"
   case "$out" in
     *harden-fin*) fail "running list must exclude finished runs" ;;
@@ -521,7 +521,7 @@ test_hub_render_recent_newest_first_capped() {
 
   almanac_loop_register_run "$tmp" "harden" "a.js" "$$" "fin-old" "2026-05-25T10:00:00Z" >/dev/null
   almanac_loop_mark_run_status "$tmp" "fin-old" "done" "2026-05-25T10:10:00Z"
-  almanac_loop_register_run "$tmp" "ralph" "b/prd.md" "$$" "fin-mid" "2026-05-25T11:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "b/prd.md" "$$" "fin-mid" "2026-05-25T11:00:00Z" >/dev/null
   almanac_loop_mark_run_status "$tmp" "fin-mid" "failed" "2026-05-25T11:10:00Z"
   almanac_loop_register_run "$tmp" "harden" "c.js" "$$" "fin-new" "2026-05-25T12:00:00Z" >/dev/null
   almanac_loop_mark_run_status "$tmp" "fin-new" "aborted" "2026-05-25T12:10:00Z"
@@ -552,7 +552,7 @@ test_hub_overview_degrades_without_gum() {
   tmp="$NEW_TMPDIR"
 
   almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "ov-live" "2026-05-25T12:00:00Z" >/dev/null
-  almanac_loop_register_run "$tmp" "ralph" "p/prd.md" "$$" "ov-done" "2026-05-25T11:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "p/prd.md" "$$" "ov-done" "2026-05-25T11:00:00Z" >/dev/null
   almanac_loop_mark_run_status "$tmp" "ov-done" "done" "2026-05-25T11:30:00Z"
 
   out="$(ALMANAC_NO_GUM=1 almanac_loop_hub_overview "$tmp")"
@@ -577,8 +577,8 @@ test_hub_overview_empty_registry_shows_empty_states() {
 # --- Hub per-run actions (crit 4: watch / stop / queue-steer) ------------------
 
 test_run_signal_file_maps_type_to_dotfile() {
-  assert_eq ".ralph-stop"   "$(almanac_loop_signal_file ralph stop)"   "ralph stop file basename"
-  assert_eq ".ralph-steer"  "$(almanac_loop_signal_file ralph steer)"  "ralph steer file basename"
+  assert_eq ".loop-stop"   "$(almanac_loop_signal_file loop stop)"   "loop stop file basename"
+  assert_eq ".loop-steer"  "$(almanac_loop_signal_file loop steer)"  "loop steer file basename"
   assert_eq ".harden-stop"  "$(almanac_loop_signal_file harden stop)"  "harden stop file basename"
   assert_eq ".harden-steer" "$(almanac_loop_signal_file harden steer)" "harden steer file basename"
   assert_eq ".converge-stop" "$(almanac_loop_signal_file converge stop)" "converge stop file basename"
@@ -586,7 +586,7 @@ test_run_signal_file_maps_type_to_dotfile() {
   if almanac_loop_signal_file bogus stop >/dev/null 2>&1; then
     fail "unknown run type must return non-zero"
   fi
-  if almanac_loop_signal_file ralph bogus >/dev/null 2>&1; then
+  if almanac_loop_signal_file loop bogus >/dev/null 2>&1; then
     fail "unknown signal kind must return non-zero"
   fi
   echo "  PASS: run signal file maps type to dotfile"
@@ -675,10 +675,10 @@ test_run_stop_writes_stopfile_and_signals() {
   tmp="$NEW_TMPDIR"
 
   # Dead pid so the best-effort TERM is a no-op (never signals the test process).
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "2147483647" "stop-me" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/x/prd.md" "2147483647" "stop-me" "2026-05-25T12:00:00Z" >/dev/null
 
   almanac_loop_run_stop "$tmp" "stop-me"
-  [ -f "$tmp/.ralph-stop" ] || fail "stop must write the run type's stop file under root"
+  [ -f "$tmp/.loop-stop" ] || fail "stop must write the run type's stop file under root"
 
   rc=0; almanac_loop_run_stop "$tmp" "ghost" || rc=$?
   assert_eq "2" "$rc" "stopping an unknown run must return 2"
@@ -693,7 +693,7 @@ test_run_stop_does_not_signal_recorded_pid() {
   sleep 60 &
   pid="$!"
 
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "$pid" "stop-live" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/x/prd.md" "$pid" "stop-live" "2026-05-25T12:00:00Z" >/dev/null
   almanac_loop_run_stop "$tmp" "stop-live"
   sleep 0.2
 
@@ -713,7 +713,7 @@ test_run_stop_ignores_finished_runs() {
   sleep 60 &
   pid="$!"
 
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "$pid" "done-run" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/x/prd.md" "$pid" "done-run" "2026-05-25T12:00:00Z" >/dev/null
   almanac_loop_mark_run_status "$tmp" "done-run" "done" "2026-05-25T12:01:00Z"
 
   rc=0; almanac_loop_run_stop "$tmp" "done-run" || rc=$?
@@ -722,7 +722,7 @@ test_run_stop_ignores_finished_runs() {
   if ! kill -0 "$pid" 2>/dev/null; then
     fail "stopping a finished run must not TERM a reused recorded pid"
   fi
-  [ ! -f "$tmp/.ralph-stop" ] || fail "terminal runs should not receive a new stop file"
+  [ ! -f "$tmp/.loop-stop" ] || fail "terminal runs should not receive a new stop file"
   kill "$pid" 2>/dev/null || true
   wait "$pid" 2>/dev/null || true
   echo "  PASS: run stop ignores finished runs"
@@ -733,11 +733,11 @@ test_run_steer_writes_steerfile_with_directive() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "$$" "steer-me" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/x/prd.md" "$$" "steer-me" "2026-05-25T12:00:00Z" >/dev/null
 
   almanac_loop_run_steer "$tmp" "steer-me" "stop adding perf tests; the PRD scopes that out"
-  [ -f "$tmp/.ralph-steer" ] || fail "steer must write the run type's steer file under root"
-  assert_file_contains "$tmp/.ralph-steer" "stop adding perf tests" "steer file must carry the directive"
+  [ -f "$tmp/.loop-steer" ] || fail "steer must write the run type's steer file under root"
+  assert_file_contains "$tmp/.loop-steer" "stop adding perf tests" "steer file must carry the directive"
 
   rc=0; almanac_loop_run_steer "$tmp" "ghost" "do something" || rc=$?
   assert_eq "2" "$rc" "steering an unknown run must return 2"
@@ -772,7 +772,7 @@ test_run_watch_one_shot_renders_detail() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "ralph" "p/prd.md" "$$" "watch-run" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "p/prd.md" "$$" "watch-run" "2026-05-25T12:00:00Z" >/dev/null
   almanac_loop_update_run_progress "$tmp" "watch-run" "5" "iteration 5"
 
   # No follow mode (and captured, so not a TTY): one frame, then return — never blocks.
@@ -782,24 +782,24 @@ test_run_watch_one_shot_renders_detail() {
   echo "  PASS: run watch one-shot renders detail"
 }
 
-test_new_run_argv_ralph_composes_flags() {
+test_new_run_argv_loop_composes_flags() {
   local flat
-  flat="$(almanac_loop_new_run_argv ralph prd=auth-system mode=afk provider=codex model=gpt-5.5 effort=high iterations=8 oversee=off | tr '\n' ' ')"
-  assert_contains "$flat" "ralph " "ralph new-run argv leads with the ralph subcommand"
-  assert_contains "$flat" "--prd auth-system" "ralph argv carries --prd <name>"
-  assert_contains "$flat" "--mode afk" "ralph argv carries --mode"
-  assert_contains "$flat" "--provider codex" "ralph argv carries --provider"
-  assert_contains "$flat" "--model gpt-5.5" "ralph argv carries --model"
-  assert_contains "$flat" "--effort high" "ralph argv carries --effort"
-  assert_contains "$flat" "--iterations 8" "ralph argv carries --iterations"
+  flat="$(almanac_loop_new_run_argv loop prd=auth-system mode=afk provider=codex model=gpt-5.5 effort=high iterations=8 oversee=off | tr '\n' ' ')"
+  assert_contains "$flat" "loop " "loop new-run argv leads with the loop subcommand"
+  assert_contains "$flat" "--prd auth-system" "loop argv carries --prd <name>"
+  assert_contains "$flat" "--mode afk" "loop argv carries --mode"
+  assert_contains "$flat" "--provider codex" "loop argv carries --provider"
+  assert_contains "$flat" "--model gpt-5.5" "loop argv carries --model"
+  assert_contains "$flat" "--effort high" "loop argv carries --effort"
+  assert_contains "$flat" "--iterations 8" "loop argv carries --iterations"
   assert_contains "$flat" "--no-oversee" "oversee=off adds --no-oversee"
 
   # Overseer left on (the default) must NOT add --no-oversee.
-  flat="$(almanac_loop_new_run_argv ralph prd=auth-system mode=afk | tr '\n' ' ')"
+  flat="$(almanac_loop_new_run_argv loop prd=auth-system mode=afk | tr '\n' ' ')"
   case "$flat" in
     *"--no-oversee"*) fail "overseer defaults to on (no --no-oversee flag when oversee unset)" ;;
   esac
-  echo "  PASS: new-run argv composes ralph flags"
+  echo "  PASS: new-run argv composes loop flags"
 }
 
 test_new_run_argv_harden_composes_loop() {
@@ -820,8 +820,8 @@ test_new_run_argv_rejects_unknown_and_missing() {
   local rc
   rc=0; almanac_loop_new_run_argv bogus target=x >/dev/null 2>&1 || rc=$?
   assert_eq "1" "$rc" "an unknown run type must return 1"
-  rc=0; almanac_loop_new_run_argv ralph mode=afk >/dev/null 2>&1 || rc=$?
-  assert_eq "2" "$rc" "a ralph run without a prd must return 2"
+  rc=0; almanac_loop_new_run_argv loop mode=afk >/dev/null 2>&1 || rc=$?
+  assert_eq "2" "$rc" "a loop run without a prd must return 2"
   rc=0; almanac_loop_new_run_argv harden rounds=2 >/dev/null 2>&1 || rc=$?
   assert_eq "2" "$rc" "a harden run without a target must return 2"
   rc=0; almanac_loop_new_run_argv converge exec="echo hi" >/dev/null 2>&1 || rc=$?
@@ -888,47 +888,47 @@ test_new_run_env_maps_harden_config() {
   assert_contains "$out" "HARDEN_MODEL=gpt-5.5" "harden env carries HARDEN_MODEL"
   assert_contains "$out" "HARDEN_EFFORT=high" "harden env carries HARDEN_EFFORT"
 
-  # Ralph config rides on flags (argv), not env — so its env stream is empty.
-  out="$(almanac_loop_new_run_env ralph provider=codex model=gpt-5.5)"
-  assert_eq "" "$out" "ralph new-run emits no env lines (config via flags)"
+  # Loop config rides on flags (argv), not env — so its env stream is empty.
+  out="$(almanac_loop_new_run_env loop provider=codex model=gpt-5.5)"
+  assert_eq "" "$out" "loop new-run emits no env lines (config via flags)"
   echo "  PASS: new-run env maps harden config"
 }
 
-test_status_to_opts_inverts_new_run_for_ralph() {
+test_status_to_opts_inverts_new_run_for_loop() {
   local tmp status_file opts flat
   new_tmpdir; tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/auth-system/prd.md" "$$" "ralph-r" "2026-05-25T12:00:00Z" >/dev/null
-  almanac_loop_set_run_config "$tmp" "ralph-r" \
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/auth-system/prd.md" "$$" "loop-r" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_set_run_config "$tmp" "loop-r" \
     "provider=codex" "model=gpt-5.5" "effort=high" "iterations=8" "oversee=off"
-  status_file="$(almanac_loop_run_status_file "$tmp" "ralph-r")"
+  status_file="$(almanac_loop_run_status_file "$tmp" "loop-r")"
 
-  opts="$(almanac_loop_adapter_call ralph status_to_opts "$status_file")"
-  case "$opts" in *prd=auth-system*) ;; *) fail "ralph status_to_opts must derive prd from target dirname" ;; esac
-  case "$opts" in *mode=afk*)         ;; *) fail "ralph status_to_opts must emit mode=afk when iterations is set" ;; esac
-  case "$opts" in *iterations=8*)     ;; *) fail "ralph status_to_opts must carry iterations" ;; esac
-  case "$opts" in *provider=codex*)   ;; *) fail "ralph status_to_opts must carry provider" ;; esac
-  case "$opts" in *oversee=off*)      ;; *) fail "ralph status_to_opts must carry oversee=off" ;; esac
+  opts="$(almanac_loop_adapter_call loop status_to_opts "$status_file")"
+  case "$opts" in *prd=auth-system*) ;; *) fail "loop status_to_opts must derive prd from target dirname" ;; esac
+  case "$opts" in *mode=afk*)         ;; *) fail "loop status_to_opts must emit mode=afk when iterations is set" ;; esac
+  case "$opts" in *iterations=8*)     ;; *) fail "loop status_to_opts must carry iterations" ;; esac
+  case "$opts" in *provider=codex*)   ;; *) fail "loop status_to_opts must carry provider" ;; esac
+  case "$opts" in *oversee=off*)      ;; *) fail "loop status_to_opts must carry oversee=off" ;; esac
 
   # Round-trip: feeding the emitted opts into new_run_argv must produce a usable
-  # ralph launcher invocation — the hub depends on this inversion.
+  # loop launcher invocation — the hub depends on this inversion.
   split_lines_into opt_arr <<< "$opts"
-  flat="$(almanac_loop_new_run_argv ralph "${opt_arr[@]}" | tr '\n' ' ')"
+  flat="$(almanac_loop_new_run_argv loop "${opt_arr[@]}" | tr '\n' ' ')"
   assert_contains "$flat" "--prd auth-system" "round-trip emits --prd"
   assert_contains "$flat" "--iterations 8"    "round-trip emits --iterations"
-  echo "  PASS: status_to_opts inverts ralph status into new_run opts"
+  echo "  PASS: status_to_opts inverts loop status into new_run opts"
 }
 
-test_status_to_opts_handles_ralph_once_mode() {
+test_status_to_opts_handles_loop_once_mode() {
   local tmp status_file opts
   new_tmpdir; tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/auth-system/prd.md" "$$" "ralph-once" "2026-05-25T12:00:00Z" >/dev/null
-  almanac_loop_set_run_config "$tmp" "ralph-once" "provider=codex"
-  status_file="$(almanac_loop_run_status_file "$tmp" "ralph-once")"
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/auth-system/prd.md" "$$" "loop-once" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_set_run_config "$tmp" "loop-once" "provider=codex"
+  status_file="$(almanac_loop_run_status_file "$tmp" "loop-once")"
 
-  opts="$(almanac_loop_adapter_call ralph status_to_opts "$status_file")"
-  case "$opts" in *mode=once*) ;; *) fail "ralph status_to_opts must emit mode=once when iterations is absent" ;; esac
+  opts="$(almanac_loop_adapter_call loop status_to_opts "$status_file")"
+  case "$opts" in *mode=once*) ;; *) fail "loop status_to_opts must emit mode=once when iterations is absent" ;; esac
   case "$opts" in *mode=afk*)  fail "no iterations → no mode=afk" ;; *) ;; esac
   echo "  PASS: status_to_opts treats missing iterations as once-mode"
 }
@@ -982,12 +982,12 @@ test_status_to_opts_inverts_new_run_for_converge() {
 }
 
 test_launch_backed_signals_launcher_only_loops() {
-  # ralph runs through the launcher (which accepts --yes); harden + converge exec
+  # loop runs through the launcher (which accepts --yes); harden + converge exec
   # their direct runners and would reject --yes. The hub's resume path uses this
   # verb to decide whether to append --yes — the only place that policy lives.
   local rc
-  rc=0; almanac_loop_adapter_call ralph launch_backed >/dev/null 2>&1 || rc=$?
-  assert_eq "0" "$rc" "ralph adapter must declare itself launcher-backed"
+  rc=0; almanac_loop_adapter_call loop launch_backed >/dev/null 2>&1 || rc=$?
+  assert_eq "0" "$rc" "loop adapter must declare itself launcher-backed"
   rc=0; almanac_loop_adapter_call harden launch_backed >/dev/null 2>&1 || rc=$?
   assert_eq "2" "$rc" "harden adapter must NOT implement launch_backed (direct-runner)"
   rc=0; almanac_loop_adapter_call converge launch_backed >/dev/null 2>&1 || rc=$?
@@ -999,14 +999,14 @@ test_hub_stats_groups_by_type_provider_model() {
   local tmp out
   new_tmpdir; tmp="$NEW_TMPDIR"
 
-  # 3 ralph runs with claude/opus: 2 done, 1 failed → expect 67% success.
-  almanac_loop_register_run "$tmp" "ralph" "demo" "1" "r1" "2026-05-26T10:00:00Z" >/dev/null
+  # 3 loop runs with claude/opus: 2 done, 1 failed → expect 67% success.
+  almanac_loop_register_run "$tmp" "loop" "demo" "1" "r1" "2026-05-26T10:00:00Z" >/dev/null
   almanac_loop_set_run_config "$tmp" "r1" "provider=claude" "model=opus"
   almanac_loop_mark_run_status "$tmp" "r1" "done" "2026-05-26T10:30:00Z"
-  almanac_loop_register_run "$tmp" "ralph" "demo" "2" "r2" "2026-05-26T11:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "demo" "2" "r2" "2026-05-26T11:00:00Z" >/dev/null
   almanac_loop_set_run_config "$tmp" "r2" "provider=claude" "model=opus"
   almanac_loop_mark_run_status "$tmp" "r2" "done" "2026-05-26T11:30:00Z"
-  almanac_loop_register_run "$tmp" "ralph" "demo" "3" "r3" "2026-05-26T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "demo" "3" "r3" "2026-05-26T12:00:00Z" >/dev/null
   almanac_loop_set_run_config "$tmp" "r3" "provider=claude" "model=opus"
   almanac_loop_mark_run_status "$tmp" "r3" "failed" "2026-05-26T12:30:00Z"
 
@@ -1017,10 +1017,10 @@ test_hub_stats_groups_by_type_provider_model() {
 
   out=$(almanac_loop_hub_stats "$tmp")
   assert_contains "$out" "type" "stats prints a header row"
-  assert_contains "$out" "ralph" "stats includes the ralph (claude/opus) bucket"
+  assert_contains "$out" "loop" "stats includes the loop (claude/opus) bucket"
   assert_contains "$out" "harden" "stats includes the harden (codex/gpt-5.4) bucket"
   assert_contains "$out" "opus" "stats groups by model"
-  assert_contains "$out" "67%" "stats computes success rate (2 done / 3 ralph runs = 67%)"
+  assert_contains "$out" "67%" "stats computes success rate (2 done / 3 loop runs = 67%)"
   assert_contains "$out" "100%" "stats computes 100% for the single harden done run"
   echo "  PASS: hub_stats groups by (type, provider, model) and reports counts + success rate"
 }
@@ -1202,14 +1202,14 @@ test_run_stop_ignores_finished_runs
 test_run_steer_writes_steerfile_with_directive
 test_run_detail_renders_run_status
 test_run_watch_one_shot_renders_detail
-test_new_run_argv_ralph_composes_flags
+test_new_run_argv_loop_composes_flags
 test_new_run_argv_harden_composes_loop
 test_new_run_argv_rejects_unknown_and_missing
 test_new_run_argv_converge_composes_flags
 test_new_run_env_maps_harden_config
 test_new_run_env_maps_converge_config
-test_status_to_opts_inverts_new_run_for_ralph
-test_status_to_opts_handles_ralph_once_mode
+test_status_to_opts_inverts_new_run_for_loop
+test_status_to_opts_handles_loop_once_mode
 test_status_to_opts_inverts_new_run_for_harden
 test_status_to_opts_inverts_new_run_for_converge
 test_launch_backed_signals_launcher_only_loops

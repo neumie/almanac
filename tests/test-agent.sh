@@ -307,7 +307,7 @@ test_stream_propagates_failure() {
 }
 
 # Opt-in merge-stderr folds the provider's stderr into the captured event log
-# (2>&1) — preserving ralph's `codex ... 2>&1 | tee`. Default leaves it off.
+# (2>&1) — preserving loop's `codex ... 2>&1 | tee`. Default leaves it off.
 test_stream_merge_stderr_is_opt_in() {
   local tmp fakebin prompt result events_default events_merge out
   command -v jq >/dev/null 2>&1 || { echo "  SKIP: stream merge-stderr (no jq)"; return 0; }

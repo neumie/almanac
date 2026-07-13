@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ralph-run-registry.sh - Ralph launcher run registry helpers.
+# loop-run-registry.sh - Loop launcher run registry helpers.
 
 # ALMANAC_HOME bootstrap — prefer an exported value, else self-resolve
 # symlink-safe (pwd -P) at this file's known depth. Mirrors almanac_resolve_home
@@ -17,9 +17,9 @@ fi
 # directly rather than the deleted loop-core barrel.
 source "$ALMANAC_HOME/lib/run.sh"
 
-RALPH_RUN_ID="${RALPH_RUN_ID:-}"
+LOOP_RUN_ID="${LOOP_RUN_ID:-}"
 
-ralph_register_run() {
+loop_register_run() {
   local spec_name="$1"
   local target pid
 
@@ -28,8 +28,8 @@ ralph_register_run() {
   [ -f "$target" ] || target="docs/plans/${spec_name}/prd.md"
   pid="${BASHPID:-$$}"
 
-  if ! RALPH_RUN_ID="$(almanac_loop_register_run "$PWD" "ralph" "$target" "$pid")"; then
-    echo "Error: failed to register Ralph run." >&2
+  if ! LOOP_RUN_ID="$(almanac_loop_register_run "$PWD" "loop" "$target" "$pid")"; then
+    echo "Error: failed to register Loop run." >&2
     return 1
   fi
 }
@@ -40,22 +40,22 @@ ralph_register_run() {
 # the loop runs. Mirrors harden's per-round almanac_loop_update_run_progress
 # call. Best-effort: a missing run id or any registry failure must never break
 # the loop, so it is fully guarded.
-ralph_update_run_progress() {
+loop_update_run_progress() {
   local round="$1"
   local summary="$2"
   local qp status_file
 
-  [ -n "$RALPH_RUN_ID" ] || return 0
+  [ -n "$LOOP_RUN_ID" ] || return 0
 
-  almanac_loop_update_run_progress "$PWD" "$RALPH_RUN_ID" "$round" "$summary" >/dev/null 2>&1 || true
+  almanac_loop_update_run_progress "$PWD" "$LOOP_RUN_ID" "$round" "$summary" >/dev/null 2>&1 || true
 
   # Best-effort queue progress (closed/total) so the hub also shows task-level
   # progress alongside the iteration count. Skips silently when no queue is
   # detectable, when gh isn't authed, or when the registry write fails.
   if [ -n "${SPEC_NAME:-}" ]; then
-    qp="$(ralph_queue_progress "$SPEC_NAME" 2>/dev/null || true)"
+    qp="$(loop_queue_progress "$SPEC_NAME" 2>/dev/null || true)"
     if [ -n "$qp" ]; then
-      status_file="$(almanac_loop_run_status_file "$PWD" "$RALPH_RUN_ID" 2>/dev/null || true)"
+      status_file="$(almanac_loop_run_status_file "$PWD" "$LOOP_RUN_ID" 2>/dev/null || true)"
       [ -n "$status_file" ] && [ -f "$status_file" ] && \
         almanac_loop_record_set "$status_file" "queue_progress=$qp" >/dev/null 2>&1 || true
     fi
@@ -65,16 +65,16 @@ ralph_update_run_progress() {
 # Stamp the run's launch config onto its registry blob (after register_run) so
 # resume/clone can rebuild the same command. Best-effort: registry trouble must
 # never sink the run; absent values stay blank and are simply skipped at resume.
-ralph_set_run_config() {
-  [ -n "$RALPH_RUN_ID" ] || return 0
-  almanac_loop_set_run_config "$PWD" "$RALPH_RUN_ID" "$@" >/dev/null 2>&1 || true
+loop_set_run_config() {
+  [ -n "$LOOP_RUN_ID" ] || return 0
+  almanac_loop_set_run_config "$PWD" "$LOOP_RUN_ID" "$@" >/dev/null 2>&1 || true
 }
 
-ralph_mark_run_finished() {
+loop_mark_run_finished() {
   local exit_code="$1"
   local status="" reason=""
 
-  [ -n "$RALPH_RUN_ID" ] || return 0
+  [ -n "$LOOP_RUN_ID" ] || return 0
 
   if [ "$exit_code" -eq 0 ]; then
     status="done"
@@ -87,7 +87,7 @@ ralph_mark_run_finished() {
     reason="exit=$exit_code"
     if [ -n "${SPEC_NAME:-}" ]; then
       local last_log hint
-      last_log="$(ls -t "docs/plans/${SPEC_NAME}/ralph-codex-"*.log 2>/dev/null | head -1)"
+      last_log="$(ls -t "docs/plans/${SPEC_NAME}/loop-codex-"*.log 2>/dev/null | head -1)"
       if [ -n "$last_log" ] && [ -f "$last_log" ]; then
         hint="$(tail -n 30 "$last_log" 2>/dev/null | grep -m1 -E '^Codex failed|^Claude failed|^Error:|fatal error' || true)"
         [ -n "$hint" ] && reason="$reason; ${hint:0:160}"
@@ -95,27 +95,27 @@ ralph_mark_run_finished() {
     fi
   fi
 
-  almanac_loop_mark_run_status "$PWD" "$RALPH_RUN_ID" "$status" "" "$reason" >/dev/null 2>&1 || true
+  almanac_loop_mark_run_status "$PWD" "$LOOP_RUN_ID" "$status" "" "$reason" >/dev/null 2>&1 || true
 }
 
-ralph_finish_run() {
+loop_finish_run() {
   local exit_code="$1"
 
   trap - EXIT
-  ralph_mark_run_finished "$exit_code"
+  loop_mark_run_finished "$exit_code"
   exit "$exit_code"
 }
 
-# Report "<closed>/<total>" for the ralph queue of SPEC_NAME, or print nothing if
+# Report "<closed>/<total>" for the loop queue of SPEC_NAME, or print nothing if
 # no queue is detectable. Detect order matches the prompt:
 #   1) local slice files at docs/plans/<name>/issues/*.md — total = files,
 #      done = files whose frontmatter has "status: done"
-#   2) GitHub issues labelled ralph(<name>) — closed + open via `gh issue list
+#   2) GitHub issues labelled loop(<name>) — closed + open via `gh issue list
 #      --search` (only when gh is on PATH; network failures fall through silent)
 # Best-effort throughout — every helper is guarded so a slow or broken gh / a
 # missing issues dir never sinks the calling iteration. Prints nothing on no
 # queue, so callers can `[ -n "$qp" ]` cheaply.
-ralph_queue_progress() {
+loop_queue_progress() {
   local spec_name="$1"
   local issues_dir="docs/plans/${spec_name}/issues"
   local total done_count closed open
@@ -130,8 +130,8 @@ ralph_queue_progress() {
   fi
 
   if command -v gh >/dev/null 2>&1; then
-    closed=$(gh issue list --search "label:\"ralph(${spec_name})\" state:closed" --limit 200 --json number -q 'length' 2>/dev/null || echo "")
-    open=$(gh issue list   --search "label:\"ralph(${spec_name})\" state:open"   --limit 200 --json number -q 'length' 2>/dev/null || echo "")
+    closed=$(gh issue list --search "label:\"loop(${spec_name})\" state:closed" --limit 200 --json number -q 'length' 2>/dev/null || echo "")
+    open=$(gh issue list   --search "label:\"loop(${spec_name})\" state:open"   --limit 200 --json number -q 'length' 2>/dev/null || echo "")
     if [ -n "$closed" ] && [ -n "$open" ]; then
       total=$((closed + open))
       if [ "$total" -gt 0 ]; then

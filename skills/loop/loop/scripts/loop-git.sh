@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-ralph_push_current_branch() {
+loop_push_current_branch() {
   local branch upstream
 
   branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || return 1

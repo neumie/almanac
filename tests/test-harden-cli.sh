@@ -1419,7 +1419,7 @@ test_run_consumes_hub_queued_harden_stop() {
 
 # Criterion (67.1): launching a harden run creates a registry entry carrying id,
 # type=harden, target, a numeric pid, the status-file path, and a start time —
-# written through the same shared engine helper ralph uses. The overridden round
+# written through the same shared engine helper loop uses. The overridden round
 # converges so the run also reaches a terminal mark on exit (criterion 67.2 for
 # harden): a clean converge is recorded as done, with the live round/summary
 # progress preserved.
@@ -1700,19 +1700,19 @@ test_commit_round_respects_autocommit_off() {
   echo "  PASS: HARDEN_AUTOCOMMIT=0 leaves changes uncommitted for manual review"
 }
 
-# Criterion (67.5): the run-status contract is identical for harden and ralph —
+# Criterion (67.5): the run-status contract is identical for harden and loop —
 # both register through the same shared engine helper, so their status.tsv blobs
-# carry the exact same field keys. Register a ralph run, run a harden loop in the
+# carry the exact same field keys. Register a loop run, run a harden loop in the
 # same registry, then compare the two blobs' key sets.
-test_run_status_contract_identical_for_harden_and_ralph() {
-  local tmp output rc ralph_id harden_id ralph_keys harden_keys
+test_run_status_contract_identical_for_harden_and_loop() {
+  local tmp output rc loop_id harden_id loop_keys harden_keys
   new_tmpdir
   tmp="$NEW_TMPDIR"
   mkdir -p "$tmp/src"
   printf '%s\n' "code" > "$tmp/src/app.js"
 
-  ralph_id="$(almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" 4242)"
-  [ -n "$ralph_id" ] || fail "the ralph run should register"
+  loop_id="$(almanac_loop_register_run "$tmp" "loop" "docs/plans/x/prd.md" 4242)"
+  [ -n "$loop_id" ] || fail "the loop run should register"
 
   almanac_harden_round() {
     local root="$1" target="$2" lp
@@ -1728,13 +1728,13 @@ test_run_status_contract_identical_for_harden_and_ralph() {
   harden_id="$(almanac_loop_list_runs "$tmp" | awk -F'\t' '$2=="harden"{print $1; exit}')"
   [ -n "$harden_id" ] || fail "the harden run should be registered"
 
-  ralph_keys="$(almanac_loop_read_run "$tmp" "$ralph_id" | cut -f1 | sort | tr '\n' ',')"
+  loop_keys="$(almanac_loop_read_run "$tmp" "$loop_id" | cut -f1 | sort | tr '\n' ',')"
   harden_keys="$(almanac_loop_read_run "$tmp" "$harden_id" | cut -f1 | sort | tr '\n' ',')"
-  assert_eq "$ralph_keys" "$harden_keys" \
-    "harden and ralph must emit an identical run-status field set"
+  assert_eq "$loop_keys" "$harden_keys" \
+    "harden and loop must emit an identical run-status field set"
 
   source "$ROOT/lib/harden-core.sh"
-  echo "  PASS: the run-status contract is identical for harden and ralph"
+  echo "  PASS: the run-status contract is identical for harden and loop"
 }
 
 # --- Role config (per-role provider/model/effort) -----------------------------
@@ -2397,7 +2397,7 @@ test_commit_round_checkpoint_when_no_killlist
 test_commit_round_excludes_almanac_runtime
 test_commit_round_noop_outside_git_repo
 test_commit_round_respects_autocommit_off
-test_run_status_contract_identical_for_harden_and_ralph
+test_run_status_contract_identical_for_harden_and_loop
 test_role_config_resolves_all_three_roles
 test_role_config_mixes_providers_across_lenses
 test_role_config_overrides_each_role_via_env

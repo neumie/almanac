@@ -15,7 +15,7 @@ Author the user-facing `skills/loop/converge-loop/SKILL.md` describing the loop,
 - [x] `skills/loop/converge-loop/SKILL.md` created with frontmatter:
   - [x] `name: converge-loop`
   - [x] `description:` starts with "Use when" (per `CLAUDE.md` skill-format rule), names the trigger explicitly, under 220 chars
-  - [x] `disable-model-invocation: true` (matches harden-loop / ralph-loop — these are user-invoked loops, not auto-fired skills)
+  - [x] `disable-model-invocation: true` (matches harden-loop / loop — these are user-invoked loops, not auto-fired skills)
   - [x] `metadata.source` notes that this is a new pattern (no upstream SHA to sync)
 - [x] SKILL.md body covers:
   - [x] The convergence-loop concept (single exec per round, overseer judges, goal mutates)
@@ -23,15 +23,15 @@ Author the user-facing `skills/loop/converge-loop/SKILL.md` describing the loop,
   - [x] State layout (`docs/plans/converge/<slug>/` file tree with one-line descriptions)
   - [x] Overseer 4-field contract (VERDICT/REASON/STEER/GOAL_UPDATE) with examples
   - [x] Role config table (`CONVERGE_AGENT_*` / `CONVERGE_OVERSEER_*` env)
-  - [x] When to use this vs ralph (PRD-driven) vs harden (lens-fanout)
+  - [x] When to use this vs loop (PRD-driven) vs harden (lens-fanout)
   - [x] gum-degrade note (reuse harden's wording)
   - [x] Body under 500 lines (per CLAUDE.md); move overflow detail to `references/`
 - [x] `README.md` updated:
   - [x] Skills table includes converge-loop row
   - [x] Structure diagram references the new files (`cmd/converge.sh`, `lib/converge-core.sh`, `lib/loops/converge.sh`, `skills/loop/converge-loop/`)
-  - [x] If there's a "sync example" or quickstart, add a converge example alongside the ralph/harden ones
+  - [x] If there's a "sync example" or quickstart, add a converge example alongside the loop/harden ones
 - [x] `docs/ARCHITECTURE.md` updated:
-  - [x] Converge listed alongside ralph and harden as a loop consumer of the shared engine
+  - [x] Converge listed alongside loop and harden as a loop consumer of the shared engine
   - [x] The new modules slot into the module-map table (`lib/converge-core.sh`, `lib/loops/converge.sh`)
 - [x] `docs/CONTRIBUTING.md` updated:
   - [x] Any contributor-facing rules touched (e.g. if `lib/role.sh` gained a `converge` consumer in slice 03, document that contributors should mirror it when adding their own consumers)

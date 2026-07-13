@@ -6,7 +6,7 @@
 # test surface. These pin the layered precedence (lens -> role -> consumer-wide
 # -> default), the set-empty-wins rule, env-key normalisation, and the one-line
 # (provider<TAB>model<TAB>effort) role_resolve projection that harden
-# (test-harden-cli) and ralph build on.
+# (test-harden-cli) and loop build on.
 
 set -euo pipefail
 
@@ -26,7 +26,7 @@ assert_eq() {
 echo "=== Role Config Resolution Tests ==="
 
 test_env_key_part_normalises_to_upper_underscore() {
-  assert_eq "RALPH_AGENT" "$(almanac_loop_env_key_part "ralph-agent")" \
+  assert_eq "LOOP_AGENT" "$(almanac_loop_env_key_part "loop-agent")" \
     "lowercase + hyphen should uppercase and join with _"
   assert_eq "A_B_C" "$(almanac_loop_env_key_part "a..b  c")" \
     "runs of non-alnum should collapse to a single _"
@@ -81,9 +81,9 @@ test_role_field_falls_through_to_default() {
 test_role_field_lens_skipped_when_empty() {
   local actual
   actual="$(
-    RALPH_AGENT_PROVIDER=codex \
-    RALPH_PROVIDER=claude \
-    almanac_loop_role_field "ralph" "agent" "" "provider" "fallback"
+    LOOP_AGENT_PROVIDER=codex \
+    LOOP_PROVIDER=claude \
+    almanac_loop_role_field "loop" "agent" "" "provider" "fallback"
   )"
   assert_eq "codex" "$actual" "an empty lens skips the lens layer and uses the role key"
   echo "  PASS: role_field skips the lens layer when lens is empty"
@@ -137,9 +137,9 @@ test_role_resolve_requires_two_args() {
 test_role_resolve_uses_defaults_when_env_unset() {
   local actual
   actual="$(
-    env -u RALPH_PROVIDER -u RALPH_MODEL -u RALPH_EFFORT \
-        -u RALPH_AGENT_PROVIDER -u RALPH_AGENT_MODEL -u RALPH_AGENT_EFFORT \
-      bash -c "source '$ROOT/lib/role.sh'; almanac_loop_role_resolve ralph agent '' codex sonnet medium"
+    env -u LOOP_PROVIDER -u LOOP_MODEL -u LOOP_EFFORT \
+        -u LOOP_AGENT_PROVIDER -u LOOP_AGENT_MODEL -u LOOP_AGENT_EFFORT \
+      bash -c "source '$ROOT/lib/role.sh'; almanac_loop_role_resolve loop agent '' codex sonnet medium"
   )"
   assert_eq $'codex\tsonnet\tmedium' "$actual" \
     "role_resolve must fall through to per-field defaults when nothing is set"

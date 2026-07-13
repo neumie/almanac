@@ -96,7 +96,7 @@ _almanac_loop_kv_get() {
 # Emit the consumer-wide role triple as KEY=VALUE lines under PREFIX (the
 # `<PREFIX>PROVIDER` / `<PREFIX>MODEL` / `<PREFIX>EFFORT` env keys role.sh's
 # resolver layers under). Empty fields drop their key. Used by every loop
-# adapter's `new_run_env` verb (harden, converge — ralph rides on argv only) so
+# adapter's `new_run_env` verb (harden, converge — loop rides on argv only) so
 # the key-name convention lives in exactly one printf — adding a 4th adapter
 # costs zero new spellings, and renaming a field key only changes this helper.
 # Sibling to lib/loop-launcher.sh::_almanac_launch_export_role (the export form
@@ -111,7 +111,7 @@ _almanac_loop_emit_role_env() {
 }
 
 # Default signal-file basename for a loop's between-round control. Every loop uses
-# the same `.${name}-${kind}` convention (`.ralph-stop`, `.harden-steer`, …) so the
+# the same `.${name}-${kind}` convention (`.loop-stop`, `.harden-steer`, …) so the
 # pattern lives once here instead of being copy-pasted into each adapter. A loop
 # only needs to define its own `signal_file` if its convention diverges; this is
 # the deepening that turns three identical stop|steer case-statements into none.
@@ -144,7 +144,7 @@ almanac_loop_signal_file() {
 
 # Resolve the DIRECTORY a loop's signal file lives in.
 #
-# Default: $root — ralph and harden both drop `.ralph-stop` / `.harden-stop`
+# Default: $root — loop and harden both drop `.loop-stop` / `.harden-stop`
 # at the repo root because their loops watch root.
 #
 # Override: a loop's adapter can define `almanac_loop_<name>_signal_dir

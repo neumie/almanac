@@ -299,7 +299,7 @@ almanac_loop_status_field() {
 # status_to_opts verb — collapses the `field=$(...); [ -n "$field" ] && printf
 # '%s\n' "key=$field"` pair into one call so passthrough fields are a single
 # line each. A fourth loop's status_to_opts is now a sequence of these emits
-# plus any per-field transforms (e.g. ralph deriving the spec name from the
+# plus any per-field transforms (e.g. loop deriving the spec name from the
 # target dirname).
 almanac_loop_status_emit_opt() {
   local status_file="$1" field="$2" out_key="${3:-$2}" val
@@ -361,7 +361,7 @@ almanac_loop_register_run() {
 # Set config fields on a run after registration. Thin convenience over record_set
 # that names intent: "store the resolved launch config so resume can rebuild it."
 # Accepts any subset of the config keys (provider/model/effort/iterations/oversee
-# for ralph; provider/model/effort/lenses/rounds for harden). Blank values are
+# for loop; provider/model/effort/lenses/rounds for harden). Blank values are
 # acceptable — record_set keeps the field present-but-blank. Returns 2 when the
 # run is unknown so callers can guard without aborting.
 almanac_loop_set_run_config() {
@@ -475,7 +475,7 @@ almanac_loop_notify_run_end() {
 }
 
 # Update a live run's progress mid-flight: rewrite its status.tsv with a new
-# round (harden round / ralph iteration) and worker/lens summary, preserving the
+# round (harden round / loop iteration) and worker/lens summary, preserving the
 # lifecycle status, start, and finish fields. This is the "updated as it
 # progresses" half of the run-status contract — the loop calls it each round so
 # the hub's read view reflects current progress. Touches only the per-run blob,
@@ -1018,7 +1018,7 @@ almanac_loop_consume_signal() {
 # signal file's name via the loop adapter (signal_file verb) and its directory
 # via the adapter override (signal_dir verb, defaults to $root), then write CONTENT
 # to <signal_dir>/<signal_file>. signal_dir routes through the loop adapter so
-# ralph/harden default to $root while converge scopes signals to the run's plan
+# loop/harden default to $root while converge scopes signals to the run's plan
 # dir (stopping one converge run doesn't halt another that shares the workspace);
 # the directory is created if missing so a run that registered but never
 # scaffolded its plan dir (quick abort) still accepts a signal harmlessly.
@@ -1063,8 +1063,8 @@ almanac_loop_run_stop() {
 }
 
 # Queue a steer directive for a running loop: write the directive to the run type's
-# steer file under root, which the loop's next round consumes (ralph reads
-# `.ralph-steer`). Returns 2 when the run is unknown, 3 when its type has no steer
+# steer file under root, which the loop's next round consumes (loop reads
+# `.loop-steer`). Returns 2 when the run is unknown, 3 when its type has no steer
 # convention, and 4 when the directive is blank.
 almanac_loop_run_steer() {
   local root="$1" run_id="$2" directive="$3"
@@ -1175,7 +1175,7 @@ almanac_loop_run_watch() {
 # --new … [--dry-run]` both drive: menu choices in, launch tokens out.
 #
 # Config arrives as `key=value` pairs (the keys the gum menu / --new flags
-# collect): ralph takes the spec name (legacy wire key `prd`), mode, provider,
+# collect): loop takes the spec name (legacy wire key `prd`), mode, provider,
 # model, effort, iterations, oversee;
 # harden takes target, rounds, lenses, provider, model, effort; converge takes
 # goal, prompt/exec, rounds, provider, model, effort, oversee, oversee_every.
@@ -1197,7 +1197,7 @@ almanac_loop_new_run_argv() {
 # Compose the environment assignments (KEY=VALUE, one per line) a new run needs
 # beyond its argv. The loop-specific env prefix lives in each loop adapter's
 # `new_run_env` verb (lib/loops/<name>.sh). Returns 1 for an unknown type;
-# adapters that have no env to emit (ralph today) return 0 with no output, so
+# adapters that have no env to emit (loop today) return 0 with no output, so
 # this dispatcher never branches on loop type.
 almanac_loop_new_run_env() {
   local type="$1"; shift

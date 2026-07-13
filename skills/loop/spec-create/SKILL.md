@@ -41,7 +41,7 @@ Check with the user that these modules match their expectations. Check with the 
 mkdir -p docs/plans/<name>
 ```
 
-Report the file path (`docs/plans/<name>/spec.md`) so the user can pass it to `/to-tickets` or directly to `/ralph-loop`.
+Report the file path (`docs/plans/<name>/spec.md`) so the user can pass it to `/to-tickets` or directly to `/loop`.
 
 ## Spec Template
 

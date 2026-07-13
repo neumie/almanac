@@ -23,7 +23,7 @@ Result: `docs/plans/converge/say-hello/` exists with `goal.md` (the goal text), 
 - [x] `cmd/converge.sh` parses `--goal "..."` (required), `--exec "..."` (required), `--rounds N` (optional, default 1 for this slice — multi-round comes in slice 02). Missing required args → `_die` with usage hint.
 - [x] `lib/converge-core.sh::almanac_converge_run` scaffolds `docs/plans/converge/<slug>/` with `goal.md`, empty `agent-reports.log`, empty `goal.history.log`. The slug is derived from the goal via the same kebab-case lowercaser used by `almanac_harden_slug` (extract if needed; do not duplicate).
 - [x] The exec command runs once via a bash subshell; the slice records a single line in `agent-reports.log` of the form `===== tick=1 ts=<ISO> exit=<N> =====`.
-- [x] The run registers in `.almanac/runs/index.tsv` as `type=converge` via `almanac_loop_register_run`, with the same status-file contract ralph/harden use.
+- [x] The run registers in `.almanac/runs/index.tsv` as `type=converge` via `almanac_loop_register_run`, with the same status-file contract loop/harden use.
 - [x] The EXIT trap uses `printf -v ... %q` baking (same pattern as `lib/harden-core.sh:1527-1538` from commit `1467073`) so a mid-loop `_die` marks the run `aborted`, NOT crashes with `root: unbound variable`.
 - [x] `bin/almanac` dispatches `converge` to `cmd/converge.sh` (one-line case branch).
 - [x] `tests/test-converge.sh`:

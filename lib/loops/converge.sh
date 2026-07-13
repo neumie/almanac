@@ -21,7 +21,7 @@
 # `.converge-steer` convention from lib/loops.sh.
 #
 # Signal-DIR override (signal_dir): converge scopes its signal files to the
-# RUN'S OWN PLAN DIR instead of $root. Ralph and harden both watch $root, but
+# RUN'S OWN PLAN DIR instead of $root. Loop and harden both watch $root, but
 # converge runs commonly share a workspace and a CONVERGED verdict's
 # `.converge-stop` written at $root would silently halt subsequent unrelated
 # runs (observed: previous run CONVERGED → wrote $root/.converge-stop → next
@@ -51,7 +51,7 @@ almanac_loop_converge_signal_dir() {
 #   $5  no_oversee     (optional) "1" / "true" enables, anything else is off
 #   $6  oversee_every  (optional) cadence
 # The role config (provider/model/effort per CONVERGE_AGENT_* / CONVERGE_OVERSEER_*)
-# rides on environment exported by the launcher, not argv — same split ralph and
+# rides on environment exported by the launcher, not argv — same split loop and
 # harden use. Requires $ALMANAC_HOME (set by every entry point).
 # Returns 2 on an unknown action_mode.
 almanac_loop_converge_exec_argv() {
@@ -132,7 +132,7 @@ almanac_loop_converge_launch() {
   fi
 
   # Provider / model / effort — the universal role-config dance, owned by the
-  # launcher helper (same shape as ralph + harden). The chosen triple drives
+  # launcher helper (same shape as loop + harden). The chosen triple drives
   # both the worker and overseer roles by default; the user can still override
   # per-role via CONVERGE_{AGENT,OVERSEER}_* env outside the launcher.
   { IFS= read -r provider && IFS= read -r model && IFS= read -r effort; } \
@@ -158,7 +158,7 @@ almanac_loop_converge_launch() {
     $([ -n "$oversee_every" ] && printf 'Oversee-every:%s' "$oversee_every")
   [ -n "$yes" ] || almanac_loop_ui_confirm "Launch this run?" || { _info "Cancelled."; return 0; }
 
-  # Export role config — same shape as ralph/harden. The consumer-wide
+  # Export role config — same shape as loop/harden. The consumer-wide
   # CONVERGE_PROVIDER/MODEL/EFFORT becomes the fallback that role.sh's lookup
   # uses for both the worker and overseer roles unless the user has set
   # CONVERGE_{AGENT,OVERSEER}_* explicitly.

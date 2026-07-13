@@ -5,23 +5,23 @@ set -e
 # Run from an immutable copy so a loop refactoring this runner cannot corrupt a
 # live run mid-iteration (bash re-reads the main script by offset). Re-exec once
 # — only when executed directly, never when sourced — from a temp copy; siblings
-# and libs still load from the real dir via RALPH_REAL_DIR. The snapshot is
-# removed by the EXIT trap (RALPH_SNAP_FILE).
-if [ -z "${RALPH_SNAPSHOT:-}" ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+# and libs still load from the real dir via LOOP_REAL_DIR. The snapshot is
+# removed by the EXIT trap (LOOP_SNAP_FILE).
+if [ -z "${LOOP_SNAPSHOT:-}" ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
   __real="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
   __snap="$(mktemp "${TMPDIR:-/tmp}/almanac-runner.XXXXXX")"
   cp "${BASH_SOURCE[0]}" "$__snap"
-  RALPH_SNAPSHOT=1 RALPH_REAL_DIR="$__real" RALPH_SNAP_FILE="$__snap" exec bash "$__snap" "$@"
+  LOOP_SNAPSHOT=1 LOOP_REAL_DIR="$__real" LOOP_SNAP_FILE="$__snap" exec bash "$__snap" "$@"
 fi
 
-SCRIPT_DIR="${RALPH_REAL_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)}"
+SCRIPT_DIR="${LOOP_REAL_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)}"
 # ALMANAC_HOME bootstrap — same standardized snippet as the other entry points
 # (mirrors almanac_resolve_home in lib/core.sh), resolved off SCRIPT_DIR rather
 # than ${BASH_SOURCE[0]} because the snapshot-exec guard above runs us from an
-# immutable temp copy; RALPH_REAL_DIR is the real scripts dir.
+# immutable temp copy; LOOP_REAL_DIR is the real scripts dir.
 ALMANAC_HOME="${ALMANAC_HOME:-$(cd -P "$SCRIPT_DIR/../../../.." && pwd -P)}"
-source "$SCRIPT_DIR/ralph-git.sh"
-source "$SCRIPT_DIR/ralph-run-registry.sh"
+source "$SCRIPT_DIR/loop-git.sh"
+source "$SCRIPT_DIR/loop-run-registry.sh"
 
 # Provider seam (almanac_provider_*) — sourced directly so this runner's use of
 # the seam (default-selection / availability / display) is an explicit
@@ -53,15 +53,15 @@ ITERATIONS="$2"
 PROMPT="docs/plans/${SPEC_NAME}/prompt.md"
 
 # Iteration-agent role config resolves through the shared engine helper
-# (almanac_loop_role_field): RALPH_AGENT_<FIELD> -> RALPH_<FIELD> -> default, the
-# same precedence harden's roles use (#66 crit 3 — ralph uses the shared role
-# config). RALPH_PROVIDER/RALPH_MODEL/RALPH_EFFORT still work (the fallback); the
-# new RALPH_AGENT_* keys now override per-role. An explicit provider config wins;
-# absent it, ralph's CLI auto-detection (CODEX_THREAD_ID, then installed CLI)
-# stays — that runtime detection is ralph-specific, not a role-config concern.
+# (almanac_loop_role_field): LOOP_AGENT_<FIELD> -> LOOP_<FIELD> -> default, the
+# same precedence harden's roles use (#66 crit 3 — loop uses the shared role
+# config). LOOP_PROVIDER/LOOP_MODEL/LOOP_EFFORT still work (the fallback); the
+# new LOOP_AGENT_* keys now override per-role. An explicit provider config wins;
+# absent it, loop's CLI auto-detection (CODEX_THREAD_ID, then installed CLI)
+# stays — that runtime detection is loop-specific, not a role-config concern.
 detect_provider() {
   local configured default
-  configured="$(almanac_loop_role_field ralph agent "" provider "")"
+  configured="$(almanac_loop_role_field loop agent "" provider "")"
   if [ -n "$configured" ]; then
     echo "$configured"
   else
@@ -77,18 +77,18 @@ PROVIDER="$(detect_provider | tr '[:upper:]' '[:lower:]')"
 # overseer's read-only judge call — now routes through the shared agent_run seam
 # (which takes these scalars directly), so afk no longer builds MODEL_ARG/
 # EFFORT_ARG arrays; that arg-shaping lives in the seam (#66 crit 6).
-AGENT_MODEL="$(almanac_loop_role_field ralph agent "" model "")"
-AGENT_EFFORT="$(almanac_loop_role_field ralph agent "" effort "")"
+AGENT_MODEL="$(almanac_loop_role_field loop agent "" model "")"
+AGENT_EFFORT="$(almanac_loop_role_field loop agent "" effort "")"
 
 if [ ! -f "$PROMPT" ]; then
-  echo "Error: $PROMPT not found. Run /ralph-loop $SPEC_NAME to set up first."
+  echo "Error: $PROMPT not found. Run /loop $SPEC_NAME to set up first."
   exit 1
 fi
 
 # Availability + display route through the provider seam (no provider-name
 # branching). The remaining case sets only the banner's cosmetic default-text.
 if [ "$PROVIDER" = "none" ] || ! almanac_provider_known "$PROVIDER"; then
-  echo "Error: no supported agent found. Install Claude Code or Codex, or set RALPH_PROVIDER."
+  echo "Error: no supported agent found. Install Claude Code or Codex, or set LOOP_PROVIDER."
   exit 1
 fi
 if ! almanac_provider_available "$PROVIDER"; then
@@ -106,18 +106,18 @@ case "$PROVIDER" in
     ;;
 esac
 
-push_ralph_commits() {
+push_loop_commits() {
   if git remote get-url origin >/dev/null 2>&1; then
     echo ""
     echo "======= PUSHING TO REMOTE ======="
-    _ralph_push || echo "[warn] git push failed — push manually to share work."
+    _loop_push || echo "[warn] git push failed — push manually to share work."
   fi
 }
 
 # Push current branch, setting upstream if needed. Used both per-iteration
 # (to trigger CI) and end-of-loop (safety net in case a per-iter push failed).
-_ralph_push() {
-  ralph_push_current_branch
+_loop_push() {
+  loop_push_current_branch
 }
 
 # Overseer-cadence push: pushes any unpushed local commits on the current
@@ -134,7 +134,7 @@ push_if_unpushed() {
       echo ""
       echo "===== OVERSEER PUSH $(date -Iseconds) — setting upstream ====="
     } >> "$OVERSEE_LOG"
-    if _ralph_push >> "$OVERSEE_LOG" 2>&1; then
+    if _loop_push >> "$OVERSEE_LOG" 2>&1; then
       return 0
     fi
     echo "[overseer] initial push failed" >> "$OVERSEE_LOG"
@@ -146,7 +146,7 @@ push_if_unpushed() {
     echo ""
     echo "===== OVERSEER PUSH $(date -Iseconds) — $ahead commit(s) ahead of $upstream ====="
   } >> "$OVERSEE_LOG"
-  if _ralph_push >> "$OVERSEE_LOG" 2>&1; then
+  if _loop_push >> "$OVERSEE_LOG" 2>&1; then
     return 0
   fi
   echo "[overseer] push failed" >> "$OVERSEE_LOG"
@@ -154,9 +154,9 @@ push_if_unpushed() {
 }
 
 # Block until the GitHub Actions run for $1 (head SHA) leaves in_progress/
-# queued. Polls every RALPH_CI_POLL_INTERVAL seconds (default 30), times out
-# after RALPH_CI_WAIT_TIMEOUT seconds (default 1800 = 30min). Exits early on
-# .ralph-stop. No-ops gracefully if `gh` missing, no remote, no run yet
+# queued. Polls every LOOP_CI_POLL_INTERVAL seconds (default 30), times out
+# after LOOP_CI_WAIT_TIMEOUT seconds (default 1800 = 30min). Exits early on
+# .loop-stop. No-ops gracefully if `gh` missing, no remote, no run yet
 # materializes for the SHA within the timeout.
 wait_for_ci() {
   local target_sha="$1"
@@ -166,8 +166,8 @@ wait_for_ci() {
 
   local branch poll_interval timeout elapsed run_json status
   branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || return 0
-  poll_interval="${RALPH_CI_POLL_INTERVAL:-30}"
-  timeout="${RALPH_CI_WAIT_TIMEOUT:-1800}"
+  poll_interval="${LOOP_CI_POLL_INTERVAL:-30}"
+  timeout="${LOOP_CI_WAIT_TIMEOUT:-1800}"
   elapsed=0
 
   {
@@ -176,7 +176,7 @@ wait_for_ci() {
   } >> "$OVERSEE_LOG"
 
   while [ "$elapsed" -lt "$timeout" ]; do
-    [ -f .ralph-stop ] && return 0
+    [ -f .loop-stop ] && return 0
     run_json=$(gh run list --branch "$branch" --limit 5 \
       --json status,headSha,url 2>/dev/null) || return 0
     if [ -n "$run_json" ] && [ "$run_json" != "[]" ]; then
@@ -207,7 +207,7 @@ wait_for_ci() {
 }
 
 # CI monitor: checks the latest GitHub Actions run on the current branch via
-# `gh`. Writes .ralph-ci-failed (consumed by next iteration) on failure;
+# `gh`. Writes .loop-ci-failed (consumed by next iteration) on failure;
 # clears it when CI is green again. No-ops gracefully if `gh` is missing,
 # the repo has no remote, or no run exists yet.
 check_ci_status() {
@@ -237,17 +237,17 @@ check_ci_status() {
 
   case "$conclusion" in
     success)
-      if [ -f .ralph-ci-failed ]; then
+      if [ -f .loop-ci-failed ]; then
         {
           echo ""
-          echo "===== CI GREEN $(date -Iseconds) — clearing .ralph-ci-failed ====="
+          echo "===== CI GREEN $(date -Iseconds) — clearing .loop-ci-failed ====="
           echo "url=$url"
         } >> "$OVERSEE_LOG"
-        rm -f .ralph-ci-failed
+        rm -f .loop-ci-failed
       fi
       ;;
     failure|cancelled|timed_out|action_required|startup_failure)
-      cat > .ralph-ci-failed <<EOF
+      cat > .loop-ci-failed <<EOF
 CI conclusion: $conclusion
 Workflow: $name
 Run URL: $url
@@ -260,7 +260,7 @@ Fetch failing logs with:
 EOF
       {
         echo ""
-        echo "===== CI FAIL $(date -Iseconds) — wrote .ralph-ci-failed ====="
+        echo "===== CI FAIL $(date -Iseconds) — wrote .loop-ci-failed ====="
         echo "conclusion=$conclusion url=$url"
       } >> "$OVERSEE_LOG"
       ;;
@@ -268,23 +268,23 @@ EOF
 }
 
 # Build a prompt prefix injected before the iteration template. Two markers
-# can be present and stack: .ralph-ci-failed (persistent — cleared by
-# check_ci_status when CI is green) and .ralph-steer (one-shot — consumed
+# can be present and stack: .loop-ci-failed (persistent — cleared by
+# check_ci_status when CI is green) and .loop-steer (one-shot — consumed
 # and removed here).
 build_prompt_prefix() {
   local emitted=0
 
-  if [ -f .ralph-ci-failed ]; then
+  if [ -f .loop-ci-failed ]; then
     cat <<'EOF'
 # CI FAILURE — FIX BEFORE ANY NEW TASK WORK
 
 The previous push broke CI. Do NOT pick a new spec task this iteration.
 
-1. Read `.ralph-ci-failed` in the working directory for the failing run URL, workflow name, and run ID.
+1. Read `.loop-ci-failed` in the working directory for the failing run URL, workflow name, and run ID.
 2. Run `gh run view <run-id> --log-failed` to read the failure logs.
 3. Identify the root cause and fix it. Follow the `ci-fix` skill if available.
 4. Run all feedback loops locally to confirm the fix.
-5. Commit with `RALPH(<name>): fix CI — <summary>` (still use the RALPH prefix so progress tracking stays consistent).
+5. Commit with `LOOP(<name>): fix CI — <summary>` (still use the LOOP prefix so progress tracking stays consistent).
 6. The push and CI re-check happen automatically after this iteration.
 
 Skip the TASK SELECTION / EXPLORATION / EXECUTION steps below for this iteration only — fixing CI is the entire iteration.
@@ -295,16 +295,16 @@ EOF
     emitted=1
   fi
 
-  if [ -f .ralph-steer ]; then
+  if [ -f .loop-steer ]; then
     echo "# OVERSEER STEER — read before picking a task"
     echo ""
     echo "The overseer reviewed recent agent reports and commits and emitted this directive for you. Treat it as authoritative steering — adjust your task selection or approach accordingly."
     echo ""
-    cat .ralph-steer
+    cat .loop-steer
     echo ""
     echo "---"
     echo ""
-    rm -f .ralph-steer
+    rm -f .loop-steer
     emitted=1
   fi
 
@@ -312,17 +312,17 @@ EOF
 }
 
 # Overseer: periodic drift detection. Runs in a background subshell, polls every
-# RALPH_OVERSEE_INTERVAL seconds (default 900 = 15min). On HIGH drift, writes
-# .ralph-stop so the next iteration exits gracefully. Set RALPH_NO_OVERSEE=1 to
+# LOOP_OVERSEE_INTERVAL seconds (default 900 = 15min). On HIGH drift, writes
+# .loop-stop so the next iteration exits gracefully. Set LOOP_NO_OVERSEE=1 to
 # disable.
-OVERSEE_INTERVAL="${RALPH_OVERSEE_INTERVAL:-900}"
+OVERSEE_INTERVAL="${LOOP_OVERSEE_INTERVAL:-900}"
 OVERSEE_LOG="docs/plans/${SPEC_NAME}/overseer.log"
 REPORTS_LOG="docs/plans/${SPEC_NAME}/agent-reports.log"
 OVERSEER_PID=""
 
 run_overseer_once() {
   local recent_commits recent_reports
-  recent_commits=$(git log --grep="RALPH(${SPEC_NAME})" -n 10 --format="%h %ad %s%n%b---" --date=short 2>/dev/null || echo "No RALPH commits yet")
+  recent_commits=$(git log --grep="LOOP(${SPEC_NAME})" -n 10 --format="%h %ad %s%n%b---" --date=short 2>/dev/null || echo "No LOOP commits yet")
   # Tail the last ~8KB of agent reports — bounded so the overseer prompt
   # doesn't balloon. Reports are appended by iteration agents under headers
   # like `===== sha=<sha> ts=<iso> =====`.
@@ -333,9 +333,9 @@ run_overseer_once() {
   fi
 
   local overseer_prompt
-  overseer_prompt="Read the spec context at @${PROMPT}. You are an overseer watching an autonomous coding loop named ralph(${SPEC_NAME}).
+  overseer_prompt="Read the spec context at @${PROMPT}. You are an overseer watching an autonomous coding loop named loop(${SPEC_NAME}).
 
-Recent RALPH commits (last 10):
+Recent LOOP commits (last 10):
 ${recent_commits}
 
 Recent agent self-reports (concerns / errors / uncertainties they flagged after each iteration):
@@ -358,10 +358,10 @@ DRIFT_LEVEL: <low|medium|high>
 REASON: <one paragraph>
 STEER: <one paragraph of concrete steering for next iteration, OR the literal word 'none'>
 
-Be conservative on DRIFT_LEVEL — only 'high' with clear evidence (the loop stops via .ralph-stop). Be conservative on STEER too — emit 'none' when agents are progressing fine."
+Be conservative on DRIFT_LEVEL — only 'high' with clear evidence (the loop stops via .loop-stop). Be conservative on STEER too — emit 'none' when agents are progressing fine."
 
   # The overseer's read-only judge call routes through the shared agent_run seam
-  # (#66 crit 6 — no inline provider exec remains in ralph scripts). The
+  # (#66 crit 6 — no inline provider exec remains in loop scripts). The
   # `read-only` sandbox maps to claude --permission-mode plan / codex --sandbox
   # read-only — exactly the read-only modes the overseer used inline. The
   # overseer parses the verdict (it never prints it live), so we use the
@@ -398,10 +398,10 @@ ${overseer_prompt}"
   if echo "$result" | grep -qiE '^[[:space:]]*DRIFT_LEVEL:[[:space:]]*high'; then
     {
       echo ""
-      echo "======= OVERSEER: HIGH DRIFT DETECTED — writing .ralph-stop ======="
+      echo "======= OVERSEER: HIGH DRIFT DETECTED — writing .loop-stop ======="
       echo "$result"
     } >&2
-    touch .ralph-stop
+    touch .loop-stop
   fi
 
   # Extract STEER directive — everything after `STEER:` until EOF, trimmed.
@@ -412,7 +412,7 @@ ${overseer_prompt}"
     capture { print }
   ' | sed -e 's/[[:space:]]*$//' -e '/^$/d')
   if [ -n "$steer" ] && ! echo "$steer" | grep -qiE '^none[[:space:]]*$'; then
-    printf '%s\n' "$steer" > .ralph-steer
+    printf '%s\n' "$steer" > .loop-steer
     {
       echo ""
       echo "===== STEER WRITTEN $(date -Iseconds) ====="
@@ -422,8 +422,8 @@ ${overseer_prompt}"
 }
 
 start_overseer() {
-  if [ "${RALPH_NO_OVERSEE:-}" = "1" ]; then
-    echo "[overseer] disabled (RALPH_NO_OVERSEE=1)"
+  if [ "${LOOP_NO_OVERSEE:-}" = "1" ]; then
+    echo "[overseer] disabled (LOOP_NO_OVERSEE=1)"
     return
   fi
   mkdir -p "$(dirname "$OVERSEE_LOG")"
@@ -434,9 +434,9 @@ start_overseer() {
   (
     while true; do
       sleep "$OVERSEE_INTERVAL"
-      [ -f .ralph-stop ] && exit 0
+      [ -f .loop-stop ] && exit 0
       # Sequential tick: push -> wait for CI to resolve (only if we pushed) ->
-      # record CI verdict (writes/clears .ralph-ci-failed) -> spawn drift agent.
+      # record CI verdict (writes/clears .loop-ci-failed) -> spawn drift agent.
       if push_if_unpushed; then
         wait_for_ci "$(git rev-parse HEAD)"
       fi
@@ -461,20 +461,20 @@ cleanup_all() {
   trap - EXIT INT TERM
   stop_overseer
   [ -n "${tmpfile:-}" ] && rm -f "$tmpfile"
-  ralph_mark_run_finished "$exit_code"
+  loop_mark_run_finished "$exit_code"
   exit "$exit_code"
 }
-trap 'cleanup_all "$?"; rm -f "${RALPH_SNAP_FILE:-}"' EXIT INT TERM
+trap 'cleanup_all "$?"; rm -f "${LOOP_SNAP_FILE:-}"' EXIT INT TERM
 
-if [ "${RALPH_NO_OVERSEE:-}" = "1" ]; then
-  OVERSEER_DISPLAY="off (RALPH_NO_OVERSEE=1)"
+if [ "${LOOP_NO_OVERSEE:-}" = "1" ]; then
+  OVERSEER_DISPLAY="off (LOOP_NO_OVERSEE=1)"
 else
   OVERSEER_DISPLAY="on (interval ${OVERSEE_INTERVAL}s)"
 fi
-CI_POLL="${RALPH_CI_POLL_INTERVAL:-30}"
-CI_TIMEOUT="${RALPH_CI_WAIT_TIMEOUT:-1800}"
+CI_POLL="${LOOP_CI_POLL_INTERVAL:-30}"
+CI_TIMEOUT="${LOOP_CI_WAIT_TIMEOUT:-1800}"
 
-echo "======= RALPH AFK ======="
+echo "======= LOOP AFK ======="
 echo "Spec:        $SPEC_NAME"
 echo "Iterations:  $ITERATIONS"
 echo "Prompt:      $PROMPT"
@@ -488,15 +488,15 @@ echo "Reports log: $REPORTS_LOG"
 echo "========================="
 echo ""
 
-ralph_register_run "$SPEC_NAME"
+loop_register_run "$SPEC_NAME"
 # Stamp launch config onto the run so `almanac hub --resume <id>` can rebuild it.
-ralph_set_run_config \
+loop_set_run_config \
   "provider=$PROVIDER" \
   "model=$AGENT_MODEL" \
   "effort=$AGENT_EFFORT" \
   "iterations=$ITERATIONS" \
-  "oversee=$([ -n "${RALPH_NO_OVERSEE:-}" ] && echo off || echo on)"
-echo "Run ID:      $RALPH_RUN_ID"
+  "oversee=$([ -n "${LOOP_NO_OVERSEE:-}" ] && echo off || echo on)"
+echo "Run ID:      $LOOP_RUN_ID"
 echo ""
 
 # Pick up any pre-existing CI failure (e.g. from a prior AFK run or a manual
@@ -506,12 +506,12 @@ check_ci_status
 start_overseer
 
 for ((i=1; i<=$ITERATIONS; i++)); do
-  if [ -f .ralph-stop ]; then
+  if [ -f .loop-stop ]; then
     echo ""
-    echo "======= STOP SIGNAL DETECTED (.ralph-stop) ======="
+    echo "======= STOP SIGNAL DETECTED (.loop-stop) ======="
     echo "Exiting after iteration $((i-1)) of $ITERATIONS."
-    rm -f .ralph-stop
-    push_ralph_commits
+    rm -f .loop-stop
+    push_loop_commits
     exit 0
   fi
 
@@ -521,16 +521,16 @@ for ((i=1; i<=$ITERATIONS; i++)); do
   echo "======= ITERATION $i of $ITERATIONS ($SPEC_NAME) ======="
   echo ""
 
-  ralph_update_run_progress "$i" "provider=$PROVIDER iteration=$i/$ITERATIONS"
+  loop_update_run_progress "$i" "provider=$PROVIDER iteration=$i/$ITERATIONS"
 
-  ralph_commits=$(git log --grep="RALPH($SPEC_NAME)" -n 10 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No RALPH commits found")
+  loop_commits=$(git log --grep="LOOP($SPEC_NAME)" -n 10 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No LOOP commits found")
 
   prompt_prefix=$(build_prompt_prefix)
 
   case "$PROVIDER" in
     claude)
       # Default claude path routes through the shared agent_run seam in stream
-      # mode rather than an inline claude exec (#66 — ralph migration onto the
+      # mode rather than an inline claude exec (#66 — loop migration onto the
       # engine). The seam builds the same invocation afk used (--print
       # --output-format stream-json --verbose, plus --model/--effort) and pipes
       # the live assistant text to stdout through the same jq filter — console
@@ -543,7 +543,7 @@ for ((i=1; i<=$ITERATIONS; i++)); do
       # Unlike the old inline pipe (no pipefail), the seam preserves claude's exit
       # via PIPESTATUS, so a provider failure now propagates instead of being
       # swallowed — matching the codex branch and once.sh's claude routing.
-      prompt="${prompt_prefix}@$PROMPT Previous RALPH commits: $ralph_commits"
+      prompt="${prompt_prefix}@$PROMPT Previous LOOP commits: $loop_commits"
       claude_prompt_file=$(mktemp)
       claude_events_file=$(mktemp)
       printf '%s' "$prompt" > "$claude_prompt_file"
@@ -565,12 +565,12 @@ As you work, emit concise progress updates describing what you are doing and wha
 
 $(cat "$PROMPT")
 
-Previous RALPH commits:
-$ralph_commits"
+Previous LOOP commits:
+$loop_commits"
       mkdir -p "docs/plans/${SPEC_NAME}"
-      codex_log="docs/plans/${SPEC_NAME}/ralph-codex-iteration-${i}.log"
+      codex_log="docs/plans/${SPEC_NAME}/loop-codex-iteration-${i}.log"
       echo "Codex session log: $codex_log"
-      if [ "${RALPH_CODEX_VERBOSE:-}" = "1" ]; then
+      if [ "${LOOP_CODEX_VERBOSE:-}" = "1" ]; then
         # Raw-output mode now routes through the shared agent_run seam too, via its
         # raw passthrough mode (#66 crit 6 — no inline provider exec remains): raw
         # runs codex WITHOUT --json so its native output streams straight to the
@@ -592,7 +592,7 @@ $ralph_commits"
         rm -f "$codex_prompt_file"
       else
         # Default codex path routes through the shared agent_run seam in stream
-        # mode rather than an inline codex exec (#66 — ralph migration onto the
+        # mode rather than an inline codex exec (#66 — loop migration onto the
         # engine). The seam builds the same invocation (--json
         # --output-last-message, --sandbox danger-full-access, plus --model/-c
         # effort), tees the raw stream to the per-iteration session log, and pipes
@@ -624,19 +624,19 @@ $ralph_commits"
 
   if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then
     echo ""
-    echo "Ralph complete after $i iterations."
-    push_ralph_commits
+    echo "Loop complete after $i iterations."
+    push_loop_commits
     exit 0
   fi
 
   if [[ "$result" == *"<promise>ABORT</promise>"* ]]; then
     echo ""
-    echo "Ralph aborted at iteration $i. Check the last commit message for details."
-    push_ralph_commits
+    echo "Loop aborted at iteration $i. Check the last commit message for details."
+    push_loop_commits
     exit 1
   fi
 done
 
 echo ""
-echo "Ralph finished $ITERATIONS iterations. Tasks may remain — check with: git log --grep='RALPH($SPEC_NAME)' --oneline"
-push_ralph_commits
+echo "Loop finished $ITERATIONS iterations. Tasks may remain — check with: git log --grep='LOOP($SPEC_NAME)' --oneline"
+push_loop_commits

@@ -14,11 +14,11 @@ Provider = `lib/providers/<name>.sh`, loop = `lib/loops/<name>.sh` — glob-disc
 
 **`launch` is the one verb that bypasses `almanac_loop_adapter_call`** — `almanac_loop_launch` (`loop-launcher.sh:190`) calls the fn directly because launch legitimately exits non-zero (user cancel), which would collide with adapter_call's rc=2. Still no `case` on type.
 
-**Implement all three `new_run_*` verbs even when one is a no-op** (ralph's `new_run_env` is `return 0`) so the `run.sh` dispatcher never branches; `status_to_opts` must round-trip through `new_run_argv`/`_env` or resume desyncs. (Helper roster: read the `run.sh`/`loops.sh` headers, not this file.)
+**Implement all three `new_run_*` verbs even when one is a no-op** (loop's `new_run_env` is `return 0`) so the `run.sh` dispatcher never branches; `status_to_opts` must round-trip through `new_run_argv`/`_env` or resume desyncs. (Helper roster: read the `run.sh`/`loops.sh` headers, not this file.)
 
 ## Sourcing: by symbol, no god-barrel
 
-`loop-core.sh` is **deleted** — never source it. Callers source only the modules they use. New entry points copy the existing `ALMANAC_HOME` bootstrap **verbatim** — prefer the exported value, else `pwd -P` (symlink-safe) at the known depth; dropping `-P` breaks symlinked installs (the bug that broke `almanac ralph`). Then source `core.sh` first (it defines `_almanac_source_sibling`), and pull each other module via `_almanac_source_sibling <file.sh> <a-symbol-it-defines>` (pattern at `worker.sh:22-23`) so a load-order or rename break surfaces. **`run.sh` stays `core.sh`-free** so it's standalone-testable (`tests/test-run.sh` sources it directly) — don't add a transitive `core.sh` dep through a new sibling. `worker.sh` does source `core.sh`.
+`loop-core.sh` is **deleted** — never source it. Callers source only the modules they use. New entry points copy the existing `ALMANAC_HOME` bootstrap **verbatim** — prefer the exported value, else `pwd -P` (symlink-safe) at the known depth; dropping `-P` breaks symlinked installs (the bug that broke `almanac loop`). Then source `core.sh` first (it defines `_almanac_source_sibling`), and pull each other module via `_almanac_source_sibling <file.sh> <a-symbol-it-defines>` (pattern at `worker.sh:22-23`) so a load-order or rename break surfaces. **`run.sh` stays `core.sh`-free** so it's standalone-testable (`tests/test-run.sh` sources it directly) — don't add a transitive `core.sh` dep through a new sibling. `worker.sh` does source `core.sh`.
 
 ## Run-status record
 

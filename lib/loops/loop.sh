@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# lib/loops/ralph.sh — the ralph loop adapter.
+# lib/loops/loop.sh — the implementation-loop adapter.
 #
 # One file owns everything the engine needs to know about how to launch and
-# control the ralph loop. Auto-discovered by lib/loops.sh from lib/loops/*.sh.
+# control the implementation loop. Auto-discovered by lib/loops.sh from lib/loops/*.sh.
 #
-# Contract (called as almanac_loop_ralph_<verb>):
+# Contract (called as almanac_loop_loop_<verb>):
 #   launch        — interactive config + exec. Used by lib/loop-launcher.sh's
 #                   dispatch (no central case-statement on loop type).
 #   launch_usage  — the --help text printed for this loop's launcher.
 #   exec_argv     — populate _ALMANAC_LOOP_ARGV with the runner exec tokens
-#                   for a given mode/spec/iterations. The ralph runner path lives
+#                   for a given mode/spec/iterations. The loop runner path lives
 #                   HERE (not hard-coded in the launcher).
 #   new_run_argv  — emit the hub's "new run" launcher argv (one token per line,
 #                   starting with the `almanac` subcommand) from key=val pairs.
-#                   The hub composes runs without knowing ralph's flag shape.
+#                   The hub composes runs without knowing loop's flag shape.
 #   new_run_env   — emit KEY=VALUE env lines for fields that ride on environment
-#                   (none for ralph; the verb exists so the dispatch in lib/run.sh
+#                   (none for loop; the verb exists so the dispatch in lib/run.sh
 #                   has no `case "$type"` branches).
 #   new_run_usage — one-line missing-config hint for hub errors.
 #
-# Control contract (signal_file) inherits the default `.ralph-stop` / `.ralph-steer`
+# Control contract (signal_file) inherits the default `.loop-stop` / `.loop-steer`
 # convention from lib/loops.sh — no adapter override needed.
 #
 # The launch verb uses helpers defined in lib/loop-launcher.sh
@@ -27,15 +27,15 @@
 # and the shared UI / provider seams. The launcher sources those before
 # dispatching, so the adapter need not source them itself.
 
-# Build ralph's runner exec command into _ALMANAC_LOOP_ARGV (the launcher execs
+# Build loop's runner exec command into _ALMANAC_LOOP_ARGV (the launcher execs
 # it). MODE selects the runner: `once` runs a single iteration (once.sh SPEC),
-# `afk` runs autonomously (afk.sh SPEC ITERATIONS). The ralph runner scripts live
-# under the ralph-loop skill — this adapter is the single place that path is
-# named, so the launcher no longer hard-codes …/ralph-loop/scripts/…. Returns 2
+# `afk` runs autonomously (afk.sh SPEC ITERATIONS). The loop runner scripts live
+# under the loop skill — this adapter is the single place that path is
+# named, so the launcher no longer hard-codes …/loop/scripts/…. Returns 2
 # for an unknown mode. Requires $ALMANAC_HOME (set by every entry point).
-almanac_loop_ralph_exec_argv() {
+almanac_loop_loop_exec_argv() {
   local mode="$1" spec="$2" iterations="${3:-}"
-  local scripts="$ALMANAC_HOME/skills/loop/ralph-loop/scripts"
+  local scripts="$ALMANAC_HOME/skills/loop/loop/scripts"
   case "$mode" in
     once) _ALMANAC_LOOP_ARGV=(bash "$scripts/once.sh" "$spec") ;;
     afk)  _ALMANAC_LOOP_ARGV=(bash "$scripts/afk.sh" "$spec" "$iterations") ;;
@@ -44,11 +44,11 @@ almanac_loop_ralph_exec_argv() {
   return 0
 }
 
-# Interactive config + exec for the ralph loop. Parses native flags, prompts for
+# Interactive config + exec for the implementation loop. Parses native flags, prompts for
 # any missing field via the gum-or-plain UI seam, exports the role-config env,
 # and execs the runner via the exec_argv verb. Called by lib/loop-launcher.sh's
 # adapter dispatch — no central code branches on loop type.
-almanac_loop_ralph_launch() {
+almanac_loop_loop_launch() {
   local spec="" mode="" provider="" model="" effort="" iterations="" no_oversee="" yes=""
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -60,8 +60,8 @@ almanac_loop_ralph_launch() {
       --iterations) shift; iterations="${1:-}"; [ -n "$iterations" ] || _die "--iterations requires a value" ;;
       --no-oversee) no_oversee=1 ;;
       --yes|-y) yes=1 ;;
-      --help|-h) almanac_loop_ralph_launch_usage; return 0 ;;
-      *) _die "Unknown ralph launch option: $1" ;;
+      --help|-h) almanac_loop_loop_launch_usage; return 0 ;;
+      *) _die "Unknown loop launch option: $1" ;;
     esac
     shift
   done
@@ -79,7 +79,7 @@ almanac_loop_ralph_launch() {
   fi
   [ -f "docs/plans/${spec}/spec.md" ] || [ -f "docs/plans/${spec}/prd.md" ] \
     || _die "docs/plans/${spec}/spec.md not found."
-  [ -f "docs/plans/${spec}/prompt.md" ] || _die "docs/plans/${spec}/prompt.md not found. Run /ralph-loop ${spec} first."
+  [ -f "docs/plans/${spec}/prompt.md" ] || _die "docs/plans/${spec}/prompt.md not found. Run /loop ${spec} first."
 
   # Mode
   [ -n "$mode" ] || mode="$(almanac_loop_ui_choose "Mode" once afk)" || return 1
@@ -101,30 +101,30 @@ almanac_loop_ralph_launch() {
   fi
 
   # Summary + confirm
-  almanac_loop_launch_summary "ralph" \
+  almanac_loop_launch_summary "loop" \
     "Spec:$spec" "Mode:$mode" "Provider:$provider" \
     "Model:${model:-provider default}" "Thinking:${effort:-provider default}" \
     $([ "$mode" = "afk" ] && printf '%s\n%s' "Iterations:$iterations" "Overseer:$([ -n "$no_oversee" ] && echo off || echo on)")
   [ -n "$yes" ] || almanac_loop_ui_confirm "Launch this run?" || { _info "Cancelled."; return 0; }
 
-  # Export role config + exec the runner (no re-launch through `almanac ralph`).
-  _almanac_launch_export_role RALPH_ "$provider" "$model" "$effort"
-  [ -n "$no_oversee" ] && export RALPH_NO_OVERSEE=1
+  # Export role config + exec the runner (no re-launch through `almanac loop`).
+  _almanac_launch_export_role LOOP_ "$provider" "$model" "$effort"
+  [ -n "$no_oversee" ] && export LOOP_NO_OVERSEE=1
 
-  # Exec the runner via the ralph adapter (no hard-coded …/ralph-loop/scripts/…
+  # Exec the runner via the loop adapter (no hard-coded …/loop/scripts/…
   # path lives here any more — the adapter owns it).
-  almanac_loop_adapter_call ralph exec_argv "$mode" "$spec" "$iterations" \
-    || _die "ralph adapter could not build a runner for mode: $mode"
+  almanac_loop_adapter_call loop exec_argv "$mode" "$spec" "$iterations" \
+    || _die "loop adapter could not build a runner for mode: $mode"
   exec "${_ALMANAC_LOOP_ARGV[@]}"
 }
 
-# Compose the hub's new-run launcher argv for ralph (one token per line, starting
+# Compose the hub's new-run launcher argv for loop (one token per line, starting
 # with the `almanac` subcommand). Accepts key=val pairs (the hub's lingua franca
-# for new-run config) so the dispatcher in lib/run.sh never has to know ralph's
-# flag shape. Returns 2 when the required spec field is missing. ralph takes all
+# for new-run config) so the dispatcher in lib/run.sh never has to know loop's
+# flag shape. Returns 2 when the required spec field is missing. loop takes all
 # its config as flags — no env lines — so it has no new_run_env counterpart with
 # real work to do, but it still implements one (below) for contract uniformity.
-almanac_loop_ralph_new_run_argv() {
+almanac_loop_loop_new_run_argv() {
   local spec mode provider model effort iterations oversee
   # "prd=" is the legacy wire key for the spec name (status blobs and hub opts
   # still speak it) — kept until the whole key=val protocol is migrated.
@@ -137,7 +137,7 @@ almanac_loop_ralph_new_run_argv() {
   oversee="$(_almanac_loop_kv_get oversee "$@")"
 
   [ -n "$spec" ] || return 2
-  printf '%s\n' ralph
+  printf '%s\n' loop
   # --prd is the legacy alias of --spec; emitted here so composed argv keeps
   # matching what older tooling expects on the wire.
   printf '%s\n%s\n' --prd "$spec"
@@ -150,25 +150,25 @@ almanac_loop_ralph_new_run_argv() {
   return 0
 }
 
-# Compose the hub's new-run env stream for ralph. Empty by construction (ralph's
+# Compose the hub's new-run env stream for loop. Empty by construction (loop's
 # config rides entirely on argv), but the verb exists so dispatch never branches
 # on loop type at the new-run composer.
-almanac_loop_ralph_new_run_env() {
+almanac_loop_loop_new_run_env() {
   return 0
 }
 
-almanac_loop_ralph_new_run_usage() {
+almanac_loop_loop_new_run_usage() {
   printf '%s\n' "requires --spec <name> (--prd is a legacy alias)"
 }
 
-# Read a ralph run's status blob and emit the key=val pairs that
-# almanac_loop_ralph_new_run_argv / _new_run_env consume — the inverse of those
+# Read a loop run's status blob and emit the key=val pairs that
+# almanac_loop_loop_new_run_argv / _new_run_env consume — the inverse of those
 # composers. Resume / clone in the hub pipes the output straight to them, so the
-# hub never has to know ralph's status schema (it used to; this verb is the
+# hub never has to know loop's status schema (it used to; this verb is the
 # deepening that makes the hub loop-agnostic).
-almanac_loop_ralph_status_to_opts() {
+almanac_loop_loop_status_to_opts() {
   local status_file="$1" target iterations oversee spec
-  # target → spec (derive from dirname) and iterations → mode are ralph's per-field
+  # target → spec (derive from dirname) and iterations → mode are loop's per-field
   # transforms — neither passes through verbatim, so they read the status fields
   # directly. The rest are passthrough.
   target="$(almanac_loop_status_field "$status_file" target || true)"
@@ -189,21 +189,21 @@ almanac_loop_ralph_status_to_opts() {
   return 0
 }
 
-# Ralph goes through the launcher (almanac_loop_launch), which accepts --yes for
+# Loop goes through the launcher (almanac_loop_launch), which accepts --yes for
 # auto-confirm. Hub `--resume` uses this signal to append --yes; loops that
 # don't implement this verb (harden, converge — they exec their direct runners,
 # which reject --yes) get no suffix appended.
-almanac_loop_ralph_launch_backed() {
+almanac_loop_loop_launch_backed() {
   return 0
 }
 
-# --help text for `almanac ralph` / `almanac_loop_launch ralph`. Stays inside
+# --help text for `almanac loop` / `almanac_loop_launch loop`. Stays inside
 # the adapter so adding a loop is a one-file change. Prints to stdout: this is
 # only reached on the explicit --help path (the launch verb returns 0 right
 # after), so it is a requested output, not run noise.
-almanac_loop_ralph_launch_usage() {
+almanac_loop_loop_launch_usage() {
   cat <<'EOF'
-Usage: almanac ralph [options]   (also: bash ralph.sh [options])
+Usage: almanac loop [options]   (also: bash loop.sh [options])
   --spec <name>         spec under docs/plans/<name>/
   --mode <once|afk>     one iteration, or autonomous
   --provider <p>        codex | claude

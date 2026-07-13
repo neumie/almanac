@@ -869,8 +869,8 @@ almanac_converge_run_worker() {
 
   prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-worker-prompt.XXXXXX")"
   result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-worker-result.XXXXXX")"
-  # Persistent per-round session log under the plan dir (mirrors ralph's
-  # docs/plans/<name>/ralph-codex-iteration-N.log). The full raw event stream
+  # Persistent per-round session log under the plan dir (mirrors loop's
+  # docs/plans/<name>/loop-codex-iteration-N.log). The full raw event stream
   # tees here while the filtered agent-message text streams live to the
   # terminal — operator sees progress, durable log is kept for forensics.
   events_file="$plan_dir/converge-${provider}-iteration-${round}.log"
@@ -986,7 +986,7 @@ almanac_converge_run_worker_prompt() {
   prompt_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-prompt.XXXXXX")"
   result_file="$(mktemp "${TMPDIR:-/tmp}/almanac-converge-result.XXXXXX")"
   # Persistent per-round session log under the plan dir (same shape as
-  # exec-mode + ralph's per-iteration logs). Streams live to terminal so the
+  # exec-mode + loop's per-iteration logs). Streams live to terminal so the
   # operator sees the agent working; tees the raw stream here for forensics.
   events_file="$plan_dir/converge-${provider}-iteration-${round}.log"
 
@@ -999,7 +999,7 @@ almanac_converge_run_worker_prompt() {
   #   3. The user's verbatim --prompt text
   #
   # The ground-rules block is prepended (not appended) so the agent reads it
-  # as CONTEXT for the work, not as a post-hoc demand. Same reason ralph's
+  # as CONTEXT for the work, not as a post-hoc demand. Same reason loop's
   # iteration prompt frames the task before listing the rules.
   local rel_plan_for_prompt="${plan_dir#"$root"/}"
   {

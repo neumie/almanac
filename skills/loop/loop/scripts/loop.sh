@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# ralph.sh — interactive Ralph launcher (direct entry point).
+# loop.sh — interactive Loop launcher (direct entry point).
 #
 # Thin delegate to the shared almanac launcher (lib/loop-launcher.sh) so a direct
-# `bash ralph.sh` and `almanac ralph` share one config UX — no second launcher to
+# `bash loop.sh` and `almanac loop` share one config UX — no second launcher to
 # keep in sync. pwd -P resolves the install symlink
-# (~/.claude/skills/almanac/ralph-loop -> repo) to the real ALMANAC_HOME, so this
+# (~/.claude/skills/almanac/loop -> repo) to the real ALMANAC_HOME, so this
 # works whether launched from the repo or an installed provider path.
 
 set -euo pipefail
@@ -22,4 +22,4 @@ for _lib in core loop-launcher; do
   source "$ALMANAC_HOME/lib/${_lib}.sh"
 done
 
-almanac_loop_launch ralph "$@"
+almanac_loop_launch loop "$@"

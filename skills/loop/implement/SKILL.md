@@ -70,6 +70,6 @@ For a GitHub issue:
 
 ### 6. Commit
 
-Follow the `commit` skill. If an orchestrator supplies a stricter commit format, such as `RALPH(<spec>):`, follow the orchestrator contract instead.
+Follow the `commit` skill. If an orchestrator supplies a stricter commit format, such as `LOOP(<spec>):`, follow the orchestrator contract instead.
 
 Report the commit, verification run, queue update, and any remaining criteria.

@@ -1593,7 +1593,7 @@ almanac_harden_round() {
 # the gum prompt) overrides it from the next round on.
 #
 # The loop registers itself in the shared run registry at start (the same contract
-# ralph emits, so it shows in the almanac hub), updates its live run-status blob
+# loop emits, so it shows in the almanac hub), updates its live run-status blob
 # each round (round + lens/open-blocking summary), and marks the run done (converge
 # or ship), failed (budget hit), or aborted (signal / mid-round _die) on exit.
 almanac_harden_run() {
@@ -1618,7 +1618,7 @@ almanac_harden_run() {
   IFS=$'\t' read -r cond_provider cond_model cond_effort < <(almanac_harden_role_resolve conductor)
   _info "Conductor: provider=$cond_provider${cond_model:+ model=$cond_model}${cond_effort:+ effort=$cond_effort}"
 
-  # Register this loop in the shared run registry — the SAME contract ralph emits
+  # Register this loop in the shared run registry — the SAME contract loop emits
   # (id/type/target/pid/status-file/start), so both appear in the almanac hub. The
   # per-round fan-out keeps its own worker run dirs; this is the loop-level run.
   # Best-effort: a registry failure must never stop a hardening run. lens_summary

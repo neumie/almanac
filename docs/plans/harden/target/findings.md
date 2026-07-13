@@ -63,7 +63,7 @@
 - severity: medium
 - location: lib/run.sh:771
 - claim: Hub stop trusts project-controlled run status files and TERM signals their pid, allowing a crafted repo to kill any same-user process.
-- demonstration: Breaking input: create .almanac/runs/evil/status.tsv with `type<TAB>ralph` and `pid<TAB>$SSH_AGENT_PID`, then run `almanac hub --stop evil`; line 782 sends `kill -TERM` to that PID.
+- demonstration: Breaking input: create .almanac/runs/evil/status.tsv with `type<TAB>loop` and `pid<TAB>$SSH_AGENT_PID`, then run `almanac hub --stop evil`; line 782 sends `kill -TERM` to that PID.
 - status: fixed
 - round: 1
 - adjudication: fixed by sequential fixer at round 1
@@ -140,7 +140,7 @@
 - severity: high
 - location: lib/run.sh:782
 - claim: Stopping a registered run signals its PID without checking lifecycle status, so a finished run can kill an unrelated reused PID.
-- demonstration: Failing test: start `sleep 60`, register a ralph run with that pid, mark it `done`, then call `almanac_loop_run_stop "$tmp" done-run`; `kill -0 $sleep_pid` fails because stop still sent TERM to a non-running run.
+- demonstration: Failing test: start `sleep 60`, register a loop run with that pid, mark it `done`, then call `almanac_loop_run_stop "$tmp" done-run`; `kill -0 $sleep_pid` fails because stop still sent TERM to a non-running run.
 - status: fixed
 - round: 1
 - adjudication: fixed by sequential fixer at round 1
@@ -160,8 +160,8 @@
 
 - lens: edge-cases
 - severity: medium
-- location: skills/loop/ralph-loop/scripts/afk.sh:225
-- claim: Ralph AFK CI monitor requires `jq` whenever `gh` returns runs, despite jq being optional.
+- location: skills/loop/loop/scripts/afk.sh:225
+- claim: Loop AFK CI monitor requires `jq` whenever `gh` returns runs, despite jq being optional.
 - demonstration: Breaking input: PATH contains fake `gh` returning `[ {"status":"completed","conclusion":"success"} ]` and no `jq`; `check_ci_status` under `set -e` exits 127 at `jq` instead of no-oping, aborting AFK before iteration.
 - status: fixed
 - round: 1

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# test-ralph-run-registry.sh - Ralph launcher run registry tests
+# test-loop-run-registry.sh - Loop launcher run registry tests
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ONCE_SCRIPT="$ROOT/skills/loop/ralph-loop/scripts/once.sh"
-AFK_SCRIPT="$ROOT/skills/loop/ralph-loop/scripts/afk.sh"
+ONCE_SCRIPT="$ROOT/skills/loop/loop/scripts/once.sh"
+AFK_SCRIPT="$ROOT/skills/loop/loop/scripts/afk.sh"
 
 TMPDIRS=()
 NEW_TMPDIR=""
@@ -232,18 +232,18 @@ test_once_registers_and_marks_run_done() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_codex "$fakebin"
 
-  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex bash "$ONCE_SCRIPT" demo >/dev/null)
+  (cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=codex bash "$ONCE_SCRIPT" demo >/dev/null)
 
   index_file="$tmp/.almanac/runs/index.tsv"
-  [ -f "$index_file" ] || fail "ralph once should write run index"
+  [ -f "$index_file" ] || fail "loop once should write run index"
   assert_file_contains "$index_file" $'id\ttype\ttarget\tpid\tstatus_file\tstarted_at\tstatus' "index should include header"
-  assert_file_contains "$index_file" $'ralph\tdocs/plans/demo/prd.md' "index should record ralph PRD target"
+  assert_file_contains "$index_file" $'loop\tdocs/plans/demo/prd.md' "index should record loop PRD target"
   assert_file_contains "$index_file" $'done' "index should mark run done"
 
   status_rel="$(awk 'BEGIN { FS = "\t" } NR == 2 { print $5 }' "$index_file")"
   status_file="$tmp/$status_rel"
-  [ -f "$status_file" ] || fail "ralph once should write status file"
-  assert_file_contains "$status_file" $'type\tralph' "status should record ralph type"
+  [ -f "$status_file" ] || fail "loop once should write status file"
+  assert_file_contains "$status_file" $'type\tloop' "status should record loop type"
   assert_file_contains "$status_file" $'target\tdocs/plans/demo/prd.md' "status should record PRD target"
   assert_file_contains "$status_file" $'status\tdone' "status should mark run done"
   echo "  PASS: once registers and marks run done"
@@ -260,18 +260,18 @@ test_once_marks_run_failed_on_provider_error() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_codex "$fakebin"
 
-  if (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex FAKE_CODEX_EXIT=7 bash "$ONCE_SCRIPT" demo >/dev/null 2>&1); then
-    fail "ralph once should fail when provider exits nonzero"
+  if (cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=codex FAKE_CODEX_EXIT=7 bash "$ONCE_SCRIPT" demo >/dev/null 2>&1); then
+    fail "loop once should fail when provider exits nonzero"
   fi
 
   index_file="$tmp/.almanac/runs/index.tsv"
-  [ -f "$index_file" ] || fail "failed ralph once should still write run index"
-  assert_file_contains "$index_file" $'ralph\tdocs/plans/demo/prd.md' "index should record failed ralph PRD target"
+  [ -f "$index_file" ] || fail "failed loop once should still write run index"
+  assert_file_contains "$index_file" $'loop\tdocs/plans/demo/prd.md' "index should record failed loop PRD target"
   assert_file_contains "$index_file" $'failed' "index should mark run failed"
 
   status_rel="$(awk 'BEGIN { FS = "\t" } NR == 2 { print $5 }' "$index_file")"
   status_file="$tmp/$status_rel"
-  [ -f "$status_file" ] || fail "failed ralph once should still write status file"
+  [ -f "$status_file" ] || fail "failed loop once should still write status file"
   assert_file_contains "$status_file" $'status\tfailed' "status should mark run failed"
   echo "  PASS: once marks run failed on provider error"
 }
@@ -287,17 +287,17 @@ test_afk_registers_and_marks_run_done() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_codex "$fakebin"
 
-  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex RALPH_NO_OVERSEE=1 bash "$AFK_SCRIPT" demo 1 >/dev/null)
+  (cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=codex LOOP_NO_OVERSEE=1 bash "$AFK_SCRIPT" demo 1 >/dev/null)
 
   index_file="$tmp/.almanac/runs/index.tsv"
-  [ -f "$index_file" ] || fail "ralph afk should write run index"
-  assert_file_contains "$index_file" $'ralph\tdocs/plans/demo/prd.md' "index should record afk PRD target"
+  [ -f "$index_file" ] || fail "loop afk should write run index"
+  assert_file_contains "$index_file" $'loop\tdocs/plans/demo/prd.md' "index should record afk PRD target"
   assert_file_contains "$index_file" $'done' "index should mark afk run done"
 
   status_rel="$(awk 'BEGIN { FS = "\t" } NR == 2 { print $5 }' "$index_file")"
   status_file="$tmp/$status_rel"
-  [ -f "$status_file" ] || fail "ralph afk should write status file"
-  assert_file_contains "$status_file" $'type\tralph' "status should record ralph type"
+  [ -f "$status_file" ] || fail "loop afk should write status file"
+  assert_file_contains "$status_file" $'type\tloop' "status should record loop type"
   assert_file_contains "$status_file" $'target\tdocs/plans/demo/prd.md' "status should record PRD target"
   assert_file_contains "$status_file" $'status\tdone' "status should mark afk run done"
   echo "  PASS: afk registers and marks run done"
@@ -314,18 +314,18 @@ test_afk_marks_run_failed_on_provider_error() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_codex "$fakebin"
 
-  if (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex RALPH_NO_OVERSEE=1 FAKE_CODEX_EXIT=9 bash "$AFK_SCRIPT" demo 1 >/dev/null 2>&1); then
-    fail "ralph afk should fail when provider exits nonzero"
+  if (cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=codex LOOP_NO_OVERSEE=1 FAKE_CODEX_EXIT=9 bash "$AFK_SCRIPT" demo 1 >/dev/null 2>&1); then
+    fail "loop afk should fail when provider exits nonzero"
   fi
 
   index_file="$tmp/.almanac/runs/index.tsv"
-  [ -f "$index_file" ] || fail "failed ralph afk should still write run index"
-  assert_file_contains "$index_file" $'ralph\tdocs/plans/demo/prd.md' "index should record failed afk PRD target"
+  [ -f "$index_file" ] || fail "failed loop afk should still write run index"
+  assert_file_contains "$index_file" $'loop\tdocs/plans/demo/prd.md' "index should record failed afk PRD target"
   assert_file_contains "$index_file" $'failed' "index should mark afk run failed"
 
   status_rel="$(awk 'BEGIN { FS = "\t" } NR == 2 { print $5 }' "$index_file")"
   status_file="$tmp/$status_rel"
-  [ -f "$status_file" ] || fail "failed ralph afk should still write status file"
+  [ -f "$status_file" ] || fail "failed loop afk should still write status file"
   assert_file_contains "$status_file" $'status\tfailed' "status should mark afk run failed"
   echo "  PASS: afk marks run failed on provider error"
 }
@@ -341,12 +341,12 @@ test_once_emits_live_run_progress_contract() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_codex "$fakebin"
 
-  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex bash "$ONCE_SCRIPT" demo >/dev/null)
+  (cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=codex bash "$ONCE_SCRIPT" demo >/dev/null)
 
   index_file="$tmp/.almanac/runs/index.tsv"
   status_rel="$(awk 'BEGIN { FS = "\t" } NR == 2 { print $5 }' "$index_file")"
   status_file="$tmp/$status_rel"
-  [ -f "$status_file" ] || fail "ralph once should write status file"
+  [ -f "$status_file" ] || fail "loop once should write status file"
   assert_file_contains "$status_file" $'round\t1' "once should record the live iteration as round in the run-status contract"
   assert_file_contains "$status_file" $'summary\tprovider=codex iteration=1/1' "once should record the live iteration summary in the run-status contract"
   echo "  PASS: once emits the live run-status progress contract"
@@ -363,20 +363,20 @@ test_afk_emits_live_run_progress_contract() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_codex "$fakebin"
 
-  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex RALPH_NO_OVERSEE=1 bash "$AFK_SCRIPT" demo 1 >/dev/null)
+  (cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=codex LOOP_NO_OVERSEE=1 bash "$AFK_SCRIPT" demo 1 >/dev/null)
 
   index_file="$tmp/.almanac/runs/index.tsv"
   status_rel="$(awk 'BEGIN { FS = "\t" } NR == 2 { print $5 }' "$index_file")"
   status_file="$tmp/$status_rel"
-  [ -f "$status_file" ] || fail "ralph afk should write status file"
+  [ -f "$status_file" ] || fail "loop afk should write status file"
   assert_file_contains "$status_file" $'round\t1' "afk should record the live iteration as round in the run-status contract"
   assert_file_contains "$status_file" $'summary\tprovider=codex iteration=1/1' "afk should record the live iteration summary in the run-status contract"
   echo "  PASS: afk emits the live run-status progress contract"
 }
 
 # once.sh routes its claude provider invocation through the shared agent_run
-# seam (#66 — ralph migration). The seam must build once.sh's exact claude
-# invocation (acceptEdits, stream-json) honoring RALPH_MODEL/RALPH_EFFORT and
+# seam (#66 — loop migration). The seam must build once.sh's exact claude
+# invocation (acceptEdits, stream-json) honoring LOOP_MODEL/LOOP_EFFORT and
 # stream the live assistant text to stdout byte-for-byte as before.
 test_once_claude_routes_provider_invocation_through_seam() {
   if ! command -v jq >/dev/null 2>&1; then
@@ -395,8 +395,8 @@ test_once_claude_routes_provider_invocation_through_seam() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_claude "$fakebin"
 
-  out=$(cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=claude \
-    RALPH_MODEL=fake-model RALPH_EFFORT=high FAKE_CLAUDE_ARGV="$argv_file" \
+  out=$(cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=claude \
+    LOOP_MODEL=fake-model LOOP_EFFORT=high FAKE_CLAUDE_ARGV="$argv_file" \
     bash "$ONCE_SCRIPT" demo)
 
   # Live assistant stream reaches stdout via the seam's claude jq filter.
@@ -411,8 +411,8 @@ test_once_claude_routes_provider_invocation_through_seam() {
   assert_file_contains "$argv_file" "stream-json" "claude invocation should request stream-json"
   assert_file_contains "$argv_file" "--permission-mode" "claude invocation should set a permission mode"
   assert_file_contains "$argv_file" "acceptEdits" "once claude permission mode should be acceptEdits"
-  assert_file_contains "$argv_file" "fake-model" "claude invocation should honor RALPH_MODEL"
-  assert_file_contains "$argv_file" "high" "claude invocation should honor RALPH_EFFORT"
+  assert_file_contains "$argv_file" "fake-model" "claude invocation should honor LOOP_MODEL"
+  assert_file_contains "$argv_file" "high" "claude invocation should honor LOOP_EFFORT"
   echo "  PASS: once routes claude provider invocation through the shared seam"
 }
 
@@ -434,7 +434,7 @@ test_once_claude_propagates_provider_failure() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_claude "$fakebin"
 
-  if (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=claude FAKE_CLAUDE_EXIT=5 \
+  if (cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=claude FAKE_CLAUDE_EXIT=5 \
     bash "$ONCE_SCRIPT" demo >/dev/null 2>&1); then
     fail "once should fail when the claude provider exits nonzero (seam PIPESTATUS)"
   fi
@@ -446,9 +446,9 @@ test_once_claude_propagates_provider_failure() {
 }
 
 # once.sh routes its default (non-verbose) codex provider invocation through the
-# shared agent_run seam (#66 — ralph migration). The seam must build once.sh's
+# shared agent_run seam (#66 — loop migration). The seam must build once.sh's
 # exact codex invocation (--json, --output-last-message, danger-full-access)
-# honoring RALPH_MODEL/RALPH_EFFORT, stream the live agent-message text, capture
+# honoring LOOP_MODEL/LOOP_EFFORT, stream the live agent-message text, capture
 # the raw stream AND merged stderr (2>&1) to the session log, and once.sh prints
 # the final result — byte-for-byte as the old inline pipe did.
 test_once_codex_routes_provider_invocation_through_seam() {
@@ -468,8 +468,8 @@ test_once_codex_routes_provider_invocation_through_seam() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_codex_recording "$fakebin"
 
-  out=$(cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex \
-    RALPH_MODEL=fake-model RALPH_EFFORT=high FAKE_CODEX_ARGV="$argv_file" \
+  out=$(cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=codex \
+    LOOP_MODEL=fake-model LOOP_EFFORT=high FAKE_CODEX_ARGV="$argv_file" \
     bash "$ONCE_SCRIPT" demo)
 
   # Live agent-message stream reaches stdout via the seam's codex jq filter.
@@ -485,11 +485,11 @@ test_once_codex_routes_provider_invocation_through_seam() {
   assert_file_contains "$argv_file" "--output-last-message" "codex invocation should capture the final message"
   assert_file_contains "$argv_file" "--sandbox" "codex invocation should set a sandbox"
   assert_file_contains "$argv_file" "danger-full-access" "once codex sandbox should be danger-full-access"
-  assert_file_contains "$argv_file" "fake-model" "codex invocation should honor RALPH_MODEL"
-  assert_file_contains "$argv_file" "high" "codex invocation should honor RALPH_EFFORT"
+  assert_file_contains "$argv_file" "fake-model" "codex invocation should honor LOOP_MODEL"
+  assert_file_contains "$argv_file" "high" "codex invocation should honor LOOP_EFFORT"
 
   # The session log captures the raw stream AND merged stderr (2>&1 preserved).
-  codex_log="$tmp/docs/plans/demo/ralph-codex-once.log"
+  codex_log="$tmp/docs/plans/demo/loop-codex-once.log"
   [ -f "$codex_log" ] || fail "once codex should write the session log via the seam"
   assert_file_contains "$codex_log" "FAKE_CODEX_STREAM_TEXT" "session log should capture the raw codex event stream"
   assert_file_contains "$codex_log" "FAKE_CODEX_STDERR_LINE" "session log should capture codex stderr (merge-stderr 2>&1)"
@@ -514,7 +514,7 @@ test_once_codex_propagates_provider_failure() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_codex_recording "$fakebin"
 
-  if (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex FAKE_CODEX_EXIT=5 \
+  if (cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=codex FAKE_CODEX_EXIT=5 \
     bash "$ONCE_SCRIPT" demo >/dev/null 2>&1); then
     fail "once should fail when the codex provider exits nonzero (seam PIPESTATUS)"
   fi
@@ -526,9 +526,9 @@ test_once_codex_propagates_provider_failure() {
 }
 
 # afk.sh routes its default (non-verbose) codex provider invocation through the
-# shared agent_run seam (#66 — ralph migration). The seam must build afk's exact
+# shared agent_run seam (#66 — loop migration). The seam must build afk's exact
 # codex invocation (--json, --output-last-message, danger-full-access) honoring
-# RALPH_MODEL/RALPH_EFFORT, stream the live agent-message text, capture the raw
+# LOOP_MODEL/LOOP_EFFORT, stream the live agent-message text, capture the raw
 # stream AND merged stderr (2>&1) to the per-iteration session log, and afk both
 # prints the final result and reads it back for <promise> extraction — byte-for-
 # byte as the old inline pipe did.
@@ -549,8 +549,8 @@ test_afk_codex_routes_provider_invocation_through_seam() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_codex_recording "$fakebin"
 
-  out=$(cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex RALPH_NO_OVERSEE=1 \
-    RALPH_MODEL=fake-model RALPH_EFFORT=high FAKE_CODEX_ARGV="$argv_file" \
+  out=$(cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=codex LOOP_NO_OVERSEE=1 \
+    LOOP_MODEL=fake-model LOOP_EFFORT=high FAKE_CODEX_ARGV="$argv_file" \
     bash "$AFK_SCRIPT" demo 1)
 
   # Live agent-message stream reaches stdout via the seam's codex jq filter.
@@ -566,11 +566,11 @@ test_afk_codex_routes_provider_invocation_through_seam() {
   assert_file_contains "$argv_file" "--output-last-message" "codex invocation should capture the final message"
   assert_file_contains "$argv_file" "--sandbox" "codex invocation should set a sandbox"
   assert_file_contains "$argv_file" "danger-full-access" "afk codex sandbox should be danger-full-access"
-  assert_file_contains "$argv_file" "fake-model" "codex invocation should honor RALPH_MODEL"
-  assert_file_contains "$argv_file" "high" "codex invocation should honor RALPH_EFFORT"
+  assert_file_contains "$argv_file" "fake-model" "codex invocation should honor LOOP_MODEL"
+  assert_file_contains "$argv_file" "high" "codex invocation should honor LOOP_EFFORT"
 
   # The per-iteration session log captures the raw stream AND merged stderr.
-  codex_log="$tmp/docs/plans/demo/ralph-codex-iteration-1.log"
+  codex_log="$tmp/docs/plans/demo/loop-codex-iteration-1.log"
   [ -f "$codex_log" ] || fail "afk codex should write the session log via the seam"
   assert_file_contains "$codex_log" "FAKE_CODEX_STREAM_TEXT" "session log should capture the raw codex event stream"
   assert_file_contains "$codex_log" "FAKE_CODEX_STDERR_LINE" "session log should capture codex stderr (merge-stderr 2>&1)"
@@ -578,10 +578,10 @@ test_afk_codex_routes_provider_invocation_through_seam() {
 }
 
 # afk.sh routes its claude iteration path through the shared agent_run seam (#66
-# — ralph migration). Unlike once.sh, afk's iteration agent has NEVER set a
+# — loop migration). Unlike once.sh, afk's iteration agent has NEVER set a
 # permission mode, so the seam must build afk's claude invocation WITHOUT
 # --permission-mode (via the `default` sandbox sentinel), still honoring
-# RALPH_MODEL/RALPH_EFFORT, stream the live assistant text to stdout, and afk
+# LOOP_MODEL/LOOP_EFFORT, stream the live assistant text to stdout, and afk
 # reads the seam's result back for <promise> extraction.
 test_afk_claude_routes_provider_invocation_through_seam() {
   if ! command -v jq >/dev/null 2>&1; then
@@ -600,8 +600,8 @@ test_afk_claude_routes_provider_invocation_through_seam() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_claude "$fakebin"
 
-  out=$(cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=claude RALPH_NO_OVERSEE=1 \
-    RALPH_MODEL=fake-model RALPH_EFFORT=high FAKE_CLAUDE_ARGV="$argv_file" \
+  out=$(cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=claude LOOP_NO_OVERSEE=1 \
+    LOOP_MODEL=fake-model LOOP_EFFORT=high FAKE_CLAUDE_ARGV="$argv_file" \
     bash "$AFK_SCRIPT" demo 1)
 
   # Live assistant stream reaches stdout via the seam's claude jq filter.
@@ -614,8 +614,8 @@ test_afk_claude_routes_provider_invocation_through_seam() {
   [ -f "$argv_file" ] || fail "fake claude should have been invoked"
   assert_file_contains "$argv_file" "--output-format" "claude invocation should request a structured output format"
   assert_file_contains "$argv_file" "stream-json" "claude invocation should request stream-json"
-  assert_file_contains "$argv_file" "fake-model" "claude invocation should honor RALPH_MODEL"
-  assert_file_contains "$argv_file" "high" "claude invocation should honor RALPH_EFFORT"
+  assert_file_contains "$argv_file" "fake-model" "claude invocation should honor LOOP_MODEL"
+  assert_file_contains "$argv_file" "high" "claude invocation should honor LOOP_EFFORT"
 
   # Crucially, afk's claude path must NOT set --permission-mode — its iteration
   # agent has never set one (the `default` sandbox sentinel preserves that).
@@ -646,7 +646,7 @@ test_afk_claude_propagates_provider_failure() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_claude "$fakebin"
 
-  if (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=claude RALPH_NO_OVERSEE=1 \
+  if (cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=claude LOOP_NO_OVERSEE=1 \
     FAKE_CLAUDE_EXIT=5 bash "$AFK_SCRIPT" demo 1 >/dev/null 2>&1); then
     fail "afk should fail when the claude provider exits nonzero (seam PIPESTATUS)"
   fi
@@ -657,7 +657,7 @@ test_afk_claude_propagates_provider_failure() {
   echo "  PASS: afk claude propagates provider failure through the seam"
 }
 
-# RALPH_CODEX_VERBOSE=1 routes once.sh's codex through the shared agent_run seam's
+# LOOP_CODEX_VERBOSE=1 routes once.sh's codex through the shared agent_run seam's
 # raw passthrough mode (#66 crit 6 — no inline provider exec remains). Raw mode
 # runs codex WITHOUT --json so its native output passes straight through, while
 # still honoring model/effort/sandbox and capturing the final message. No jq is
@@ -674,8 +674,8 @@ test_once_codex_verbose_routes_through_seam_raw_mode() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_codex_recording "$fakebin"
 
-  out=$(cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex RALPH_CODEX_VERBOSE=1 \
-    RALPH_MODEL=fake-model RALPH_EFFORT=high FAKE_CODEX_ARGV="$argv_file" \
+  out=$(cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=codex LOOP_CODEX_VERBOSE=1 \
+    LOOP_MODEL=fake-model LOOP_EFFORT=high FAKE_CODEX_ARGV="$argv_file" \
     bash "$ONCE_SCRIPT" demo)
 
   # The seam built once.sh's verbose codex invocation in raw mode: NO --json,
@@ -684,8 +684,8 @@ test_once_codex_verbose_routes_through_seam_raw_mode() {
   assert_file_lacks "$argv_file" "--json" "verbose codex should run raw (no --json) through the seam"
   assert_file_contains "$argv_file" "--output-last-message" "verbose codex should still capture the final message"
   assert_file_contains "$argv_file" "danger-full-access" "verbose codex sandbox should be danger-full-access"
-  assert_file_contains "$argv_file" "fake-model" "verbose codex should honor RALPH_MODEL via the seam"
-  assert_file_contains "$argv_file" "high" "verbose codex should honor RALPH_EFFORT via the seam"
+  assert_file_contains "$argv_file" "fake-model" "verbose codex should honor LOOP_MODEL via the seam"
+  assert_file_contains "$argv_file" "high" "verbose codex should honor LOOP_EFFORT via the seam"
 
   # Native codex output passes straight through (the recording fake prints a raw
   # JSON event line that raw mode does not filter).
@@ -694,7 +694,7 @@ test_once_codex_verbose_routes_through_seam_raw_mode() {
   echo "  PASS: once routes verbose codex through the shared seam raw mode"
 }
 
-# RALPH_CODEX_VERBOSE=1 routes afk.sh's codex through the seam's raw passthrough
+# LOOP_CODEX_VERBOSE=1 routes afk.sh's codex through the seam's raw passthrough
 # mode too, and afk reads the seam's captured result back for <promise>
 # extraction (the result lands in $tmpfile via --output-last-message).
 test_afk_codex_verbose_routes_through_seam_raw_mode() {
@@ -709,16 +709,16 @@ test_afk_codex_verbose_routes_through_seam_raw_mode() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_codex_recording "$fakebin"
 
-  out=$(cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex RALPH_NO_OVERSEE=1 \
-    RALPH_CODEX_VERBOSE=1 RALPH_MODEL=fake-model RALPH_EFFORT=high \
+  out=$(cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=codex LOOP_NO_OVERSEE=1 \
+    LOOP_CODEX_VERBOSE=1 LOOP_MODEL=fake-model LOOP_EFFORT=high \
     FAKE_CODEX_ARGV="$argv_file" bash "$AFK_SCRIPT" demo 1)
 
   [ -f "$argv_file" ] || fail "fake codex should have been invoked"
   assert_file_lacks "$argv_file" "--json" "verbose codex should run raw (no --json) through the seam"
   assert_file_contains "$argv_file" "--output-last-message" "verbose codex should still capture the final message"
   assert_file_contains "$argv_file" "danger-full-access" "verbose codex sandbox should be danger-full-access"
-  assert_file_contains "$argv_file" "fake-model" "verbose codex should honor RALPH_MODEL via the seam"
-  assert_file_contains "$argv_file" "high" "verbose codex should honor RALPH_EFFORT via the seam"
+  assert_file_contains "$argv_file" "fake-model" "verbose codex should honor LOOP_MODEL via the seam"
+  assert_file_contains "$argv_file" "high" "verbose codex should honor LOOP_EFFORT via the seam"
 
   # Native codex output passes straight through unfiltered.
   printf '%s' "$out" | grep -Fq "FAKE_CODEX_STREAM_TEXT" \
@@ -727,8 +727,8 @@ test_afk_codex_verbose_routes_through_seam_raw_mode() {
 }
 
 # once.sh resolves its iteration-agent model/effort through the shared role-config
-# helper (almanac_loop_role_field), so the per-role RALPH_AGENT_* keys override the
-# bare RALPH_* keys (#66 crit 3 — ralph uses the shared role config). The seam's
+# helper (almanac_loop_role_field), so the per-role LOOP_AGENT_* keys override the
+# bare LOOP_* keys (#66 crit 3 — loop uses the shared role config). The seam's
 # codex invocation must carry the AGENT-role model/effort, not the bare-env ones.
 test_once_resolves_agent_model_via_shared_role_config() {
   if ! command -v jq >/dev/null 2>&1; then
@@ -747,21 +747,21 @@ test_once_resolves_agent_model_via_shared_role_config() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_codex_recording "$fakebin"
 
-  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex \
-    RALPH_AGENT_MODEL=agentrolemodel RALPH_MODEL=baseenvmodel \
-    RALPH_AGENT_EFFORT=agentroleeffort RALPH_EFFORT=baseenveffort \
+  (cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=codex \
+    LOOP_AGENT_MODEL=agentrolemodel LOOP_MODEL=baseenvmodel \
+    LOOP_AGENT_EFFORT=agentroleeffort LOOP_EFFORT=baseenveffort \
     FAKE_CODEX_ARGV="$argv_file" bash "$ONCE_SCRIPT" demo >/dev/null)
 
   [ -f "$argv_file" ] || fail "fake codex should have been invoked"
-  assert_file_contains "$argv_file" "agentrolemodel" "once should resolve RALPH_AGENT_MODEL over RALPH_MODEL via shared role config"
-  assert_file_lacks "$argv_file" "baseenvmodel" "once should not pass RALPH_MODEL when RALPH_AGENT_MODEL is set"
-  assert_file_contains "$argv_file" "agentroleeffort" "once should resolve RALPH_AGENT_EFFORT over RALPH_EFFORT via shared role config"
-  assert_file_lacks "$argv_file" "baseenveffort" "once should not pass RALPH_EFFORT when RALPH_AGENT_EFFORT is set"
+  assert_file_contains "$argv_file" "agentrolemodel" "once should resolve LOOP_AGENT_MODEL over LOOP_MODEL via shared role config"
+  assert_file_lacks "$argv_file" "baseenvmodel" "once should not pass LOOP_MODEL when LOOP_AGENT_MODEL is set"
+  assert_file_contains "$argv_file" "agentroleeffort" "once should resolve LOOP_AGENT_EFFORT over LOOP_EFFORT via shared role config"
+  assert_file_lacks "$argv_file" "baseenveffort" "once should not pass LOOP_EFFORT when LOOP_AGENT_EFFORT is set"
   echo "  PASS: once resolves the agent model/effort via the shared role config"
 }
 
 # afk.sh resolves its iteration-agent model/effort through the shared role-config
-# helper too, so RALPH_AGENT_* overrides RALPH_* (#66 crit 3).
+# helper too, so LOOP_AGENT_* overrides LOOP_* (#66 crit 3).
 test_afk_resolves_agent_model_via_shared_role_config() {
   if ! command -v jq >/dev/null 2>&1; then
     echo "  SKIP: afk agent role-config (jq not available)"
@@ -779,21 +779,21 @@ test_afk_resolves_agent_model_via_shared_role_config() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_codex_recording "$fakebin"
 
-  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex RALPH_NO_OVERSEE=1 \
-    RALPH_AGENT_MODEL=agentrolemodel RALPH_MODEL=baseenvmodel \
-    RALPH_AGENT_EFFORT=agentroleeffort RALPH_EFFORT=baseenveffort \
+  (cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=codex LOOP_NO_OVERSEE=1 \
+    LOOP_AGENT_MODEL=agentrolemodel LOOP_MODEL=baseenvmodel \
+    LOOP_AGENT_EFFORT=agentroleeffort LOOP_EFFORT=baseenveffort \
     FAKE_CODEX_ARGV="$argv_file" bash "$AFK_SCRIPT" demo 1 >/dev/null)
 
   [ -f "$argv_file" ] || fail "fake codex should have been invoked"
-  assert_file_contains "$argv_file" "agentrolemodel" "afk should resolve RALPH_AGENT_MODEL over RALPH_MODEL via shared role config"
-  assert_file_lacks "$argv_file" "baseenvmodel" "afk should not pass RALPH_MODEL when RALPH_AGENT_MODEL is set"
-  assert_file_contains "$argv_file" "agentroleeffort" "afk should resolve RALPH_AGENT_EFFORT over RALPH_EFFORT via shared role config"
-  assert_file_lacks "$argv_file" "baseenveffort" "afk should not pass RALPH_EFFORT when RALPH_AGENT_EFFORT is set"
+  assert_file_contains "$argv_file" "agentrolemodel" "afk should resolve LOOP_AGENT_MODEL over LOOP_MODEL via shared role config"
+  assert_file_lacks "$argv_file" "baseenvmodel" "afk should not pass LOOP_MODEL when LOOP_AGENT_MODEL is set"
+  assert_file_contains "$argv_file" "agentroleeffort" "afk should resolve LOOP_AGENT_EFFORT over LOOP_EFFORT via shared role config"
+  assert_file_lacks "$argv_file" "baseenveffort" "afk should not pass LOOP_EFFORT when LOOP_AGENT_EFFORT is set"
   echo "  PASS: afk resolves the agent model/effort via the shared role config"
 }
 
 # once.sh resolves its iteration-agent provider through the shared role-config
-# helper, so RALPH_AGENT_PROVIDER selects the provider over auto-detection (#66
+# helper, so LOOP_AGENT_PROVIDER selects the provider over auto-detection (#66
 # crit 3). With both providers on PATH, auto-detect would pick claude; the
 # AGENT-role provider key must win and select codex instead.
 test_once_resolves_agent_provider_via_shared_role_config() {
@@ -815,14 +815,14 @@ test_once_resolves_agent_provider_via_shared_role_config() {
   write_fake_codex_recording "$fakebin"
   write_fake_claude "$fakebin"
 
-  # No RALPH_PROVIDER — only the AGENT-role key. Both CLIs are on PATH, so the
+  # No LOOP_PROVIDER — only the AGENT-role key. Both CLIs are on PATH, so the
   # bare auto-detection would resolve claude; role config must select codex.
-  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_AGENT_PROVIDER=codex \
+  (cd "$tmp" && PATH="$fakebin:$PATH" LOOP_AGENT_PROVIDER=codex \
     FAKE_CODEX_ARGV="$codex_argv" FAKE_CLAUDE_ARGV="$claude_argv" \
     bash "$ONCE_SCRIPT" demo >/dev/null)
 
-  [ -f "$codex_argv" ] || fail "RALPH_AGENT_PROVIDER=codex should select the codex provider via shared role config"
-  [ -f "$claude_argv" ] && fail "RALPH_AGENT_PROVIDER=codex must not fall through to claude auto-detection"
+  [ -f "$codex_argv" ] || fail "LOOP_AGENT_PROVIDER=codex should select the codex provider via shared role config"
+  [ -f "$claude_argv" ] && fail "LOOP_AGENT_PROVIDER=codex must not fall through to claude auto-detection"
   assert_file_contains "$codex_argv" "--json" "the selected codex provider should run through the seam"
   echo "  PASS: once resolves the agent provider via the shared role config"
 }
@@ -848,8 +848,8 @@ test_afk_overseer_routes_codex_judge_call_through_seam() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_codex_overseer "$fakebin"
 
-  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=codex \
-    RALPH_OVERSEE_INTERVAL=1 OVERSEER_FIRED="$fired" FAKE_OVERSEER_ARGV="$overseer_argv" \
+  (cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=codex \
+    LOOP_OVERSEE_INTERVAL=1 OVERSEER_FIRED="$fired" FAKE_OVERSEER_ARGV="$overseer_argv" \
     bash "$AFK_SCRIPT" demo 1 >/dev/null 2>&1)
 
   [ -f "$fired" ] || fail "afk overseer should have fired (routed its codex judge call)"
@@ -883,8 +883,8 @@ test_afk_overseer_routes_claude_judge_call_through_seam() {
   printf '%s\n' "# Demo Prompt" > "$tmp/docs/plans/demo/prompt.md"
   write_fake_claude_overseer "$fakebin"
 
-  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_PROVIDER=claude \
-    RALPH_OVERSEE_INTERVAL=1 OVERSEER_FIRED="$fired" FAKE_OVERSEER_ARGV="$overseer_argv" \
+  (cd "$tmp" && PATH="$fakebin:$PATH" LOOP_PROVIDER=claude \
+    LOOP_OVERSEE_INTERVAL=1 OVERSEER_FIRED="$fired" FAKE_OVERSEER_ARGV="$overseer_argv" \
     bash "$AFK_SCRIPT" demo 1 >/dev/null 2>&1)
 
   [ -f "$fired" ] || fail "afk overseer should have fired (routed its claude judge call)"
@@ -896,12 +896,12 @@ test_afk_overseer_routes_claude_judge_call_through_seam() {
   echo "  PASS: afk routes the overseer claude judge call through the shared seam"
 }
 
-# Criterion 6 (#66): no duplicate provider/feedback logic remains in ralph
+# Criterion 6 (#66): no duplicate provider/feedback logic remains in loop
 # scripts — every provider invocation now lives in the shared agent_run seam, so
 # the launchers carry no raw provider-invocation flags of their own. Strip
 # comments first (the scripts document the seam's invocation in prose), then
 # assert no inline exec flag survives in once.sh or afk.sh.
-test_ralph_scripts_carry_no_inline_provider_invocation() {
+test_loop_scripts_carry_no_inline_provider_invocation() {
   local script code flag
   for script in "$ONCE_SCRIPT" "$AFK_SCRIPT"; do
     code="$(sed 's/#.*//' "$script")"
@@ -911,10 +911,10 @@ test_ralph_scripts_carry_no_inline_provider_invocation() {
       fi
     done
   done
-  echo "  PASS: ralph scripts carry no inline provider invocation (all routed through the seam)"
+  echo "  PASS: loop scripts carry no inline provider invocation (all routed through the seam)"
 }
 
-echo "=== Ralph Run Registry Tests ==="
+echo "=== Loop Run Registry Tests ==="
 test_once_registers_and_marks_run_done
 test_once_marks_run_failed_on_provider_error
 test_once_emits_live_run_progress_contract
@@ -935,4 +935,4 @@ test_afk_resolves_agent_model_via_shared_role_config
 test_once_resolves_agent_provider_via_shared_role_config
 test_afk_overseer_routes_codex_judge_call_through_seam
 test_afk_overseer_routes_claude_judge_call_through_seam
-test_ralph_scripts_carry_no_inline_provider_invocation
+test_loop_scripts_carry_no_inline_provider_invocation

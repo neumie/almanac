@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# loop-launcher.sh — the single almanac launcher (ralph + harden + converge).
+# loop-launcher.sh — the single almanac launcher (loop + harden + converge).
 #
 # almanac_loop_launch <type> [native flags…] interactively configures and starts
 # a loop run. It is loop-agnostic: one launcher for every consumer — `almanac
-# ralph`, `almanac harden`, the hub's New-run flow, and the ralph skill launcher
+# loop`, `almanac harden`, the hub's New-run flow, and the loop skill launcher
 # all route here, so the config UX is identical everywhere (the PRD's "almanac
 # launcher, not per-loop reimplementations").
 #
@@ -113,9 +113,9 @@ _almanac_launch_need_positive_int_optional() {
 # (the helper this dispatches to short-circuits, the pipe closes, the caller's
 # `read` returns false).
 #
-# Pre-extraction this 3-line block lived verbatim in ralph/harden/converge
+# Pre-extraction this 3-line block lived verbatim in loop/harden/converge
 # adapters — three sites diverging only in the model+effort label strings
-# (ralph: "Model"/"Thinking effort", harden: "Reviewer model"/"Reviewer thinking
+# (loop: "Model"/"Thinking effort", harden: "Reviewer model"/"Reviewer thinking
 # effort", converge: "Model"/"Thinking effort"). The dependency between the
 # three calls (model+effort menus REQUIRE provider) was structural; encoding
 # that rule in one place makes "add a 4th loop adapter" a one-line call to this
@@ -133,7 +133,7 @@ _almanac_launch_need_role_triple() {
 }
 
 # Export the consumer-wide role config (PROVIDER always, MODEL/EFFORT conditional)
-# under PREFIX (e.g. RALPH_, HARDEN_, CONVERGE_). Empty model/effort UNSET the
+# under PREFIX (e.g. LOOP_, HARDEN_, CONVERGE_). Empty model/effort UNSET the
 # var so a stale value inherited from the parent env can't leak into the runner.
 # Single source of truth for the export shape — adding a 4th adapter can't
 # forget the unset, and the prefix convention lives in exactly one place.
@@ -178,7 +178,7 @@ almanac_loop_launch_usage() {
   declare -F "$fn" >/dev/null 2>&1 && "$fn"
 }
 
-# Public entry: configure and launch a run of TYPE (ralph|harden|converge|…).
+# Public entry: configure and launch a run of TYPE (loop|harden|converge|…).
 # Remaining args are that type's native flags; missing fields are prompted by
 # the adapter's `launch` verb, which also execs the runner. The launcher does
 # not enumerate loop types — discovery is via the loop-adapter seam, so adding

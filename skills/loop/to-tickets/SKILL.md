@@ -46,7 +46,7 @@ Draft thin, complete tracer bullets:
 
 Use readiness vocabulary instead of HITL/AFK:
 
-- `ready-for-agent` — implementable without another human decision. `/implement` or `ralph-loop` may take it.
+- `ready-for-agent` — implementable without another human decision. `/implement` or `loop` may take it.
 - `ready-for-human` — requires a decision, design review, access, or another human-only action.
 
 Wide mechanical refactors are the exception. Sequence them as expand, bounded migration batches, then contract. Keep each intermediate state green; declare the real blocking edges.
@@ -99,17 +99,17 @@ Reference blockers by filename basename. Existing legacy files using `status: op
 Ensure these labels exist:
 
 ```bash
-gh label create "ralph(<spec>)" --color FBCA04 --description "Ralph loop task queue" 2>/dev/null || true
+gh label create "loop(<spec>)" --color FBCA04 --description "Loop task queue" 2>/dev/null || true
 gh label create "ready-for-agent" --color 0E8A16 --description "Ready for autonomous implementation" 2>/dev/null || true
 gh label create "ready-for-human" --color D93F0B --description "Needs human decision or action" 2>/dev/null || true
 ```
 
 Create one issue per ticket with both:
 
-- `ralph(<spec>)` — queue identity
+- `loop(<spec>)` — queue identity
 - `ready-for-agent` or `ready-for-human` — executor eligibility
 
-Use `gh issue create --label "ralph(<spec>)" --label "<readiness>"`, passing the approved title and body.
+Use `gh issue create --label "loop(<spec>)" --label "<readiness>"`, passing the approved title and body.
 
 Use this body:
 
@@ -142,4 +142,4 @@ Do not close or modify a parent issue. Avoid file-level implementation instructi
 
 ### 6. Report
 
-List created files or issue URLs, readiness, and blockers. Point to `/implement <ticket>` for one agent-ready ticket or `/ralph-loop <spec>` for the autonomous queue.
+List created files or issue URLs, readiness, and blockers. Point to `/implement <ticket>` for one agent-ready ticket or `/loop <spec>` for the autonomous queue.

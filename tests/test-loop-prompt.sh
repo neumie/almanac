@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# test-ralph-prompt.sh - Ralph prompt generation tests
+# test-loop-prompt.sh - Loop prompt generation tests
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PROMPT_SCRIPT="$ROOT/skills/loop/ralph-loop/scripts/prompt.sh"
+PROMPT_SCRIPT="$ROOT/skills/loop/loop/scripts/prompt.sh"
 
 TMPDIRS=()
 NEW_TMPDIR=""
@@ -75,15 +75,15 @@ test_generates_prompt_with_shared_feedback_commands() {
   echo "  PASS: generates prompt with shared feedback commands"
 }
 
-# Ralph's feedback-loop DETECTION uses the shared runner (#66 crit 2): prompt.sh
+# Loop's feedback-loop DETECTION uses the shared runner (#66 crit 2): prompt.sh
 # injects the FEEDBACK LOOPS list via almanac_loop_feedback_markdown ->
 # almanac_loop_feedback_commands (lib/feedback.sh), and once.sh/afk.sh carry NO
 # private detection. This pins that the list is marker-DRIVEN by the shared
-# detector, not a hardcoded ralph list: a project whose only marker is Cargo.toml
+# detector, not a hardcoded loop list: a project whose only marker is Cargo.toml
 # must yield the shared detector's Rust commands and none of the npm commands a
-# fixed list would always print. (Ralph does not EXECUTE feedback loops — the
+# fixed list would always print. (Loop does not EXECUTE feedback loops — the
 # in-iteration agent runs them per the prompt — so the shared executor
-# almanac_loop_feedback_run is genuinely N/A for ralph; detection is the
+# almanac_loop_feedback_run is genuinely N/A for loop; detection is the
 # criterion's subject and it is shared.)
 test_prompt_feedback_detection_is_marker_driven_by_shared_runner() {
   local tmp prompt
@@ -105,6 +105,6 @@ test_prompt_feedback_detection_is_marker_driven_by_shared_runner() {
   echo "  PASS: prompt feedback detection is marker-driven by the shared runner"
 }
 
-echo "=== Ralph Prompt Tests ==="
+echo "=== Loop Prompt Tests ==="
 test_generates_prompt_with_shared_feedback_commands
 test_prompt_feedback_detection_is_marker_driven_by_shared_runner

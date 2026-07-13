@@ -26,9 +26,9 @@ echo "=== Home Resolution Tests ==="
 # A real repo-shaped tree plus an install-style directory symlink pointing into
 # it. pwd -P collapses macOS /var -> /private/var, so the expected root is itself
 # resolved physically.
-mkdir -p "$TMP/real/skills/loop/ralph-loop/scripts"
+mkdir -p "$TMP/real/skills/loop/loop/scripts"
 mkdir -p "$TMP/real/bin"
-ln -s "$TMP/real/skills/loop/ralph-loop" "$TMP/linkdir"
+ln -s "$TMP/real/skills/loop/loop" "$TMP/linkdir"
 REAL_ROOT="$(cd -P "$TMP/real" && pwd -P)"
 
 # Resolution cases must run with ALMANAC_HOME unset so the prefer-exported branch
@@ -36,7 +36,7 @@ REAL_ROOT="$(cd -P "$TMP/real" && pwd -P)"
 unset ALMANAC_HOME
 
 # 1. Plain checkout: a skill script at depth 4 resolves to the real root.
-got="$(almanac_resolve_home "$TMP/real/skills/loop/ralph-loop/scripts/once.sh" 4)"
+got="$(almanac_resolve_home "$TMP/real/skills/loop/loop/scripts/once.sh" 4)"
 assert_eq "$REAL_ROOT" "$got" "repo checkout resolves to real root (depth 4)"
 
 # 2. Install dir-symlink: same script reached via the symlinked path resolves to
@@ -50,7 +50,7 @@ assert_eq "$REAL_ROOT" "$got" "bin/ entry point resolves to real root (depth 1)"
 
 # 4. Default depth of 0 yields the script's own physical directory.
 got="$(almanac_resolve_home "$TMP/linkdir/scripts/once.sh")"
-assert_eq "$REAL_ROOT/skills/loop/ralph-loop/scripts" "$got" "depth 0 yields own dir"
+assert_eq "$REAL_ROOT/skills/loop/loop/scripts" "$got" "depth 0 yields own dir"
 
 # 5. An already-exported ALMANAC_HOME is preferred verbatim (no self-resolution).
 got="$(ALMANAC_HOME=/exported/override almanac_resolve_home "$TMP/linkdir/scripts/once.sh" 4)"

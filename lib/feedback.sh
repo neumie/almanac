@@ -3,7 +3,7 @@
 #
 # The feedback loops are a project's objective gate: the test/typecheck/lint
 # commands implied by its marker files (package.json, Cargo.toml, …). Detection
-# maps marker files to commands (shared by Ralph's prompt and harden's fixer, so
+# maps marker files to commands (shared by Loop's prompt and harden's fixer, so
 # both run the same gate with no per-project config); the runner executes them
 # and reports a pass/fail verdict per loop.
 #
@@ -106,7 +106,7 @@ almanac_loop_feedback_markdown() {
 # else discarded). Returns 0 only when every loop passed and non-zero when any
 # failed, so a caller can gate on the aggregate while still reading the per-loop
 # verdicts. This is the runner half of the shared feedback engine; detection is
-# almanac_loop_feedback_commands, shared with Ralph, so both consumers run the
+# almanac_loop_feedback_commands, shared with Loop, so both consumers run the
 # same objective gate without per-project config.
 almanac_loop_feedback_run() {
   local root="${1:-.}"

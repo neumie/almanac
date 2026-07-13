@@ -21,7 +21,7 @@ _almanac_source_sibling run.sh          almanac_loop_run_status_file
 _almanac_source_sibling ui.sh           almanac_loop_ui_choose
 _almanac_source_sibling loop-launcher.sh almanac_loop_launch
 
-# Pipe-joined list of known loop names (e.g. "ralph|harden|converge"), for usage
+# Pipe-joined list of known loop names (e.g. "loop|harden|converge"), for usage
 # strings — discovered from the loop-adapter seam, never hard-coded.
 almanac_hub_loop_names_inline() {
   local names=() name
@@ -199,7 +199,7 @@ almanac_hub_resume_or_clone() {
     || _die "Could not compose $mode for $run_id"
   env_raw="$(almanac_loop_new_run_env "$run_type" "${opts[@]}")" || env_raw=""
 
-  # resume auto-confirms launcher-backed loops (ralph) via --yes; loops whose
+  # resume auto-confirms launcher-backed loops (loop) via --yes; loops whose
   # adapter doesn't implement `launch_backed` exec their direct runner and would
   # reject the launcher-only flag, so they get no suffix. clone leaves confirm
   # in place where a launcher is used.

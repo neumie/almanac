@@ -8,13 +8,13 @@ user-stories: [11, 12, 13]
 
 ## What to build
 
-Wire converge runs into the shared `almanac hub` so they appear alongside ralph and harden runs in the registry view. Add `almanac converge <slug> --watch` (live dashboard, redraw loop) and `almanac converge <slug> --stop` (graceful halt via `.converge-stop`). Slice 04 already writes `.converge-stop` from the overseer; this slice exposes the same signal to the human operator.
+Wire converge runs into the shared `almanac hub` so they appear alongside loop and harden runs in the registry view. Add `almanac converge <slug> --watch` (live dashboard, redraw loop) and `almanac converge <slug> --stop` (graceful halt via `.converge-stop`). Slice 04 already writes `.converge-stop` from the overseer; this slice exposes the same signal to the human operator.
 
 Goal: converge feels like a first-class citizen alongside the two other loops.
 
 ## Acceptance criteria
 
-- [x] `cmd/hub.sh` recognizes `type=converge` rows in `.almanac/runs/index.tsv` and renders them with the same columns as ralph/harden. No converge-specific branch in the hub — the registry's uniform contract carries everything needed (id, type, target, pid, status, started_at, round, summary, failure_reason).
+- [x] `cmd/hub.sh` recognizes `type=converge` rows in `.almanac/runs/index.tsv` and renders them with the same columns as loop/harden. No converge-specific branch in the hub — the registry's uniform contract carries everything needed (id, type, target, pid, status, started_at, round, summary, failure_reason).
 - [x] `lib/loops/converge.sh` (the auto-discovered loop adapter, per CLAUDE.md's loop-adapter map) declares its control contract:
   - [x] `signal_file stop` → `.converge-stop`
   - [x] `signal_file steer` → `.converge-steer`
@@ -43,7 +43,7 @@ Goal: converge feels like a first-class citizen alongside the two other loops.
 - The hub already handles the heavy lifting via the registry's uniform contract — most of this slice is small-glue. The big asks are: declare the loop adapter (`lib/loops/converge.sh`), wire `--watch` rendering, wire `--stop` signal writing.
 - `--watch` should reuse the same redraw loop / styling primitives harden uses. If they're not yet extracted into a shareable lib helper, do not extract in this slice — open a separate refactor issue and inline the styling. Don't let extraction become a yak in this slice.
 - `--stop` is the human's mirror of the overseer's STOP verdict. Same signal file, same handler. The loop driver doesn't care who wrote it.
-- The "auto-discovered loop adapter" file (`lib/loops/converge.sh`) needs to follow the same shape as `lib/loops/ralph.sh` and `lib/loops/harden.sh`. Read them first, then mirror.
+- The "auto-discovered loop adapter" file (`lib/loops/converge.sh`) needs to follow the same shape as `lib/loops/loop.sh` and `lib/loops/harden.sh`. Read them first, then mirror.
 
 ## Progress
 

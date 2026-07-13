@@ -2,12 +2,12 @@
 
 Pull @docs/plans/loop-engine-split/prd.md into your context.
 
-You've been passed the last 10 RALPH commits (SHA, date, full message). Review these to understand what work has been done.
+You've been passed the last 10 LOOP commits (SHA, date, full message). Review these to understand what work has been done.
 
 # CONSTRAINTS
 
-- **Preserve the snapshot-exec guard.** `afk.sh` and `once.sh` begin with a `RALPH_SNAPSHOT` re-exec block — it is what lets this refactor run safely against its own runner. NEVER remove, reorder, or break it: it must stay the first executable block, and `SCRIPT_DIR` must keep resolving via `RALPH_REAL_DIR`. If your slice edits these files, keep the guard intact.
-- **Behavior-preserving refactor.** Do not change the surface behavior of `almanac ralph`, `almanac harden`, or the hub. The full test suite is the proof; if you can't keep every suite green, the slice is not done.
+- **Preserve the snapshot-exec guard.** `afk.sh` and `once.sh` begin with a `LOOP_SNAPSHOT` re-exec block — it is what lets this refactor run safely against its own runner. NEVER remove, reorder, or break it: it must stay the first executable block, and `SCRIPT_DIR` must keep resolving via `LOOP_REAL_DIR`. If your slice edits these files, keep the guard intact.
+- **Behavior-preserving refactor.** Do not change the surface behavior of `almanac loop`, `almanac harden`, or the hub. The full test suite is the proof; if you can't keep every suite green, the slice is not done.
 - Read `CONTEXT.md` for the canonical vocabulary (provider/loop adapters, deep invocation, the module map) before touching the engine.
 
 # TASK QUEUE
@@ -15,7 +15,7 @@ You've been passed the last 10 RALPH commits (SHA, date, full message). Review t
 Before decomposing the PRD, check whether an explicit queue exists. Detect in this order:
 
 1. **Local slice files.** If `docs/plans/loop-engine-split/issues/` contains `*.md` files, that directory is your queue. Each file has frontmatter (`status`, `blocked-by`, `type`) and an `## Acceptance criteria` checklist of `- [ ]` items.
-2. **GitHub issues.** Else if `gh issue list --search 'label:"ralph(loop-engine-split)" state:open'` returns at least one issue, that's your queue. (Use `--search`, not `--label` — the parenthesised label name breaks the `--label` filter.) Each issue body contains an `## Acceptance criteria` section with `- [ ]` items.
+2. **GitHub issues.** Else if `gh issue list --search 'label:"loop(loop-engine-split)" state:open'` returns at least one issue, that's your queue. (Use `--search`, not `--label` — the parenthesised label name breaks the `--label` filter.) Each issue body contains an `## Acceptance criteria` section with `- [ ]` items.
 3. **No queue.** Skip to TASK BREAKDOWN below and decompose the PRD yourself.
 
 If a queue is present:
@@ -40,7 +40,7 @@ If you can't articulate a behavior the task pins, you're mid-refactor — bundle
 
 # TASK SELECTION
 
-If TASK QUEUE found a task, that's your task. Otherwise pick the next task from your TASK BREAKDOWN that hasn't been completed (check RALPH commits for completed work).
+If TASK QUEUE found a task, that's your task. Otherwise pick the next task from your TASK BREAKDOWN that hasn't been completed (check LOOP commits for completed work).
 
 If all tasks are complete, output <promise>COMPLETE</promise>.
 
@@ -64,7 +64,7 @@ For mechanical refactors, skip TDD: make the change across all affected files in
 
 Before committing, run ALL feedback loops. Fix any failures before proceeding.
 
-- `for t in tests/test-*.sh; do echo "== $(basename "$t") =="; bash "$t" || exit 1; done` — run the **FULL** test suite; **every** suite must pass. This is a behavior-preserving refactor, so the existing suites (especially `test-ralph-smoke`, `test-loop-core`, `test-hub`, `test-harden-cli`) are the safety net for every slice. A slice that can't keep them all green is not done.
+- `for t in tests/test-*.sh; do echo "== $(basename "$t") =="; bash "$t" || exit 1; done` — run the **FULL** test suite; **every** suite must pass. This is a behavior-preserving refactor, so the existing suites (especially `test-loop-smoke`, `test-loop-core`, `test-hub`, `test-harden-cli`) are the safety net for every slice. A slice that can't keep them all green is not done.
 - After any change to a script's behavior, also confirm `bash -n` parses every edited `.sh` file.
 
 # COMMIT
@@ -90,7 +90,7 @@ If you used a queued task, update the queue using the **strict checkbox protocol
 
 Then make the git commit. The commit message must:
 
-1. Start with `RALPH(loop-engine-split):` prefix
+1. Start with `LOOP(loop-engine-split):` prefix
 2. Include task completed + PRD reference
 3. Key decisions made
 4. Files changed

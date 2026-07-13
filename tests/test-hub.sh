@@ -70,7 +70,7 @@ test_hub_command_renders_registry_overview() {
 
   almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "hub-live" "2026-05-25T12:00:00Z" >/dev/null
   almanac_loop_update_run_progress "$tmp" "hub-live" "3" "reviewers: security,perf"
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "$$" "hub-done" "2026-05-25T11:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/x/prd.md" "$$" "hub-done" "2026-05-25T11:00:00Z" >/dev/null
   almanac_loop_mark_run_status "$tmp" "hub-done" "done" "2026-05-25T11:30:00Z"
 
   out="$(cd "$tmp" && ALMANAC_NO_GUM=1 "$ALMANAC_BIN" hub </dev/null 2>&1)"
@@ -91,11 +91,11 @@ test_hub_steer_queues_directive() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "$$" "steer-cli" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/x/prd.md" "$$" "steer-cli" "2026-05-25T12:00:00Z" >/dev/null
 
   out="$(cd "$tmp" && "$ALMANAC_BIN" hub --steer steer-cli "stop adding perf tests" </dev/null 2>&1)"
-  [ -f "$tmp/.ralph-steer" ] || fail "hub --steer must write the run's steer file"
-  case "$(cat "$tmp/.ralph-steer")" in
+  [ -f "$tmp/.loop-steer" ] || fail "hub --steer must write the run's steer file"
+  case "$(cat "$tmp/.loop-steer")" in
     *"stop adding perf tests"*) ;;
     *) fail "steer file must carry the directive" ;;
   esac
@@ -110,10 +110,10 @@ test_hub_stop_signals_run() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "ralph" "docs/plans/x/prd.md" "2147483647" "stop-cli" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "loop" "docs/plans/x/prd.md" "2147483647" "stop-cli" "2026-05-25T12:00:00Z" >/dev/null
 
   out="$(cd "$tmp" && "$ALMANAC_BIN" hub --stop stop-cli </dev/null 2>&1)"
-  [ -f "$tmp/.ralph-stop" ] || fail "hub --stop must write the run's stop file"
+  [ -f "$tmp/.loop-stop" ] || fail "hub --stop must write the run's stop file"
   echo "  PASS: hub --stop signals a run"
 }
 
@@ -133,18 +133,18 @@ test_hub_watch_renders_run_detail() {
   echo "  PASS: hub --watch renders run detail"
 }
 
-# Criterion 3: `almanac hub --new ralph … --dry-run` composes (without launching)
-# the ralph launcher invocation from the menu's config flags. The gum New-run menu
+# Criterion 3: `almanac hub --new loop … --dry-run` composes (without launching)
+# the loop launcher invocation from the menu's config flags. The gum New-run menu
 # drives the same seam; --dry-run is the non-interactive, scripts-safe preview.
-test_hub_new_dry_run_composes_ralph_launch() {
+test_hub_new_dry_run_composes_loop_launch() {
   local out
-  out="$("$ALMANAC_BIN" hub --new ralph --prd auth-system --mode afk --iterations 4 --provider codex --dry-run </dev/null 2>&1)"
-  assert_contains "$out" "ralph" "hub --new ralph dry-run shows the ralph launch"
+  out="$("$ALMANAC_BIN" hub --new loop --prd auth-system --mode afk --iterations 4 --provider codex --dry-run </dev/null 2>&1)"
+  assert_contains "$out" "loop" "hub --new loop dry-run shows the loop launch"
   assert_contains "$out" "--prd auth-system" "dry-run shows --prd"
   assert_contains "$out" "--mode afk" "dry-run shows --mode"
   assert_contains "$out" "--iterations 4" "dry-run shows --iterations"
   assert_contains "$out" "--provider codex" "dry-run shows --provider"
-  echo "  PASS: hub --new ralph dry-run composes the launch"
+  echo "  PASS: hub --new loop dry-run composes the launch"
 }
 
 # Criterion 3: `almanac hub --new harden … --dry-run` composes the harden
@@ -184,7 +184,7 @@ test_hub_new_unknown_type_lists_discovered_loops() {
   local out rc=0
   out="$("$ALMANAC_BIN" hub --new bogus --dry-run </dev/null 2>&1)" || rc=$?
   [ "$rc" -ne 0 ] || fail "hub --new unknown type must exit non-zero"
-  assert_contains "$out" "ralph" "unknown-type error should list ralph"
+  assert_contains "$out" "loop" "unknown-type error should list loop"
   assert_contains "$out" "harden" "unknown-type error should list harden"
   assert_contains "$out" "converge" "unknown-type error should list converge"
   echo "  PASS: hub --new unknown type lists discovered loops"
@@ -276,7 +276,7 @@ test_hub_command_renders_registry_overview
 test_hub_steer_queues_directive
 test_hub_stop_signals_run
 test_hub_watch_renders_run_detail
-test_hub_new_dry_run_composes_ralph_launch
+test_hub_new_dry_run_composes_loop_launch
 test_hub_new_dry_run_composes_harden_launch
 test_hub_new_dry_run_composes_converge_launch
 test_hub_new_dry_run_composes_converge_prompt_launch

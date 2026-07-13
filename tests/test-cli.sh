@@ -53,7 +53,7 @@ meta_isolation_check
 # Registry is non-empty and lists the commands we expect to exist.
 COMMANDS="$(almanac_list_commands)"
 [ -n "$COMMANDS" ] && pass "registry lists commands" || failf "registry is empty"
-for expected in help install uninstall list update sync doctor ralph harden converge hub; do
+for expected in help install uninstall list update sync doctor loop harden converge hub; do
   case $'\n'"$COMMANDS"$'\n' in
     *$'\n'"$expected"$'\n'*) pass "registry includes '$expected'" ;;
     *)                       failf "registry missing '$expected'" ;;

@@ -2,14 +2,14 @@
 
 Pull @docs/plans/harden-loop/prd.md into your context.
 
-You've been passed the last 10 RALPH commits (SHA, date, full message). Review these to understand what work has been done.
+You've been passed the last 10 LOOP commits (SHA, date, full message). Review these to understand what work has been done.
 
 # TASK QUEUE
 
 Before decomposing the PRD, check whether an explicit queue exists. Detect in this order:
 
 1. **Local slice files.** If `docs/plans/harden-loop/issues/` contains `*.md` files, that directory is your queue. Each file has frontmatter (`status`, `blocked-by`, `type`) and an `## Acceptance criteria` checklist of `- [ ]` items.
-2. **GitHub issues.** Else if `gh issue list --search 'label:"ralph(harden-loop)" state:open'` returns at least one issue, that's your queue. (Use `--search`, not `--label` — the parenthesised label name breaks the `--label` filter.) Each issue body contains an `## Acceptance criteria` section with `- [ ]` items.
+2. **GitHub issues.** Else if `gh issue list --search 'label:"loop(harden-loop)" state:open'` returns at least one issue, that's your queue. (Use `--search`, not `--label` — the parenthesised label name breaks the `--label` filter.) Each issue body contains an `## Acceptance criteria` section with `- [ ]` items.
 3. **No queue.** Skip to TASK BREAKDOWN below and decompose the PRD yourself.
 
 If a queue is present:
@@ -34,7 +34,7 @@ If you can't articulate a behavior the task pins, you're mid-refactor — bundle
 
 # TASK SELECTION
 
-If TASK QUEUE found a task, that's your task. Otherwise pick the next task from your TASK BREAKDOWN that hasn't been completed (check RALPH commits for completed work).
+If TASK QUEUE found a task, that's your task. Otherwise pick the next task from your TASK BREAKDOWN that hasn't been completed (check LOOP commits for completed work).
 
 If all tasks are complete, output <promise>COMPLETE</promise>.
 
@@ -84,7 +84,7 @@ If you used a queued task, update the queue using the **strict checkbox protocol
 
 Then make the git commit. The commit message must:
 
-1. Start with `RALPH(harden-loop):` prefix
+1. Start with `LOOP(harden-loop):` prefix
 2. Include task completed + PRD reference
 3. Key decisions made
 4. Files changed

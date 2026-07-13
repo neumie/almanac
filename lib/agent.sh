@@ -173,7 +173,7 @@ _almanac_agent_extract() {
 
 # capture: run the provider silently, capturing the raw event stream to
 # EVENTS_FILE and (for adapters with an extract hook) the final result to
-# RESULT_FILE. No stdout — the harden fan-out / ratify / fixer and ralph's
+# RESULT_FILE. No stdout — the harden fan-out / ratify / fixer and loop's
 # overseer all discard it. A direct redirect (no pipe) keeps $? as the provider's
 # exit so a failure propagates.
 # Usage: almanac_loop_agent_capture <provider> <model> <effort> <sandbox> \
@@ -204,7 +204,7 @@ almanac_loop_agent_capture() {
 # raw tee, unaffected); degrades to a raw tee when jq is absent or the adapter
 # yields no filter, so output is never silently dropped. Optional MERGE_STDERR
 # (merge-stderr|on|1) folds the provider's stderr into the captured/streamed
-# output — preserving ralph's `codex ... 2>&1 | tee` log capture; default leaves
+# output — preserving loop's `codex ... 2>&1 | tee` log capture; default leaves
 # stderr on the terminal. The events-file path is NOT echoed (it would corrupt
 # the live stream); the caller passes its own path and already knows it.
 # Usage: almanac_loop_agent_stream <provider> <model> <effort> <sandbox> \

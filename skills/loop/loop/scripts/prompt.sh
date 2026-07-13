@@ -41,7 +41,7 @@ case "$SPEC_NAME" in
     ;;
 esac
 
-PROJECT_ROOT="${RALPH_PROJECT_ROOT:-$PWD}"
+PROJECT_ROOT="${LOOP_PROJECT_ROOT:-$PWD}"
 # Prefer spec.md; fall back to legacy prd.md so old plan dirs keep working.
 SPEC_FILE="docs/plans/${SPEC_NAME}/spec.md"
 [ -f "$PROJECT_ROOT/$SPEC_FILE" ] || SPEC_FILE="docs/plans/${SPEC_NAME}/prd.md"
@@ -60,14 +60,14 @@ render_intro() {
 
 Pull @{{SPEC_FILE}} into your context.
 
-You've been passed the last 10 RALPH commits (SHA, date, full message). Review these to understand what work has been done.
+You've been passed the last 10 LOOP commits (SHA, date, full message). Review these to understand what work has been done.
 
 # TASK QUEUE
 
 Before decomposing the spec, check whether an explicit queue exists. Detect in this order:
 
 1. **Local ticket files.** If `docs/plans/{{SPEC_NAME}}/issues/` contains `*.md` files, that directory is your queue. New tickets use `status: ready-for-agent|ready-for-human`; legacy tickets use `status: open` plus `type: AFK|HITL`.
-2. **GitHub issues.** Else if `gh issue list --search 'label:"ralph({{SPEC_NAME}})" state:open'` returns at least one issue, that's your queue. (Use `--search`, not `--label` — the parenthesised label name breaks the `--label` filter.) New agent tickets also carry `ready-for-agent`; legacy tickets may have no readiness label.
+2. **GitHub issues.** Else if `gh issue list --search 'label:"loop({{SPEC_NAME}})" state:open'` returns at least one issue, that's your queue. (Use `--search`, not `--label` — the parenthesised label name breaks the `--label` filter.) New agent tickets also carry `ready-for-agent`; legacy tickets may have no readiness label.
 3. **No queue.** Skip to TASK BREAKDOWN below and decompose the spec yourself.
 
 If a queue is present:
@@ -92,7 +92,7 @@ If you can't articulate a behavior the task pins, you're mid-refactor — bundle
 
 # TASK SELECTION
 
-If TASK QUEUE found a task, that's your task. Otherwise pick the next task from your TASK BREAKDOWN that hasn't been completed (check RALPH commits for completed work).
+If TASK QUEUE found a task, that's your task. Otherwise pick the next task from your TASK BREAKDOWN that hasn't been completed (check LOOP commits for completed work).
 
 If all tasks are complete, output <promise>COMPLETE</promise>.
 
@@ -118,7 +118,7 @@ render_tail() {
 
 Follow the `implement` skill's strict checkbox and queue-update protocol. Then make the git commit. The commit message must:
 
-1. Start with `RALPH({{SPEC_NAME}}):` prefix
+1. Start with `LOOP({{SPEC_NAME}}):` prefix
 2. Include task completed + spec reference
 3. Key decisions made
 4. Files changed

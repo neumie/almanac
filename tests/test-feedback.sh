@@ -4,7 +4,7 @@
 # Sources lib/feedback.sh DIRECTLY (not through loop-core) so the feedback
 # engine — almanac_loop_feedback_commands (detection) and
 # almanac_loop_feedback_run (runner) — is its own test surface. These pin the
-# marker-file → command mapping (shared by Ralph's prompt and harden's fixer)
+# marker-file → command mapping (shared by Loop's prompt and harden's fixer)
 # and the per-loop pass/fail verdict + aggregate exit code the fixer gates on.
 
 set -euo pipefail

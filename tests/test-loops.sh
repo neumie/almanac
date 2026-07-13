@@ -24,29 +24,29 @@ assert_eq() {
 test_discovery_lists_present_adapters() {
   local list
   list="$(almanac_loop_adapter_list)"
-  case "$list" in *ralph*) ;; *) fail "loop list should include the ralph adapter file" ;; esac
+  case "$list" in *loop*) ;; *) fail "loop list should include the loop adapter file" ;; esac
   case "$list" in *harden*) ;; *) fail "loop list should include the harden adapter file" ;; esac
   case "$list" in *converge*) ;; *) fail "loop list should include the converge adapter file" ;; esac
 
-  almanac_loop_adapter_known ralph  || fail "ralph must be a known loop"
+  almanac_loop_adapter_known loop  || fail "loop must be a known loop"
   almanac_loop_adapter_known harden || fail "harden must be a known loop"
   almanac_loop_adapter_known converge || fail "converge must be a known loop"
-  almanac_loop_adapter_known RALPH  || fail "known must normalise case (RALPH -> ralph)"
+  almanac_loop_adapter_known LOOP  || fail "known must normalise case (LOOP -> loop)"
   if almanac_loop_adapter_known bogus; then fail "an undiscovered name must not be known"; fi
   echo "  PASS: discovery lists present adapters"
 }
 
 test_dispatch_rejects_unknown_verb() {
   local rc=0
-  almanac_loop_adapter_call ralph no_such_verb >/dev/null 2>&1 || rc=$?
+  almanac_loop_adapter_call loop no_such_verb >/dev/null 2>&1 || rc=$?
   assert_eq 2 "$rc" "dispatch should return 2 for a verb the adapter does not implement"
   echo "  PASS: dispatch rejects an unimplemented verb"
 }
 
 test_new_run_usage_contract() {
   local out
-  out="$(almanac_loop_adapter_call ralph new_run_usage)"
-  case "$out" in *"--prd"*) ;; *) fail "ralph new_run_usage should mention --prd" ;; esac
+  out="$(almanac_loop_adapter_call loop new_run_usage)"
+  case "$out" in *"--prd"*) ;; *) fail "loop new_run_usage should mention --prd" ;; esac
   out="$(almanac_loop_adapter_call harden new_run_usage)"
   case "$out" in *"--target"*) ;; *) fail "harden new_run_usage should mention --target" ;; esac
   out="$(almanac_loop_adapter_call converge new_run_usage)"
@@ -60,15 +60,15 @@ test_signal_file_control_contract() {
   # `.${name}-${kind}` pattern need not define signal_file at all — the default
   # provides it. Test at the public resolver, not the adapter, so deleting the
   # three identical adapter functions doesn't break this surface.
-  assert_eq ".ralph-stop"   "$(almanac_loop_signal_file ralph stop)"   "ralph stop file basename"
-  assert_eq ".ralph-steer"  "$(almanac_loop_signal_file ralph steer)"  "ralph steer file basename"
+  assert_eq ".loop-stop"   "$(almanac_loop_signal_file loop stop)"   "loop stop file basename"
+  assert_eq ".loop-steer"  "$(almanac_loop_signal_file loop steer)"  "loop steer file basename"
   assert_eq ".harden-stop"  "$(almanac_loop_signal_file harden stop)"  "harden stop file basename"
   assert_eq ".harden-steer" "$(almanac_loop_signal_file harden steer)" "harden steer file basename"
   assert_eq ".converge-stop" "$(almanac_loop_signal_file converge stop)" "converge stop file basename"
   assert_eq ".converge-steer" "$(almanac_loop_signal_file converge steer)" "converge steer file basename"
 
   local rc=0
-  almanac_loop_signal_file ralph bogus >/dev/null 2>&1 || rc=$?
+  almanac_loop_signal_file loop bogus >/dev/null 2>&1 || rc=$?
   [ "$rc" -ne 0 ] || fail "an unknown signal kind should be rejected"
 
   rc=0
@@ -82,21 +82,21 @@ test_signal_file_control_contract() {
   echo "  PASS: signal_file control contract"
 }
 
-test_ralph_exec_argv_launch_contract() {
+test_loop_exec_argv_launch_contract() {
   local ALMANAC_HOME="/fake/home"
 
-  almanac_loop_adapter_call ralph exec_argv once "demo-prd"
-  assert_eq "bash /fake/home/skills/loop/ralph-loop/scripts/once.sh demo-prd" \
-    "${_ALMANAC_LOOP_ARGV[*]}" "ralph once exec argv"
+  almanac_loop_adapter_call loop exec_argv once "demo-prd"
+  assert_eq "bash /fake/home/skills/loop/loop/scripts/once.sh demo-prd" \
+    "${_ALMANAC_LOOP_ARGV[*]}" "loop once exec argv"
 
-  almanac_loop_adapter_call ralph exec_argv afk "demo-prd" "7"
-  assert_eq "bash /fake/home/skills/loop/ralph-loop/scripts/afk.sh demo-prd 7" \
-    "${_ALMANAC_LOOP_ARGV[*]}" "ralph afk exec argv"
+  almanac_loop_adapter_call loop exec_argv afk "demo-prd" "7"
+  assert_eq "bash /fake/home/skills/loop/loop/scripts/afk.sh demo-prd 7" \
+    "${_ALMANAC_LOOP_ARGV[*]}" "loop afk exec argv"
 
   local rc=0
-  almanac_loop_adapter_call ralph exec_argv bogus "demo-prd" >/dev/null 2>&1 || rc=$?
-  assert_eq 2 "$rc" "an unknown ralph mode should be rejected"
-  echo "  PASS: ralph exec_argv launch contract"
+  almanac_loop_adapter_call loop exec_argv bogus "demo-prd" >/dev/null 2>&1 || rc=$?
+  assert_eq 2 "$rc" "an unknown loop mode should be rejected"
+  echo "  PASS: loop exec_argv launch contract"
 }
 
 test_harden_exec_argv_launch_contract() {
@@ -171,7 +171,7 @@ test_discovery_lists_present_adapters
 test_dispatch_rejects_unknown_verb
 test_new_run_usage_contract
 test_signal_file_control_contract
-test_ralph_exec_argv_launch_contract
+test_loop_exec_argv_launch_contract
 test_harden_exec_argv_launch_contract
 test_converge_exec_argv_launch_contract
 test_kv_get_picks_value

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# test-ralph-smoke.sh — End-to-end smoke run of the `almanac ralph` CLI.
+# test-loop-smoke.sh — End-to-end smoke run of the `almanac loop` CLI.
 #
-# Unlike test-ralph-run-registry.sh (which drives once.sh/afk.sh DIRECTLY), these
-# tests exercise the FULL user-facing command chain — bin/almanac -> cmd/ralph.sh
-# -> the launcher ralph.sh (arg parsing, provider validation, env export, PRD/
+# Unlike test-loop-run-registry.sh (which drives once.sh/afk.sh DIRECTLY), these
+# tests exercise the FULL user-facing command chain — bin/almanac -> cmd/loop.sh
+# -> the launcher loop.sh (arg parsing, provider validation, env export, PRD/
 # prompt checks, mode dispatch) -> once.sh/afk.sh — behind a fake provider, with
 # NO real model calls (per the PRD's testing discipline: "tested behind a fake
-# provider, no real model calls"). This is the criterion-5 proof for #66 (ralph
-# migration onto the shared engine): a smoke run of `almanac ralph` behaves as
+# provider, no real model calls"). This is the criterion-5 proof for #66 (loop
+# migration onto the shared engine): a smoke run of `almanac loop` behaves as
 # before — same iteration, commit, and overseer behavior.
 
 set -euo pipefail
@@ -114,8 +114,8 @@ EOF
   chmod +x "$fakebin/codex"
 }
 
-# Fake codex that also makes a RALPH commit in its cwd (the work repo), so the
-# end-to-end push path — afk's end-of-loop push_ralph_commits — has a real commit
+# Fake codex that also makes a LOOP commit in its cwd (the work repo), so the
+# end-to-end push path — afk's end-of-loop push_loop_commits — has a real commit
 # to share. Stands in for the iteration agent committing during a real run.
 write_fake_codex_committing() {
   local fakebin="$1"
@@ -133,9 +133,9 @@ while [ "$#" -gt 0 ]; do
   shift || true
 done
 
-printf 'agent change\n' > ralph-agent-change.txt
-git add ralph-agent-change.txt >/dev/null 2>&1
-git commit -q -m "RALPH(demo): fake agent change" >/dev/null 2>&1
+printf 'agent change\n' > loop-agent-change.txt
+git add loop-agent-change.txt >/dev/null 2>&1
+git commit -q -m "LOOP(demo): fake agent change" >/dev/null 2>&1
 
 [ -n "$result_file" ] && printf '%s\n' "fake codex progress (no promise)" > "$result_file"
 printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"committed"}}'
@@ -146,15 +146,15 @@ EOF
 
 test_afk_ci_monitor_noops_without_jq() {
   local body
-  body="$(sed -n '/^check_ci_status()/,/^}/p' "$ROOT/skills/loop/ralph-loop/scripts/afk.sh")"
+  body="$(sed -n '/^check_ci_status()/,/^}/p' "$ROOT/skills/loop/loop/scripts/afk.sh")"
   assert_contains "$body" "command -v jq >/dev/null 2>&1 || return 0" \
     "AFK CI monitor should no-op when gh returns runs but jq is unavailable"
   echo "  PASS: AFK CI monitor no-ops without jq"
 }
 
-# `almanac ralph --mode once` dispatches end-to-end through the launcher to
+# `almanac loop --mode once` dispatches end-to-end through the launcher to
 # once.sh, runs the single iteration, and registers a run marked done.
-test_almanac_ralph_once_smoke() {
+test_almanac_loop_once_smoke() {
   local tmp fakebin out index
   new_tmpdir
   tmp="$NEW_TMPDIR"
@@ -163,21 +163,21 @@ test_almanac_ralph_once_smoke() {
   seed_prd "$tmp"
   write_fake_codex_smoke "$fakebin"
 
-  out="$(cd "$tmp" && PATH="$fakebin:$PATH" "$ALMANAC" ralph \
+  out="$(cd "$tmp" && PATH="$fakebin:$PATH" "$ALMANAC" loop \
     --prd demo --mode once --provider codex --model default --effort default </dev/null 2>&1)"
 
-  assert_contains "$out" "RALPH ONCE" "almanac ralph --mode once should dispatch through the launcher to once.sh"
+  assert_contains "$out" "LOOP ONCE" "almanac loop --mode once should dispatch through the launcher to once.sh"
 
   index="$tmp/.almanac/runs/index.tsv"
-  [ -f "$index" ] || fail "almanac ralph once should register a run end-to-end"
-  assert_file_contains "$index" $'ralph\tdocs/plans/demo/prd.md' "once run should record the ralph PRD target"
+  [ -f "$index" ] || fail "almanac loop once should register a run end-to-end"
+  assert_file_contains "$index" $'loop\tdocs/plans/demo/prd.md' "once run should record the loop PRD target"
   assert_file_contains "$index" $'done' "once run should be marked done end-to-end"
-  echo "  PASS: almanac ralph once smoke run registers and completes"
+  echo "  PASS: almanac loop once smoke run registers and completes"
 }
 
-# `almanac ralph --mode afk --iterations N` runs exactly N iterations when the
+# `almanac loop --mode afk --iterations N` runs exactly N iterations when the
 # agent never signals completion (iteration behavior preserved).
-test_almanac_ralph_afk_runs_requested_iterations() {
+test_almanac_loop_afk_runs_requested_iterations() {
   local tmp fakebin out index
   new_tmpdir
   tmp="$NEW_TMPDIR"
@@ -186,22 +186,22 @@ test_almanac_ralph_afk_runs_requested_iterations() {
   seed_prd "$tmp"
   write_fake_codex_smoke "$fakebin"
 
-  out="$(cd "$tmp" && PATH="$fakebin:$PATH" "$ALMANAC" ralph \
+  out="$(cd "$tmp" && PATH="$fakebin:$PATH" "$ALMANAC" loop \
     --prd demo --mode afk --iterations 2 --provider codex --model default --effort default \
     --no-oversee </dev/null 2>&1)"
 
   assert_contains "$out" "ITERATION 1 of 2" "afk should run the first iteration"
   assert_contains "$out" "ITERATION 2 of 2" "afk should run the full requested iteration budget"
-  assert_contains "$out" "Ralph finished 2 iterations" "afk should report finishing the iteration budget"
+  assert_contains "$out" "Loop finished 2 iterations" "afk should report finishing the iteration budget"
 
   index="$tmp/.almanac/runs/index.tsv"
   assert_file_contains "$index" $'done' "afk run should be marked done end-to-end"
-  echo "  PASS: almanac ralph afk runs the requested iteration count"
+  echo "  PASS: almanac loop afk runs the requested iteration count"
 }
 
 # afk stops as soon as the agent's result carries <promise>COMPLETE</promise> —
 # it does not exhaust the budget (commit/completion-lifecycle behavior preserved).
-test_almanac_ralph_afk_stops_on_completion_promise() {
+test_almanac_loop_afk_stops_on_completion_promise() {
   local tmp fakebin out index
   new_tmpdir
   tmp="$NEW_TMPDIR"
@@ -211,24 +211,24 @@ test_almanac_ralph_afk_stops_on_completion_promise() {
   write_fake_codex_smoke "$fakebin"
 
   out="$(cd "$tmp" && PATH="$fakebin:$PATH" \
-    FAKE_CODEX_RESULT='all done <promise>COMPLETE</promise>' "$ALMANAC" ralph \
+    FAKE_CODEX_RESULT='all done <promise>COMPLETE</promise>' "$ALMANAC" loop \
     --prd demo --mode afk --iterations 5 --provider codex --model default --effort default \
     --no-oversee </dev/null 2>&1)"
 
   assert_contains "$out" "ITERATION 1 of 5" "afk should run the first iteration"
-  assert_contains "$out" "Ralph complete after 1 iterations" "afk should stop when the agent signals <promise>COMPLETE</promise>"
+  assert_contains "$out" "Loop complete after 1 iterations" "afk should stop when the agent signals <promise>COMPLETE</promise>"
   refute_contains "$out" "ITERATION 2 of 5" "afk must not run further iterations after the completion promise"
 
   index="$tmp/.almanac/runs/index.tsv"
   assert_file_contains "$index" $'done' "completed afk run should be marked done"
-  echo "  PASS: almanac ralph afk stops on the completion promise"
+  echo "  PASS: almanac loop afk stops on the completion promise"
 }
 
 # The launcher wires the overseer through to afk both ways: on by default (stdin
 # EOF -> the launcher's 'on' default) and off with --no-oversee. Interval=1 so any
 # orphaned overseer sleep dies within a second; output is captured to a file (the
 # overseer backgrounds a subshell, so a live pipe could block on the orphan).
-test_almanac_ralph_afk_overseer_wiring() {
+test_almanac_loop_afk_overseer_wiring() {
   local tmp fakebin out_on out_off
   new_tmpdir
   tmp="$NEW_TMPDIR"
@@ -238,21 +238,21 @@ test_almanac_ralph_afk_overseer_wiring() {
   write_fake_codex_smoke "$fakebin"
 
   out_on="$tmp/oversee-on.out"
-  (cd "$tmp" && PATH="$fakebin:$PATH" RALPH_OVERSEE_INTERVAL=1 "$ALMANAC" ralph \
+  (cd "$tmp" && PATH="$fakebin:$PATH" LOOP_OVERSEE_INTERVAL=1 "$ALMANAC" loop \
     --prd demo --mode afk --iterations 1 --provider codex --model default --effort default \
     </dev/null > "$out_on" 2>&1)
-  assert_file_contains "$out_on" "[overseer] started" "almanac ralph afk should start the overseer by default"
+  assert_file_contains "$out_on" "[overseer] started" "almanac loop afk should start the overseer by default"
 
-  out_off="$(cd "$tmp" && PATH="$fakebin:$PATH" "$ALMANAC" ralph \
+  out_off="$(cd "$tmp" && PATH="$fakebin:$PATH" "$ALMANAC" loop \
     --prd demo --mode afk --iterations 1 --provider codex --model default --effort default \
     --no-oversee </dev/null 2>&1)"
-  assert_contains "$out_off" "[overseer] disabled" "almanac ralph afk --no-oversee should disable the overseer"
-  echo "  PASS: almanac ralph afk wires the overseer (on by default, off with --no-oversee)"
+  assert_contains "$out_off" "[overseer] disabled" "almanac loop afk --no-oversee should disable the overseer"
+  echo "  PASS: almanac loop afk wires the overseer (on by default, off with --no-oversee)"
 }
 
-# End-to-end commit behavior: `almanac ralph` afk pushes the iteration agent's
-# RALPH commit to the remote at end-of-loop, exactly as before the migration.
-test_almanac_ralph_afk_pushes_agent_commits() {
+# End-to-end commit behavior: `almanac loop` afk pushes the iteration agent's
+# LOOP commit to the remote at end-of-loop, exactly as before the migration.
+test_almanac_loop_afk_pushes_agent_commits() {
   local tmp fakebin work remote_head work_head subj
   new_tmpdir
   tmp="$NEW_TMPDIR"
@@ -275,23 +275,23 @@ test_almanac_ralph_afk_pushes_agent_commits() {
   )
   write_fake_codex_committing "$fakebin"
 
-  (cd "$work" && PATH="$fakebin:$PATH" "$ALMANAC" ralph \
+  (cd "$work" && PATH="$fakebin:$PATH" "$ALMANAC" loop \
     --prd demo --mode afk --iterations 1 --provider codex --model default --effort default \
     --no-oversee </dev/null >/dev/null 2>&1)
 
   remote_head="$(git --git-dir="$tmp/origin.git" rev-parse refs/heads/main)"
   work_head="$(cd "$work" && git rev-parse HEAD)"
-  assert_eq "$work_head" "$remote_head" "almanac ralph afk should push the agent's commit to origin (commit behavior preserved)"
+  assert_eq "$work_head" "$remote_head" "almanac loop afk should push the agent's commit to origin (commit behavior preserved)"
 
   subj="$(git --git-dir="$tmp/origin.git" log -1 --format=%s refs/heads/main)"
-  assert_contains "$subj" "RALPH(demo)" "the pushed commit should be the agent's RALPH commit"
-  echo "  PASS: almanac ralph afk pushes the agent's commit end-to-end"
+  assert_contains "$subj" "LOOP(demo)" "the pushed commit should be the agent's LOOP commit"
+  echo "  PASS: almanac loop afk pushes the agent's commit end-to-end"
 }
 
-echo "=== Ralph CLI Smoke Tests ==="
+echo "=== Loop CLI Smoke Tests ==="
 test_afk_ci_monitor_noops_without_jq
-test_almanac_ralph_once_smoke
-test_almanac_ralph_afk_runs_requested_iterations
-test_almanac_ralph_afk_stops_on_completion_promise
-test_almanac_ralph_afk_overseer_wiring
-test_almanac_ralph_afk_pushes_agent_commits
+test_almanac_loop_once_smoke
+test_almanac_loop_afk_runs_requested_iterations
+test_almanac_loop_afk_stops_on_completion_promise
+test_almanac_loop_afk_overseer_wiring
+test_almanac_loop_afk_pushes_agent_commits

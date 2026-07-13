@@ -8,7 +8,7 @@ Skills follow the [Agent Skills Open Standard](https://agentskills.io/specificat
 
 Skills are portable instruction sets that teach coding agents *how* to do things — commit code, create PRs, run TDD, fix CI, and more. Each skill is a single Markdown file (`SKILL.md`) with YAML frontmatter. Agents discover and load them automatically.
 
-Run any skill as a slash command in your agent (e.g. `/commit`, `/ship`, `/ralph-loop`, `/converge-loop`).
+Run any skill as a slash command in your agent (e.g. `/commit`, `/ship`, `/loop`, `/converge-loop`).
 
 Skills are organized by category in the repo (`skills/git/`, `skills/productivity/`, `skills/other/`, …) and flattened at install time so Claude Code's flat skill discovery finds them.
 
@@ -16,7 +16,7 @@ Skills are organized by category in the repo (`skills/git/`, `skills/productivit
 
 | Skill | Use |
 |-------|-----|
-| `ralph-loop` | Build a spec slice queue task-by-task, with each iteration committed. |
+| `loop` | Build a spec slice queue task-by-task, with each iteration committed. |
 | `converge-loop` | Repeat one custom exec command toward a mutable `goal.md` until an overseer says done. |
 | `spec-create` | Synthesize a conversation or idea into `docs/plans/<name>/spec.md` for the loops to consume. |
 | `to-tickets` | Split a spec into blocked tracer-bullet tickets for GitHub or `docs/plans/`. |
@@ -74,7 +74,7 @@ almanac install codex                        # same, for ~/.codex/AGENTS.md
 
 `almanac help` lists every command and `almanac <command> --help` shows its flags. Dispatch and help are registry-driven (one file per command under `cmd/`), so the listing never drifts from what's installed.
 
-- **Loops** — `ralph`, `harden`, `converge`, and `hub` (the interactive front door: list / watch / launch loops)
+- **Loops** — `loop`, `harden`, `converge`, and `hub` (the interactive front door: list / watch / launch loops)
 - **Providers** — `install`, `uninstall`, `list`
 - **Maintenance** — `update`, `sync`, `doctor`
 
@@ -83,14 +83,14 @@ almanac                                     # loop hub on a TTY, else this help
 almanac harden <target>                     # fan out reviewers; --loop to converge, --watch to supervise
 almanac harden <target> --help              # full flag list (--goal/--approve/--fix/--loop/…)
 almanac converge --goal "…" --prompt "…"    # generic convergence loop (--exec for a shell command)
-almanac hub --new <ralph|harden|converge>   # launch a run (add --dry-run to preview)
+almanac hub --new <loop|harden|converge>   # launch a run (add --dry-run to preview)
 almanac install claude-code                 # install skills for an agent
 ```
 
 ### Loop examples
 
 ```bash
-almanac ralph
+almanac loop
 almanac harden lib/role.sh --loop --rounds 3
 almanac converge \
   --goal "Improve the codebase until no major architecture friction remains" \
@@ -105,7 +105,7 @@ bin/almanac
 cmd/
   converge.sh
   harden.sh
-  ralph.sh
+  loop.sh
 lib/
   converge-core.sh
   harden-core.sh
@@ -113,14 +113,14 @@ lib/
   loops/
     converge.sh
     harden.sh
-    ralph.sh
+    loop.sh
 skills/
   loop/
     converge-loop/
       SKILL.md
     implement/
       SKILL.md
-    ralph-loop/
+    loop/
       SKILL.md
     spec-create/
       SKILL.md

@@ -1672,16 +1672,16 @@ test_converge_adapter_exposes_stop_and_steer() {
   assert_eq ".converge-steer" "$(almanac_loop_signal_file converge steer)" \
     "converge steer file basename"
 
-  # signal_dir override: ralph and harden default to $root, but converge
+  # signal_dir override: loop and harden default to $root, but converge
   # scopes signals to the run's plan dir so CONVERGED in one run doesn't
   # halt sibling runs sharing the workspace.
   assert_eq "/r/docs/plans/converge/my-slug" \
     "$(almanac_loop_signal_dir converge "/r" "my-slug")" \
     "converge signal_dir routes to the run's plan dir"
-  # Ralph and harden keep the default $root scoping — confirms the adapter
+  # Loop and harden keep the default $root scoping — confirms the adapter
   # contract is opt-in deepening, not a forced regression for other loops.
-  assert_eq "/r" "$(almanac_loop_signal_dir ralph "/r" "any-target")" \
-    "ralph signal_dir defaults to \$root"
+  assert_eq "/r" "$(almanac_loop_signal_dir loop "/r" "any-target")" \
+    "loop signal_dir defaults to \$root"
   assert_eq "/r" "$(almanac_loop_signal_dir harden "/r" "src/app.js")" \
     "harden signal_dir defaults to \$root"
   # Missing target falls back to $root rather than producing a malformed

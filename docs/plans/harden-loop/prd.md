@@ -6,7 +6,7 @@ The recurring failure is **non-convergence**. When the bar is tight, LLM reviewe
 
 I also want to **supervise** the run — see that the workers are doing what they're meant to do and aren't stuck — and spin up several worker instances for throughput and diverse perspectives, **without babysitting each one** and without a safety guard watching for dangerous commands (that is not the concern here; progress and correctness are).
 
-Finally, I don't want a one-off. I want a **proper, good-looking CLI** for this, and I want the *same* engine to power almanac's existing `ralph` loop — one orchestration runtime, not two.
+Finally, I don't want a one-off. I want a **proper, good-looking CLI** for this, and I want the *same* engine to power almanac's existing `loop` loop — one orchestration runtime, not two.
 
 ## Solution
 
@@ -23,7 +23,7 @@ The bar is allowed to **grow**, but only via falsifiable, ratified criteria. Bec
 
 Every role — **conductor/overseer, reviewers, fixer** — is a pluggable provider (**Claude or Codex**), switchable per role, with reviewers *mixable* across providers so different model families catch different defects in the same round. You run the CLI and supervise through a live, `gum`-styled dashboard (reviewer status, round, findings tallies, rubric progress, feedback verdict) plus steer keys and `gum` HITL prompts — you do not chat with one fixed model. The deliverable is hardened code **plus the regression suite the loop built to prove it.**
 
-The orchestration runtime is a **shared bash engine**; `almanac ralph` is refactored onto it as the second consumer.
+The orchestration runtime is a **shared bash engine**; `almanac loop` is refactored onto it as the second consumer.
 
 ## User Stories
 
@@ -57,41 +57,41 @@ The orchestration runtime is a **shared bash engine**; `almanac ralph` is refact
 28. As a developer, I want to choose the provider for the reviewers, so that I can pick the model family that reviews best for my code.
 29. As a developer, I want to mix providers across reviewer lenses (some Codex, some Claude), so that different model families catch different classes of issue in one round.
 30. As a developer, I want to choose the provider for the fixer, so that the agent applying changes is the one I prefer.
-31. As a developer, I want per-role model and thinking-effort overrides (like ralph's RALPH_MODEL / RALPH_EFFORT), so that I can tune cost and depth per role.
+31. As a developer, I want per-role model and thinking-effort overrides (like loop's LOOP_MODEL / LOOP_EFFORT), so that I can tune cost and depth per role.
 32. As a developer, I want to run the loop from either host (Claude Code or Codex), so that the agent I talk to is independent of which providers do the work.
 33. As a developer, I want a good-looking CLI with a live dashboard, so that supervising a fleet feels like a real tool, not a shell script.
-34. As a developer, I want the same engine to power `almanac ralph`, so that there is one orchestration runtime to learn and maintain, not two.
+34. As a developer, I want the same engine to power `almanac loop`, so that there is one orchestration runtime to learn and maintain, not two.
 35. As a developer, I want the CLI to degrade gracefully when `gum` is absent, so that the rest of almanac keeps its zero-dependency promise.
 36. As a maintainer, I want harden-loop to follow almanac's authoring, validation, and doc-sync rules, so that it lands consistently with the rest of the repo.
 
 ## Implementation Decisions
 
-**Form factor — a shared bash CLI engine, two consumers.** The orchestration runtime is a set of shared bash libraries built on `lib/core.sh` and styled with Charm's `gum`, exposed as `almanac harden <target>` and `almanac ralph <prd>`. harden-loop's loop *logic* is a convergence loop (review rounds + ratification), distinct from ralph's slice-queue loop; both sit on the same engine. ralph's existing scripts are refactored onto the engine in a later, careful phase that preserves today's behavior — harden is the engine's first consumer, ralph the second.
+**Form factor — a shared bash CLI engine, two consumers.** The orchestration runtime is a set of shared bash libraries built on `lib/core.sh` and styled with Charm's `gum`, exposed as `almanac harden <target>` and `almanac loop <prd>`. harden-loop's loop *logic* is a convergence loop (review rounds + ratification), distinct from loop's slice-queue loop; both sit on the same engine. loop's existing scripts are refactored onto the engine in a later, careful phase that preserves today's behavior — harden is the engine's first consumer, loop the second.
 
 **Stack — bash + `gum`.** No compiled binary, no runtime, to keep almanac's near-zero-dependency install. The accepted cost: no true TUI. The dashboard is a `gum`-styled **redraw loop** (`clear` + reprint of composed styled blocks read from per-worker state files), with mild flicker and no smooth per-cell animation. `gum` itself is one new optional dependency (a single Go binary); install/doctor detects it and the CLI **degrades gracefully** to plain output when it is absent.
 
 **The CLI is the conductor runtime; conductor judgment is a configured agent call.** You run `almanac harden`; the bash engine drives the loop and renders the dashboard. The judgment work — ratify findings, filter, decide fixes, declare convergence — is an agent-runner call to the *configured conductor provider*, not hardcoded to the host you launched from. You interact through the CLI (dashboard + steer keys + `gum` prompts), not by chatting with one fixed model. Provider selection for every role ships in v1; a fully autonomous headless run is a later increment.
 
-**Major modules** (favoring deep modules with simple, testable interfaces; "shared" = used by both harden and ralph):
+**Major modules** (favoring deep modules with simple, testable interfaces; "shared" = used by both harden and loop):
 
-- **Agent runner (shared).** A uniform interface over both providers: (provider, model, effort, sandbox, prompt, output schema / last-message) → (event stream, structured result). Generalizes ralph's dual-provider exec branches into one seam every role calls. The substrate that makes roles pluggable.
-- **Role config (shared).** Conductor, reviewer, and fixer roles each carry provider + model + effort. Reviewers map lens → provider, so providers can be mixed across lenses. Sensible defaults, overridable per role (ralph-style env vars / args), no enforced cap on reviewer count.
+- **Agent runner (shared).** A uniform interface over both providers: (provider, model, effort, sandbox, prompt, output schema / last-message) → (event stream, structured result). Generalizes loop's dual-provider exec branches into one seam every role calls. The substrate that makes roles pluggable.
+- **Role config (shared).** Conductor, reviewer, and fixer roles each carry provider + model + effort. Reviewers map lens → provider, so providers can be mixed across lenses. Sensible defaults, overridable per role (loop-style env vars / args), no enforced cap on reviewer count.
 - **Worker orchestration (shared).** Spawns background agent-runner processes, tracks PID + per-worker log/status files, detects stall (log mtime not advancing), idle, and loop, and collects results.
-- **Run registry (shared).** A per-run index: each launched loop (harden or ralph) registers id/type/target/pid/status-file/start, writes a uniform run-status blob, and is marked done/failed on exit. The substrate the `almanac` hub reads to list and monitor runs. Landed early so the hub is a thin reader, not a retrofit.
+- **Run registry (shared).** A per-run index: each launched loop (harden or loop) registers id/type/target/pid/status-file/start, writes a uniform run-status blob, and is marked done/failed on exit. The substrate the `almanac` hub reads to list and monitor runs. Landed early so the hub is a thin reader, not a retrofit.
 - **Reviewer fan-out.** Spawns N reviewers in parallel (provider per lens, via the agent runner) as background, **read-only** processes, one per lens, each constrained by the rubric and emitting structured findings via the findings schema. Interface: (target ref, lens→provider map, rubric, concurrency) → aggregated raw findings. Because reviewers never write, v1 needs **no worktrees**.
 - **Findings schema + parser.** A fixed schema for a finding: lens, severity, location, claim, and a demonstration (proposed failing test, breaking input, or cited rubric criterion). The parser normalizes reviewer output into ledger entries and rejects malformed output cleanly.
 - **Findings ledger.** Append-only record: id, lens, severity, status (`open` | `fixed` | `rejected-subjective` | `wontfix-per-context`), round, demonstration, adjudication note. Pure data operations: add, dedupe against prior adjudications, mark status, query open-blocking.
 - **Ratification engine.** Given a finding + demonstration, decide blocking vs. note by executing the demonstration: reproduces against current code → blocking, and the criterion is appended to the rubric; otherwise → non-blocking note. Dedupes against the ledger (already-adjudicated findings auto-drop unless the code changed to re-trigger).
 - **Rubric contract.** `rubric.md` with sections: Goal, Acceptance (objective/checkable), In scope, Out of scope (+ non-goals), Severity (what blocks vs. notes), Context (intentional decisions / false-positive pre-emptions). Amendment is a controlled append (visible diff); agents propose, conductor/human ratifies. Immutable to agents during a run.
 - **Convergence gate.** A pure predicate: exit when all Acceptance items are met AND zero open blocking findings remain (optionally requiring N consecutive clean rounds), or the round budget is hit. Reports the verdict each round.
-- **Feedback-loop runner (shared — extracted from ralph).** Reuses ralph's detection (package.json → npm test/typecheck/lint, Makefile, Cargo/go/python equivalents, this repo's own test scripts) to run the objective gate every round; one implementation for both consumers.
+- **Feedback-loop runner (shared — extracted from loop).** Reuses loop's detection (package.json → npm test/typecheck/lint, Makefile, Cargo/go/python equivalents, this repo's own test scripts) to run the objective gate every round; one implementation for both consumers.
 - **UI primitives (shared).** `gum`-based styling helpers (header, bordered panel, status dot, key/value row, table) plus the redraw loop composing a dashboard from worker-state files. Each consumer composes its own layout; render logic (state → printable rows) is kept pure so it can be tested without a terminal.
 
 **Convergence invariants.** The bar grows monotonically (criteria are only added, never silently removed); a finding raises the bar only if falsifiable (test / input / criterion); green checks stay green (regression ratchet); subjective notes never gate.
 
 **Falsifiability bar (chosen).** "Concrete demonstration" — a failing test OR a specific breaking input/repro OR a cited criterion violation — biased toward automated tests wherever possible. Stricter (test-only) would resist hard-to-automate real issues; looser reopens the subjectivity hole.
 
-**Reuse, don't duplicate.** Reviewer prompts draw on the `code-review` skill; fixers draw on `ci-fix`/`diagnose`; codex/claude invocation and feedback-loop detection draw on `ralph-loop`; the contract borrows the acceptance-criteria discipline from `issues-create-local`.
+**Reuse, don't duplicate.** Reviewer prompts draw on the `code-review` skill; fixers draw on `ci-fix`/`diagnose`; codex/claude invocation and feedback-loop detection draw on `loop`; the contract borrows the acceptance-criteria discipline from `issues-create-local`.
 
 **Almanac conventions.** The shared engine lives in new lib(s) (e.g. `lib/loop-core.sh`) sourced like `lib/core.sh`, using `_die`/`_info`/`_success`/`_warn`/`_error` — never raw `echo`. New skill-format rules extend `almanac_validate_skill()`; layout rules extend the structure test. User-facing instructions print absolute `~/.claude/skills/almanac/harden-loop/scripts/…` paths. Adding the skill triggers doc-sync (README, ARCHITECTURE, CONTRIBUTING) in the same commit.
 
@@ -109,11 +109,11 @@ The orchestration runtime is a **shared bash engine**; `almanac ralph` is refact
   - *Render logic* — given worker-state inputs, the dashboard composer returns the expected printable rows/sections (pure function; `gum`/terminal not involved).
 - **Reviewer fan-out** is integration-tested behind a **mock provider** (a fake runner emitting canned events + findings): asserts N reviewers spawn with the right per-lens providers, run read-only, and aggregate — without real model calls.
 - **Skill format** is validated by `almanac_validate_skill()` via `tests/test-skills.sh`; **layout** by `tests/test-structure.sh`. Both run after any skill edit.
-- **Prior art:** ralph-loop's scripts (provider invocation, feedback-loop detection); the `tests/test-skills.sh` / `tests/test-structure.sh` harness; `cmd/*.sh` + `lib/core.sh` helper conventions.
+- **Prior art:** loop's scripts (provider invocation, feedback-loop detection); the `tests/test-skills.sh` / `tests/test-structure.sh` harness; `cmd/*.sh` + `lib/core.sh` helper conventions.
 
 ## Out of Scope
 
-- **Autonomous headless conductor.** Provider *selection* for every role (incl. conductor) is in v1; a self-running conductor loop with no human present (ralph-overseer style) is later.
+- **Autonomous headless conductor.** Provider *selection* for every role (incl. conductor) is in v1; a self-running conductor loop with no human present (loop-overseer style) is later.
 - **Live "take the wheel."** Attaching an interactive TUI to a running worker to type at it yourself (codex `app-server` / `remote-control` / `--remote`) is deferred — read-only watching + redirect-through-the-conductor covers v1.
 - **Parallel fixers + worktree fan-out.** v1 uses a single sequential fixer (any provider), so there are no concurrent writers and no worktrees. Multiple fixers at once — and the worktree isolation + sequential merge they require — only earn their keep when findings cluster into disjoint files; a later increment.
 - **GitHub PR integration.** Posting findings as inline PR comments and PR-status gating are out for v1.
@@ -123,9 +123,9 @@ The orchestration runtime is a **shared bash engine**; `almanac ralph` is refact
 
 ## Further Notes
 
-- **Build order — engine-first, crawl-first.** Build the shared engine (agent runner, role config, orchestration, feedback detection, UI primitives), then `almanac harden` on top: draft/lock rubric → parallel read-only reviewers → ratify-by-execution → single sequential fixer → feedback loops → gate. Defer autonomous headless, take-the-wheel, and parallel fixers. Port ralph onto the engine afterward.
+- **Build order — engine-first, crawl-first.** Build the shared engine (agent runner, role config, orchestration, feedback detection, UI primitives), then `almanac harden` on top: draft/lock rubric → parallel read-only reviewers → ratify-by-execution → single sequential fixer → feedback loops → gate. Defer autonomous headless, take-the-wheel, and parallel fixers. Port loop onto the engine afterward.
 - **Why no worktrees in v1:** reviewers are read-only and the fixer is a single sequential agent (any provider), so there are no concurrent writers to isolate. Worktrees return only with parallel fixers.
 - **Cross-provider reviewing is a feature, not just a knob:** running some lenses on Codex and others on Claude in the same round surfaces defects one model family alone would miss. The lens→provider map makes this first-class.
 - **Related prior art in-repo:** `pr-watch` (watch → auto-fix via `ci-fix` → bounded retries) is the same loop shape with a poorer failure signal; harden-loop generalizes it to review-driven findings with provider fan-out.
 - **`gum` rendering is proven:** a mock dashboard (rounded panels joined horizontally, color-coded status dots, findings tallies, rubric/feedback strip, footer with live action + steer keys) renders cleanly at 256-color; the only trade vs a compiled TUI is buttery live motion.
-- **Next epic — `almanac` hub (#67, #68):** a TTY-aware bare `almanac` opens an interactive hub to start runs (ralph / harden), list running ones with live status, and watch / stop / queue-steer them; prints help when piped. Built on the **run registry**, which lands early (off the convergence loop) so the hub is a thin reader rather than a retrofit. ralph appears in the hub once migrated (#66). The hub is still bash + `gum` — same ceiling: it monitors many AFK runs concurrently and hands the terminal to HITL runs; it is not a real-time multi-session driver.
+- **Next epic — `almanac` hub (#67, #68):** a TTY-aware bare `almanac` opens an interactive hub to start runs (loop / harden), list running ones with live status, and watch / stop / queue-steer them; prints help when piped. Built on the **run registry**, which lands early (off the convergence loop) so the hub is a thin reader rather than a retrofit. loop appears in the hub once migrated (#66). The hub is still bash + `gum` — same ceiling: it monitors many AFK runs concurrently and hands the terminal to HITL runs; it is not a real-time multi-session driver.

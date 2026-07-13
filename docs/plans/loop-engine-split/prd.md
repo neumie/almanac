@@ -5,8 +5,8 @@ The loop engine works, but it has converged into shapes that fight maintenance a
 - **`lib/loop-core.sh` is a 1619-line god-module** holding eleven loosely-cohesive concerns (run registry, role config, agent run, worker orchestration, feedback, UI seam, worker health, hub views, run control, new-run composer). Answering "how does an agent run?" means scrolling past UI and registry code to line ~480 of one file.
 - **Provider knowledge is smeared across ~6 sites.** `detect_provider` is copy-pasted in `once.sh`/`afk.sh`; provider availability is checked in at least six places; model/effort menus live only in the launcher; the `codex …`/`claude …` invocation details + the `sandbox`→permission mapping + the event-stream jq filters live inside `agent_run` (and the filter is duplicated again in `agent_stream`). Adding or updating a provider is an edit hunt.
 - **`agent_run` is a 9-positional-arg multiplexer** with overlapping modes (`stream`/`raw`/silent) + a `merge_stderr` toggle + hidden validity rules (`raw` is codex-only; `stream` needs an events file). A caller can't tell what will happen from the call.
-- **The launcher hard-codes ralph's filesystem path** (`…/ralph-loop/scripts/once.sh`), so a new loop can't plug in without editing the central launcher.
-- **`ALMANAC_HOME` resolution is duplicated four ways** with subtle differences — one copy missing `pwd -P`, which is the exact symlink bug that broke `almanac ralph` this session.
+- **The launcher hard-codes loop's filesystem path** (`…/loop/scripts/once.sh`), so a new loop can't plug in without editing the central launcher.
+- **`ALMANAC_HOME` resolution is duplicated four ways** with subtle differences — one copy missing `pwd -P`, which is the exact symlink bug that broke `almanac loop` this session.
 - **The run-status schema is enumerated in every caller** (register/mark/update/hub each list the fields); adding a field means editing the writer and every reader, and the "all loops emit an identical key set" contract is only held by a test.
 - **Almost none of this is unit-tested through its interface** — provider/agent logic is only reachable via full end-to-end loop runs.
 
@@ -14,10 +14,10 @@ The friction is poor **locality** (a change touches many files), weak **leverage
 
 ## Solution
 
-Deepen the engine around **two auto-discovered adapter seams** and carve the god-module into cohesive modules, each with a small interface that is its own test surface. This is a **behavior-preserving refactor**: the user-facing behavior of `almanac ralph`, `almanac harden`, and the hub is unchanged; the existing test suite is the safety net.
+Deepen the engine around **two auto-discovered adapter seams** and carve the god-module into cohesive modules, each with a small interface that is its own test surface. This is a **behavior-preserving refactor**: the user-facing behavior of `almanac loop`, `almanac harden`, and the hub is unchanged; the existing test suite is the safety net.
 
 - A **provider adapter** seam: each backend (`codex`, `claude`) is a drop-in file answering one fixed question set. The seam is **deep on invocation** — the adapter yields the exec argv (including the sandbox→permission mapping) and its event-stream filter; nothing outside an adapter contains a `codex …`/`claude …` literal. Adding a provider is one new file.
-- A **loop adapter** seam, symmetric: each loop (`ralph`, `harden`) is a drop-in file declaring a **launch** contract (config fields + how to exec its runner) and a **control** contract (its stop/steer signal files). The launcher consumes launch; the hub consumes control; no central `case "$type"`, no hard-coded paths.
+- A **loop adapter** seam, symmetric: each loop (`loop`, `harden`) is a drop-in file declaring a **launch** contract (config fields + how to exec its runner) and a **control** contract (its stop/steer signal files). The launcher consumes launch; the hub consumes control; no central `case "$type"`, no hard-coded paths.
 - **Agent run becomes three intention-revealing shapes** — `agent_capture`, `agent_stream`, `agent_raw` — instead of one mode-parametric function. Each takes only what its shape needs; there are no invalid combinations to guard.
 - A **run-status record** module owns the canonical field list, so the cross-loop run-status contract is enforced by construction, not by a test.
 - **One standardized `ALMANAC_HOME` bootstrap** (prefer exported, else `pwd -P` at known depth) replaces the four drifting copies.
@@ -34,10 +34,10 @@ The payoff: "add a provider" or "add a loop" is a single drop-in file; provider/
 5. As a maintainer, I want the adapter to own the exec argv and the event-stream filter (deep invocation), so that no `codex …`/`claude …` literal lives outside an adapter.
 6. As a developer, I want `agent run` to be three named shapes (`agent_capture`, `agent_stream`, `agent_raw`), so that a call reads as intent and there are no invalid mode combinations.
 7. As a developer, I want the event-stream filter defined once (in the adapter), so that a schema fix is one edit, not four.
-8. As a maintainer, I want a single default-provider policy (active-env if available, else preference order), so that ralph's runtime detection and the launcher's menu agree.
+8. As a maintainer, I want a single default-provider policy (active-env if available, else preference order), so that loop's runtime detection and the launcher's menu agree.
 9. As a contributor, I want to add a new loop by dropping in `lib/loops/<name>.sh` with launch + control contracts, so that the launcher and hub pick it up without edits.
 10. As a maintainer, I want the launcher to exec a loop's runner via the loop adapter, so that no central code hard-codes a loop's filesystem path.
-11. As a developer, I want the launcher to remain usable standalone (`almanac ralph --prd x` with no dashboard), with the hub embedding it for New-run, so that the scripted/non-TTY path never opens a menu.
+11. As a developer, I want the launcher to remain usable standalone (`almanac loop --prd x` with no dashboard), with the hub embedding it for New-run, so that the scripted/non-TTY path never opens a menu.
 12. As a maintainer, I want the hub's stop/steer to read each loop's signal files from its adapter's control contract, so that loop-specific control lives with the loop.
 13. As a developer, I want one run-status record module that owns the field list, so that adding a field is one edit and the cross-loop contract can't drift.
 14. As a developer, I want callers to set/get run-status fields by name, so that no caller enumerates the schema.
@@ -45,13 +45,13 @@ The payoff: "add a provider" or "add a loop" is a single drop-in file; provider/
 16. As a maintainer, I want `loop-core.sh` deleted and replaced by focused modules, so that understanding one concern doesn't require reading ten others.
 17. As a maintainer, I want each caller to source only the modules it uses, so that dependencies are explicit and the silent whole-engine import is gone.
 18. As a developer, I want each module's interface to be its test surface, so that provider/agent/record/role logic is unit-testable behind fakes instead of only via end-to-end runs.
-19. As a user, I want `almanac ralph`, `almanac harden`, and the hub to behave exactly as before, so that the refactor is invisible at the surface.
+19. As a user, I want `almanac loop`, `almanac harden`, and the hub to behave exactly as before, so that the refactor is invisible at the surface.
 20. As a maintainer, I want the existing test suites to stay green throughout, so that behavior preservation is provable at each step.
 21. As a maintainer, I want the refactor sequenced so each step is independently shippable, so that the engine is never left half-migrated for long.
 
 ## Implementation Decisions
 
-**This is a behavior-preserving refactor.** No surface behavior changes; the existing suites (`test-ralph-smoke`, `test-hub`, `test-ralph-run-registry`, `test-loop-core`, `test-harden-cli`, `test-ralph-prompt`, `test-ralph-push`, `test-structure`, `test-skills`) must stay green at every step, and new unit tests are added per extracted module.
+**This is a behavior-preserving refactor.** No surface behavior changes; the existing suites (`test-loop-smoke`, `test-hub`, `test-loop-run-registry`, `test-loop-core`, `test-harden-cli`, `test-loop-prompt`, `test-loop-push`, `test-structure`, `test-skills`) must stay green at every step, and new unit tests are added per extracted module.
 
 **Two adapter seams (the spine).**
 - **Provider adapter** — auto-discovered at `lib/providers/<name>.sh`; the provider list is the files present. Contract: `available`, `active_env`, `models`, `efforts`, `display`, `argv`, `filter`. **Deep invocation**: `argv` yields the exec tokens (including the sandbox→permission mapping and `--json`-or-not by shape); `filter` yields the jq event-stream program. The one central remainder is **default-selection** policy (active-env provider if available, else preference order `claude` → `codex`).
@@ -71,15 +71,15 @@ The payoff: "add a provider" or "add a loop" is a single drop-in file; provider/
 
 ## Testing Decisions
 
-- **What makes a good test:** assert external behavior through a module's interface, not its internals. The adapter seams make this possible behind fakes (a fake `command -v` / fake provider executable) with no real model calls — matching the discipline already used by `test-ralph-smoke`.
+- **What makes a good test:** assert external behavior through a module's interface, not its internals. The adapter seams make this possible behind fakes (a fake `command -v` / fake provider executable) with no real model calls — matching the discipline already used by `test-loop-smoke`.
 - **Unit-tested modules** (new, behind fakes): provider adapters (`available`/`active_env`/`models`/`efforts`/`display`/`argv`/`filter` + default-selection policy); the three agent shapes (capture/stream/raw, asserting fd routing + `PIPESTATUS` propagation); the run-status record (set/get by name, schema round-trip, identical key set across loops); role resolution (lens → role → consumer-wide → default); feedback detection (marker files → command list); loop adapters (launch + control contracts).
-- **Integration coverage stays:** `test-ralph-smoke` (full `almanac ralph` chain) and `test-hub` continue to prove end-to-end behavior is unchanged — they are the behavior-preservation safety net for every step.
-- **Prior art:** the existing `tests/test-*.sh` harness, especially `test-ralph-smoke.sh` (fake-provider end-to-end) and `test-loop-core.sh` (pure-function unit tests).
+- **Integration coverage stays:** `test-loop-smoke` (full `almanac loop` chain) and `test-hub` continue to prove end-to-end behavior is unchanged — they are the behavior-preservation safety net for every step.
+- **Prior art:** the existing `tests/test-*.sh` harness, especially `test-loop-smoke.sh` (fake-provider end-to-end) and `test-loop-core.sh` (pure-function unit tests).
 
 ## Out of Scope
 
 - **Behavior changes.** This refactor changes structure, not surface behavior. Any behavior change is a separate PRD.
-- **New providers or loops** beyond today's `codex`/`claude` and `ralph`/`harden` — the seams *enable* them, but adding one is not part of this work.
+- **New providers or loops** beyond today's `codex`/`claude` and `loop`/`harden` — the seams *enable* them, but adding one is not part of this work.
 - **The hub's visual/UX redesign** — the gum-vs-plain seam and look stay as they are.
 - **A `loop-core.sh` compatibility barrel** — explicitly rejected; callers move to explicit dependencies.
 - **Reworking the overseer, the convergence loop, or the run registry's storage format** — only their *location* changes, not their behavior.
@@ -88,5 +88,5 @@ The payoff: "add a provider" or "add a loop" is a single drop-in file; provider/
 
 - **Behavior preservation is the acceptance bar.** Every step keeps all existing suites green; a step that can't is not done.
 - **The two adapter seams are the durable win:** providers and loops become drop-in files, learned once. Everything else (agent shapes, record, home bootstrap, the split) supports that.
-- **Dogfood option:** this PRD can be decomposed into vertical slices and built by the ralph loop on the very engine it refactors — a strong end-to-end exercise of the loop on itself.
+- **Dogfood option:** this PRD can be decomposed into vertical slices and built by the implementation loop on the very engine it refactors — a strong end-to-end exercise of the loop on itself.
 - **Domain reference:** `CONTEXT.md` holds the canonical vocabulary (provider/loop adapter, deep invocation, launch/control contracts, the module map); keep it in sync as modules land.

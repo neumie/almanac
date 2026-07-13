@@ -18,8 +18,8 @@ Adds two flags: `--no-oversee` (disables the overseer entirely; loop runs until 
 
 - [x] `lib/converge-core.sh::almanac_converge_overseer_prompt` produces a prompt that:
   - [x] Reads the current `goal.md` and embeds it verbatim
-  - [x] Tails `agent-reports.log` (last ~8KB — bounded like ralph's overseer at `scripts/afk.sh:329-333`)
-  - [x] Lists the last 10 `CONVERGE(<slug>)` commits via `git log --grep` (mirror ralph's pattern at `scripts/afk.sh:325`)
+  - [x] Tails `agent-reports.log` (last ~8KB — bounded like loop's overseer at `scripts/afk.sh:329-333`)
+  - [x] Lists the last 10 `CONVERGE(<slug>)` commits via `git log --grep` (mirror loop's pattern at `scripts/afk.sh:325`)
   - [x] Instructs the overseer to output **exactly four lines** with no preamble:
     ```
     VERDICT: <CONVERGED|CONTINUE|STEER|STOP>
@@ -28,7 +28,7 @@ Adds two flags: `--no-oversee` (disables the overseer entirely; loop runs until 
     GOAL_UPDATE: <new goal.md content, or 'unchanged'>
     ```
 - [x] `lib/converge-core.sh::almanac_converge_overseer_parse` parses the overseer's response into the four fields. Robust: missing/garbled lines default to `VERDICT=CONTINUE`, `STEER=none`, `GOAL_UPDATE=unchanged` (conservative — never accidentally stop or mutate goal on a malformed response).
-- [x] Overseer runs through `agent_run` with `sandbox=read-only` (same pattern as ralph's overseer at `scripts/afk.sh:373-380`). Provider/model/effort via `CONVERGE_OVERSEER_*` env, resolved through `lib/role.sh`.
+- [x] Overseer runs through `agent_run` with `sandbox=read-only` (same pattern as loop's overseer at `scripts/afk.sh:373-380`). Provider/model/effort via `CONVERGE_OVERSEER_*` env, resolved through `lib/role.sh`.
 - [x] Cadence: `--oversee-every N` controls how often the overseer ticks (every N rounds; default 1). `--no-oversee` skips the tick entirely.
 - [x] Verdict handling:
   - [x] `CONVERGED` or `STOP` → write `.converge-stop` → loop exits cleanly after current round → mark registry `status=done` (CONVERGED) or `status=aborted` (STOP)
@@ -50,7 +50,7 @@ Adds two flags: `--no-oversee` (disables the overseer entirely; loop runs until 
 ## Notes
 
 - The overseer is **read-only**. It never commits, never writes outside `overseer.log`, `.converge-stop`, `.converge-steer`, and `convergence.md`. Slice 05 will add `goal.md` and `goal.history.log` to its write list.
-- Mirror ralph's overseer architecture but keep it **synchronous** (between-rounds tick). Ralph's overseer runs in a background subshell with its own interval timer; converge's overseer runs in the main loop, between rounds. Simpler, fewer concurrency bugs, and the cadence is round-based not wall-clock.
+- Mirror loop's overseer architecture but keep it **synchronous** (between-rounds tick). Loop's overseer runs in a background subshell with its own interval timer; converge's overseer runs in the main loop, between rounds. Simpler, fewer concurrency bugs, and the cadence is round-based not wall-clock.
 - The 4-field contract is the **interface**. Don't add a 5th field for "log this thing" or "annotate that thing" — extending the protocol is a separate slice.
 - `--no-oversee` is the **trust knob**. Some users will want the convergence loop without the LLM judge — they'll set rounds=5, eyeball the result. Make sure this path has zero overseer-related work (no prompt, no agent call, no parsing, no `.converge-stop` writes from the overseer).
 
