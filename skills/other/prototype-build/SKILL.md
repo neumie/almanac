@@ -3,8 +3,8 @@ name: prototype-build
 description: Use when building throwaway logic or UI prototypes to answer design questions before production implementation; terminal state app or UI variants.
 metadata:
   upstream: mattpocock/skills/skills/engineering/prototype
-  upstream-sha: 9425f7dbc7665029c72ba4ae22ad303df039a5e5
-  adapted-date: "2026-07-10"
+  upstream-sha: e75d5331ceffd9b2c5a9554c3db124d848afa054
+  adapted-date: "2026-07-13"
 ---
 
 # Prototype Build
@@ -27,7 +27,7 @@ If ambiguous and user is unavailable, default to the branch matching surrounding
 3. **No persistence by default.** State lives in memory unless persistence is the question.
 4. **Skip polish.** No tests, no broad error handling, no abstractions beyond what makes it runnable.
 5. **Surface state.** After every logic action or UI variant switch, show the relevant state.
-6. **Delete or absorb when done.** Keep the decision, not the prototype shell.
+6. **Delete or absorb when done.** Keep the decision, not the prototype shell. Do not preserve a prototype-only branch.
 
 ## When Done
 
