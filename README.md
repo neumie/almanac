@@ -8,7 +8,7 @@ Skills follow the [Agent Skills Open Standard](https://agentskills.io/specificat
 
 Skills are portable instruction sets that teach coding agents *how* to do things — commit code, create PRs, run TDD, fix CI, and more. Each skill is a single Markdown file (`SKILL.md`) with YAML frontmatter. Agents discover and load them automatically.
 
-Run any skill as a slash command in your agent (e.g. `/commit`, `/ship`, `/ralph-loop`, `/harden-loop`, `/converge-loop`).
+Run any skill as a slash command in your agent (e.g. `/commit`, `/ship`, `/ralph-loop`, `/converge-loop`).
 
 Skills are organized by category in the repo (`skills/git/`, `skills/productivity/`, `skills/other/`, …) and flattened at install time so Claude Code's flat skill discovery finds them.
 
@@ -17,7 +17,6 @@ Skills are organized by category in the repo (`skills/git/`, `skills/productivit
 | Skill | Use |
 |-------|-----|
 | `ralph-loop` | Build a spec slice queue task-by-task, with each iteration committed. |
-| `harden-loop` | Harden one target through reviewers, ratification, fixer, and feedback gates. |
 | `converge-loop` | Repeat one custom exec command toward a mutable `goal.md` until an overseer says done. |
 | `spec-create` | Synthesize a conversation or idea into `docs/plans/<name>/spec.md` for the loops to consume. |
 | `to-tickets` | Split a spec into blocked tracer-bullet tickets for GitHub or `docs/plans/`. |
@@ -118,8 +117,6 @@ lib/
 skills/
   loop/
     converge-loop/
-      SKILL.md
-    harden-loop/
       SKILL.md
     implement/
       SKILL.md

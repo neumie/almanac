@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# harden.sh - Bootstrap a harden-loop rubric for one target
+# harden.sh - Bootstrap a harden rubric for one target
 # summary: Fan out reviewers over a target, aggregate findings
 # usage: almanac harden <target> [--goal G | --approve | --fix | --loop [--rounds N] | --watch | --watch-worker LENS]
 # group: loops

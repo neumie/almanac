@@ -196,7 +196,7 @@ default provider/model/effort
 | Loop | Use when | Convergence signal |
 |------|----------|--------------------|
 | `ralph-loop` | You have a spec and slice queue under `docs/plans/<name>/issues/`. | Queue empty or slice work complete. |
-| `harden-loop` | You need parallel reviewers, ratify-by-execution, and a single fixer against a target. | Acceptance met and zero open blocking findings. |
+| `almanac harden` | You need parallel reviewers, ratify-by-execution, and a single fixer against a target. | Acceptance met and zero open blocking findings. |
 | `converge-loop` | You already know the per-round command and want an overseer to judge a mutable goal. | Overseer verdict against current `goal.md`. |
 
 ## Supervision
