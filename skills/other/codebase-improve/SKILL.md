@@ -6,8 +6,8 @@ metadata:
     - codebase-design
     - domain-model
   upstream: mattpocock/skills/skills/engineering/improve-codebase-architecture
-  upstream-sha: a79b493ea386d537208beacc41ad26336da257eb
-  adapted-date: "2026-06-19"
+  upstream-sha: b56969e92f0705d70700f908b8ec929a1edfa782
+  adapted-date: "2026-07-13"
 ---
 
 # Improve Codebase Architecture
@@ -19,6 +19,11 @@ Follow the `codebase-design` skill for design vocabulary and principles. Follow 
 ## Process
 
 ### 1. Explore
+
+Scope the scan before exploring. Deepening pays off when future changes land in that area, so avoid speculative whole-repo review:
+
+- If the user names a module, subsystem, or pain point, focus there.
+- Otherwise inspect a useful stretch of `git log --oneline` for recurring files and areas. Start with those hot spots; widen only when history is scattered.
 
 These commands run automatically when the skill loads — output replaces each line below:
 
@@ -64,7 +69,7 @@ Do NOT propose interfaces yet. After the file is written, ask the user: "Which o
 
 ### 3. Grilling loop
 
-Once the user picks a candidate, drop into a grilling conversation. Walk the design tree with them — constraints, dependencies, the shape of the deepened module, what sits behind the seam, what tests survive.
+Once the user picks a candidate, drop into a grilling conversation. Walk the decision tree with them — constraints, dependencies, the shape of the deepened module, what sits behind the seam, what tests survive.
 
 Side effects happen inline as decisions crystallize:
 
