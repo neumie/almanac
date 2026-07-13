@@ -20,6 +20,8 @@ Skills are organized by category in the repo (`skills/git/`, `skills/productivit
 | `harden-loop` | Harden one target through reviewers, ratification, fixer, and feedback gates. |
 | `converge-loop` | Repeat one custom exec command toward a mutable `goal.md` until an overseer says done. |
 | `spec-create` | Synthesize a conversation or idea into `docs/plans/<name>/spec.md` for the loops to consume. |
+| `to-tickets` | Split a spec into blocked tracer-bullet tickets for GitHub or `docs/plans/`. |
+| `implement` | Implement one agent-ready ticket through TDD, review, queue update, and commit. |
 | `code-review` | Review changes since a fixed point on two parallel axes — repo standards and spec conformance. |
 | `codebase-design` | Shared vocabulary for deep modules, interfaces, seams, adapters, and testability. |
 | `domain-model` | Maintain `CONTEXT.md` domain language and ADRs while design decisions crystallize. |
@@ -119,9 +121,13 @@ skills/
       SKILL.md
     harden-loop/
       SKILL.md
+    implement/
+      SKILL.md
     ralph-loop/
       SKILL.md
     spec-create/
+      SKILL.md
+    to-tickets/
       SKILL.md
   other/
     code-review/
@@ -139,7 +145,7 @@ skills/
 
 ### Upstream sync
 
-Twelve skills are adapted from upstream repositories:
+Thirteen skills are adapted from upstream repositories:
 
 | Skill | Upstream |
 |-------|----------|
@@ -151,10 +157,11 @@ Twelve skills are adapted from upstream repositories:
 | grill-me | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | grill-with-docs | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | grilling | [mattpocock/skills](https://github.com/mattpocock/skills) |
-| issues-create | [mattpocock/skills](https://github.com/mattpocock/skills) |
+| implement | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | prototype-build | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | spec-create | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | tdd | [mattpocock/skills](https://github.com/mattpocock/skills) |
+| to-tickets | [mattpocock/skills](https://github.com/mattpocock/skills) |
 
 Run `almanac sync` to check for updates.
 

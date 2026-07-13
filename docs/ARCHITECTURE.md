@@ -16,7 +16,7 @@ Skills use progressive disclosure:
 
 Some skills are adapted from upstream sources ([mattpocock/skills](https://github.com/mattpocock/skills), [contember/agent-canvas](https://github.com/contember/agent-canvas)) and track their upstream via `metadata.upstream-sha` in frontmatter. Run `almanac sync` to check for updates.
 
-Reference material (templates, patterns, guardrails) lives in `skills/<category>/<name>/references/` directories, loaded on demand by the skills that use them. Shared design/domain/interview skills (`codebase-design`, `domain-model`, `grilling`) own reusable vocabulary, decision-record rules, and interview mechanics; consumer skills such as `codebase-improve`, `tdd`, `spec-create`, `grill-me`, and `grill-with-docs` declare `metadata.dependencies` and delegate rather than copying those rules.
+Reference material (templates, patterns, guardrails) lives in `skills/<category>/<name>/references/` directories, loaded on demand by the skills that use them. Shared design/domain/interview/implementation skills (`codebase-design`, `domain-model`, `grilling`, `implement`) own reusable vocabulary, decision-record rules, interview mechanics, and one-ticket execution. Consumers such as `codebase-improve`, `tdd`, `spec-create`, `grill-me`, `grill-with-docs`, and `ralph-loop` declare `metadata.dependencies` and delegate rather than copying those rules. The planning pipeline is `spec-create` → `to-tickets` → `implement`; `ralph-loop` repeatedly selects agent-ready tickets and delegates each iteration to `implement`.
 
 ## Layer 2: Adapters (provider-specific)
 
@@ -56,6 +56,8 @@ In-repo guidance follows the `agents-md-map` convention: `AGENTS.md` is the cano
 | `lib/loops/ralph.sh` | Ralph loop adapter contract. |
 | `lib/loops/harden.sh` | Harden loop adapter contract. |
 | `lib/loops/converge.sh` | Converge loop control contract for hub stop/steer signals. |
+| `skills/loop/to-tickets/` | Tracer-bullet ticket publisher for GitHub or `docs/plans/`. |
+| `skills/loop/implement/` | Single-ticket TDD, review, queue-update, and commit workflow. |
 | `skills/loop/ralph-loop/` | User-facing Ralph loop skill and scripts. |
 | `skills/loop/harden-loop/` | User-facing harden-loop skill. |
 | `skills/loop/converge-loop/` | User-facing converge-loop skill. |

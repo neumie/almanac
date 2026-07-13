@@ -102,7 +102,7 @@ docs/plans/
 │   ├── agent-reports.log  ← appended each iteration
 │   ├── overseer.log       ← overseer ticks
 │   ├── ralph-codex-*.log  ← raw Codex session logs (if using Codex)
-│   └── issues/            ← optional task queue (from /issues-create-local)
+│   └── issues/            ← optional local ticket queue (from /to-tickets)
 │       └── 01-add-login-form.md
 └── dashboard/             ← another spec (can coexist)
     ├── spec.md

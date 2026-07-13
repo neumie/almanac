@@ -69,6 +69,9 @@ test_generates_prompt_with_shared_feedback_commands() {
   assert_contains "$prompt" "- \`npm run test\` to run npm tests" "prompt should include package feedback from shared detector"
   assert_contains "$prompt" "- \`bash tests/test-skills.sh\` to validate skill format/content" "prompt should include skill feedback from shared detector"
   assert_contains "$prompt" "- \`bash tests/test-structure.sh\` to validate repo layout" "prompt should include structure feedback from shared detector"
+  assert_contains "$prompt" 'status: ready-for-agent|ready-for-human' "prompt should describe readiness-based local tickets"
+  assert_contains "$prompt" 'legacy tickets may have no readiness label' "prompt should preserve legacy GitHub queues"
+  assert_contains "$prompt" 'Follow the `implement` skill for this one selected task' "prompt should delegate one-ticket execution to implement"
   echo "  PASS: generates prompt with shared feedback commands"
 }
 

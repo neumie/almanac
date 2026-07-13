@@ -3,8 +3,10 @@ name: ralph-loop
 description: "Use when autonomously implementing a spec task-by-task. Each loop iteration picks one task, TDDs it, commits, exits. Progress persists in git. Triggers: ralph, AFK mode, autonomous loop."
 disable-model-invocation: true
 metadata:
+  dependencies:
+    - implement
   source: mattpocock/ralph-workshop-repo-001 (technique only — no canonical SKILL.md to SHA-sync)
-  adapted-date: "2026-04-28"
+  adapted-date: "2026-07-13"
 ---
 
 # Ralph Loop
@@ -78,13 +80,13 @@ You've been passed the last 10 RALPH commits (SHA, date, full message). Review t
 
 Before decomposing the spec, check whether an explicit queue exists. Detect in this order:
 
-1. **Local slice files.** If `docs/plans/<name>/issues/` contains `*.md` files, that directory is your queue. Each file has frontmatter (`status`, `blocked-by`, `type`) and an `## Acceptance criteria` checklist of `- [ ]` items.
-2. **GitHub issues.** Else if `gh issue list --search 'label:"ralph(<name>)" state:open'` returns at least one issue, that's your queue. (Use `--search`, not `--label` — the parenthesised label name breaks the `--label` filter.) Each issue body contains an `## Acceptance criteria` section with `- [ ]` items.
+1. **Local ticket files.** If `docs/plans/<name>/issues/` contains `*.md` files, that directory is your queue. New tickets use `status: ready-for-agent|ready-for-human`; legacy tickets use `status: open` plus `type: AFK|HITL`.
+2. **GitHub issues.** Else if `gh issue list --search 'label:"ralph(<name>)" state:open'` returns at least one issue, that's your queue. (Use `--search`, not `--label` — the parenthesised label name breaks the `--label` filter.) New agent tickets also carry `ready-for-agent`; legacy tickets may have no readiness label.
 3. **No queue.** Skip to TASK BREAKDOWN below and decompose the spec yourself.
 
 If a queue is present:
 
-- Pick the **lowest-numbered** open slice file (or **oldest** open issue) whose `blocked-by` references are all `status: done` (or closed). That slice/issue is your task.
+- Pick the **lowest-numbered** agent-ready local ticket (or **oldest** agent-ready GitHub issue) whose blockers are all done or closed. Treat legacy `status: open` + `type: AFK` files and legacy GitHub queue issues without any readiness label as agent-ready. Never pick `ready-for-human` or legacy `type: HITL`.
 - Its `## What to build` and `## Acceptance criteria` define your scope. The spec is reference; the slice/issue is authoritative.
 - Do NOT decompose the spec again — TASK BREAKDOWN below is for the no-queue case only.
 - If every queued task is blocked by something incomplete, output `<promise>ABORT</promise>`.
@@ -114,15 +116,7 @@ Explore the repo and fill your context window with relevant information that wil
 
 # EXECUTION
 
-Complete the task.
-
-For behavior changes, use TDD:
-1. Write one failing test for the behavior
-2. Write minimal code to pass
-3. Refactor if needed
-4. Repeat for the next behavior within this task
-
-For mechanical refactors, skip TDD: make the change across all affected files in one pass, then run the feedback loops. Existing tests verify correctness; don't write new ones to pin the refactor itself.
+Follow the `implement` skill for this one selected task: verify readiness and blockers, implement at the agreed seam, run feedback loops, review the diff, and update queue state. The selected task is already resolved — do not choose another ticket.
 
 # FEEDBACK LOOPS
 
@@ -132,26 +126,7 @@ Before committing, run ALL feedback loops. Fix any failures before proceeding.
 
 # COMMIT
 
-If you used a queued task, update the queue using the **strict checkbox protocol** before committing.
-
-**Strict means:** flip a `- [ ]` to `- [x]` ONLY for an acceptance criterion that THIS commit's actual code changes demonstrably fulfill. Do not flip a checkbox for something "almost", "implicitly", or "previously" done. The overseer audits these flips against the diff and rolls back overclaims.
-
-**Local slice file:**
-
-1. Edit the slice file: flip `- [ ]` → `- [x]` for each criterion this commit fulfills.
-2. Append a line under `## Progress` (create the section if it doesn't exist): `- <ISO-date>: <one-line summary> — fulfills criteria N[, M…]`.
-3. If every `- [ ]` in `## Acceptance criteria` is now `- [x]`, also flip frontmatter `status: open` → `status: done`.
-4. Stage the slice-file edits as part of this commit.
-
-**GitHub issue:**
-
-1. Fetch current body: `gh issue view <num> --json body -q .body > /tmp/issue-body.md`.
-2. Edit `/tmp/issue-body.md` to flip the relevant `- [ ]` → `- [x]`.
-3. After committing the code, push the body update: `gh issue edit <num> --body-file /tmp/issue-body.md`.
-4. Post a comment with the commit SHA: `gh issue comment <num> --body "<sha>: <summary> — fulfills criteria N[, M…]"`.
-5. If every checkbox is now `- [x]`, also `gh issue close <num>`.
-
-Then make the git commit. The commit message must:
+Follow the `implement` skill's strict checkbox and queue-update protocol. Then make the git commit. The commit message must:
 
 1. Start with `RALPH(<name>):` prefix (e.g. `RALPH(auth-system):`)
 2. Include task completed + spec reference

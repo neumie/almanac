@@ -7,7 +7,7 @@ metadata:
     - codebase-design
   upstream: mattpocock/skills/skills/engineering/to-spec
   upstream-sha: f3cca8d3dbdb7c22e11447f1d13011a78ca6efba
-  adapted-date: "2026-07-10"
+  adapted-date: "2026-07-13"
 ---
 
 Synthesize the current conversation context and codebase understanding into a spec (you may know this document as a PRD). Do NOT interview the user — just synthesize what you already know.
@@ -41,7 +41,7 @@ Check with the user that these modules match their expectations. Check with the 
 mkdir -p docs/plans/<name>
 ```
 
-Report the file path (`docs/plans/<name>/spec.md`) so the user knows which spec to pass to `/ralph-loop`.
+Report the file path (`docs/plans/<name>/spec.md`) so the user can pass it to `/to-tickets` or directly to `/ralph-loop`.
 
 ## Spec Template
 
