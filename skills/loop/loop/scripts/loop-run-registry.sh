@@ -37,7 +37,7 @@ loop_register_run() {
 # Emit the live half of the shared run-status contract: record the current
 # iteration (as the contract's `round` field) and a one-line summary into the
 # run's status.tsv blob, so the almanac hub's read view reflects progress while
-# the loop runs. Mirrors harden's per-round almanac_loop_update_run_progress
+# the loop runs. Mirrors the shared per-round almanac_loop_update_run_progress
 # call. Best-effort: a missing run id or any registry failure must never break
 # the loop, so it is fully guarded.
 loop_update_run_progress() {

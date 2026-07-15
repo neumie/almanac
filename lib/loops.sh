@@ -96,8 +96,8 @@ _almanac_loop_kv_get() {
 # Emit the consumer-wide role triple as KEY=VALUE lines under PREFIX (the
 # `<PREFIX>PROVIDER` / `<PREFIX>MODEL` / `<PREFIX>EFFORT` env keys role.sh's
 # resolver layers under). Empty fields drop their key. Used by every loop
-# adapter's `new_run_env` verb (harden, converge — loop rides on argv only) so
-# the key-name convention lives in exactly one printf — adding a 4th adapter
+# adapter's `new_run_env` verb (converge — loop rides on argv only) so
+# the key-name convention lives in exactly one printf — adding a 3rd adapter
 # costs zero new spellings, and renaming a field key only changes this helper.
 # Sibling to lib/loop-launcher.sh::_almanac_launch_export_role (the export form
 # used by launch verbs); both helpers share the prefix+field convention but
@@ -111,10 +111,10 @@ _almanac_loop_emit_role_env() {
 }
 
 # Default signal-file basename for a loop's between-round control. Every loop uses
-# the same `.${name}-${kind}` convention (`.loop-stop`, `.harden-steer`, …) so the
+# the same `.${name}-${kind}` convention (`.loop-stop`, `.converge-steer`, …) so the
 # pattern lives once here instead of being copy-pasted into each adapter. A loop
 # only needs to define its own `signal_file` if its convention diverges; this is
-# the deepening that turns three identical stop|steer case-statements into none.
+# the deepening that turns two identical stop|steer case-statements into none.
 # Returns 1 for an unknown kind.
 almanac_loop_default_signal_file() {
   local name="$1" kind="$2"
@@ -126,7 +126,7 @@ almanac_loop_default_signal_file() {
 
 # Resolve a loop's signal-file basename: the adapter's override if it defines
 # `signal_file`, else the standard `.${name}-${kind}` default. This is the
-# control-contract public surface — callers (lib/run.sh, harden-core, converge-core)
+# control-contract public surface — callers (lib/run.sh, converge-core)
 # go through here instead of dispatching to the adapter directly, so adding a new
 # loop costs zero signal_file code unless the loop is non-standard. Returns 1 for
 # an unknown kind or an unknown loop name.
@@ -144,8 +144,8 @@ almanac_loop_signal_file() {
 
 # Resolve the DIRECTORY a loop's signal file lives in.
 #
-# Default: $root — loop and harden both drop `.loop-stop` / `.harden-stop`
-# at the repo root because their loops watch root.
+# Default: $root — loop drops `.loop-stop` at the repo root because its
+# loop watches root.
 #
 # Override: a loop's adapter can define `almanac_loop_<name>_signal_dir
 # <root> <target>` to scope signals to a per-run directory instead. Converge

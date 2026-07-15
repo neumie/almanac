@@ -581,8 +581,8 @@ test_run_aborts_cleanly_when_plan_dir_unwritable() {
   mkdir -p "$tmp/docs/plans/converge"
   chmod 500 "$tmp/docs/plans/converge"
 
-  # Regression parity with harden commit 1467073: a mid-loop _die after run
-  # registration must mark the run aborted without trap-time set -u crashes.
+  # Regression: a mid-loop _die after run registration must mark the run
+  # aborted without trap-time set -u crashes.
   output="$(run_converge "$tmp" --goal "Blocked Plan" --exec "true" 2>&1)" && rc=0 || rc=$?
   chmod 700 "$tmp/docs/plans/converge"
 
@@ -965,7 +965,7 @@ REASON: Round 1 surveyed the codebase and found 8 friction points.
 The agent stalled at AskUserQuestion and applied none.
 Round 2 should pick the top finding and implement it.
 STEER: Implement finding #1 first: split cmd/converge.sh into a launcher
-front-end and a runner script, matching harden's shape.
+front-end and a runner script, mirroring the shim + core layout.
 GOAL_UPDATE: unchanged"
   assert_eq "CONTINUE" "$ALMANAC_CONVERGE_VERDICT" "multi-line parse keeps verdict"
   case "$ALMANAC_CONVERGE_REASON" in
@@ -973,7 +973,7 @@ GOAL_UPDATE: unchanged"
     *) fail "multi-line REASON should capture all continuation lines (got: '$ALMANAC_CONVERGE_REASON')" ;;
   esac
   case "$ALMANAC_CONVERGE_STEER" in
-    *"Implement finding #1"*"matching harden's shape"*) : ;;
+    *"Implement finding #1"*"mirroring the shim + core layout"*) : ;;
     *) fail "multi-line STEER should capture all continuation lines (got: '$ALMANAC_CONVERGE_STEER')" ;;
   esac
   assert_eq "unchanged" "$ALMANAC_CONVERGE_GOAL_UPDATE" "GOAL_UPDATE unchanged on multi-line REASON"
@@ -1672,18 +1672,16 @@ test_converge_adapter_exposes_stop_and_steer() {
   assert_eq ".converge-steer" "$(almanac_loop_signal_file converge steer)" \
     "converge steer file basename"
 
-  # signal_dir override: loop and harden default to $root, but converge
+  # signal_dir override: loop defaults to $root, but converge
   # scopes signals to the run's plan dir so CONVERGED in one run doesn't
   # halt sibling runs sharing the workspace.
   assert_eq "/r/docs/plans/converge/my-slug" \
     "$(almanac_loop_signal_dir converge "/r" "my-slug")" \
     "converge signal_dir routes to the run's plan dir"
-  # Loop and harden keep the default $root scoping — confirms the adapter
+  # Loop keeps the default $root scoping — confirms the adapter
   # contract is opt-in deepening, not a forced regression for other loops.
   assert_eq "/r" "$(almanac_loop_signal_dir loop "/r" "any-target")" \
     "loop signal_dir defaults to \$root"
-  assert_eq "/r" "$(almanac_loop_signal_dir harden "/r" "src/app.js")" \
-    "harden signal_dir defaults to \$root"
   # Missing target falls back to $root rather than producing a malformed
   # path — defensive for the case where status.tsv is malformed.
   assert_eq "/r" "$(almanac_loop_signal_dir converge "/r" "")" \
@@ -1758,8 +1756,7 @@ test_converge_stop_signal_exits_running_loop() {
     --rounds 3 --no-oversee >/dev/null
 
   # The round-start stop check routes through `almanac_loop_consume_signal`
-  # (read+delete in one op) — same seam harden uses (see test-harden-cli.sh
-  # ".harden-stop should be consumed"). Post-detection the file is gone; the
+  # (read+delete in one op). Post-detection the file is gone; the
   # abort status below is the delivery proof. Plan-dir scoping of the WRITE
   # is covered by test_hub_stop_writes_converge_signal, which routes via the
   # same almanac_loop_run_control_file resolver as the CLI path.

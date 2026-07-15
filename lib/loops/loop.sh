@@ -191,8 +191,8 @@ almanac_loop_loop_status_to_opts() {
 
 # Loop goes through the launcher (almanac_loop_launch), which accepts --yes for
 # auto-confirm. Hub `--resume` uses this signal to append --yes; loops that
-# don't implement this verb (harden, converge — they exec their direct runners,
-# which reject --yes) get no suffix appended.
+# don't implement this verb (e.g. converge — it execs its direct runner,
+# which rejects --yes) get no suffix appended.
 almanac_loop_loop_launch_backed() {
   return 0
 }

@@ -1027,7 +1027,7 @@ the overseer thinks the round did nothing.
 The <one-line summary> must describe WHAT you changed, concretely:
 
   GOOD:  "extract loop-adapter signal_dir verb; scope converge signals to plan dir"
-  GOOD:  "fix harden ratify gate threading: pass conductor to demo_reproduces"
+  GOOD:  "fix converge steer threading: pass the directive into the next worker prompt"
   GOOD:  "rename almanac_converge_role_field -> almanac_converge_role_resolve"
 
   BAD:   "round $round"

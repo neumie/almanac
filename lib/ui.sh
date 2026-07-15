@@ -9,7 +9,7 @@
 #
 # Self-contained: these helpers use only printf/read/cat/gum and never call the
 # _die/_info output helpers, so this file has no dependency on lib/core.sh. Every
-# consumer (lib/run.sh, the launcher, harden-core, the hub) sources it directly.
+# consumer (lib/run.sh, the launcher, the hub) sources it directly.
 
 # True (0) only when gum styling should be used: gum is installed, stdout is a
 # terminal, and the operator has not opted out via ALMANAC_NO_GUM. Piped/captured

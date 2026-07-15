@@ -361,7 +361,7 @@ almanac_loop_register_run() {
 # Set config fields on a run after registration. Thin convenience over record_set
 # that names intent: "store the resolved launch config so resume can rebuild it."
 # Accepts any subset of the config keys (provider/model/effort/iterations/oversee
-# for loop; provider/model/effort/lenses/rounds for harden). Blank values are
+# for loop; goal/prompt/exec/rounds/provider/model/effort for converge). Blank values are
 # acceptable — record_set keeps the field present-but-blank. Returns 2 when the
 # run is unknown so callers can guard without aborting.
 almanac_loop_set_run_config() {
@@ -475,7 +475,7 @@ almanac_loop_notify_run_end() {
 }
 
 # Update a live run's progress mid-flight: rewrite its status.tsv with a new
-# round (harden round / loop iteration) and worker/lens summary, preserving the
+# round (converge round / loop iteration) and worker summary, preserving the
 # lifecycle status, start, and finish fields. This is the "updated as it
 # progresses" half of the run-status contract — the loop calls it each round so
 # the hub's read view reflects current progress. Touches only the per-run blob,
@@ -514,7 +514,7 @@ almanac_loop_update_run_progress() {
 # The %q bake is the load-bearing detail: bash uses dynamic scoping for trap
 # text expansion, so by the time the trap fires the outer caller's `run_id`
 # local may have been shadowed by an inner function's local of the same name
-# (e.g. `almanac_harden_fanout` declares its own `local run_id` for worker
+# (e.g. an inner helper declares its own `local run_id` for worker
 # bookkeeping). Under `set -u`, an inner-frame `_die` would resolve `$run_id`
 # against the inner unset local and bash would abort with `run_id: unbound
 # variable` before the finalize call ever runs. printf %q resolves the values
@@ -536,10 +536,10 @@ almanac_loop_install_finalize_trap() {
 # `almanac_loop_mark_run_status`. No-op on an empty run_id so a registry-failed
 # loop (best-effort `register_run` returned blank) still exits cleanly. The
 # optional REASON rides through to `mark_run_status`'s failure_reason field —
-# converge uses it ("exec exit=N round=K"); harden omits.
+# converge uses it ("exec exit=N round=K").
 #
-# Harden and converge each used to keep their own near-identical 6-line
-# finalize wrappers (the only difference: converge threaded REASON). Both
+# converge and loop route through this instead of near-identical 6-line
+# finalize wrappers (converge threads REASON, loop omits it). Both
 # pass straight to `mark_run_status` — pure pass-through. This is the seam
 # they collapse onto, called both from `almanac_loop_install_finalize_trap`'s
 # baked trap text and from the loops' normal exit paths.
@@ -601,8 +601,8 @@ almanac_loop_list_runs() {
 
 # Find the most recently registered run for (type, target) and print its run id.
 # "Latest" comes from the registry's append order — the index file is monotonic.
-# Both harden (per target) and converge (per slug) call this; their earlier
-# per-loop variants diverged in mechanism (glob+stat-mtime vs row-scan) but
+# converge (per slug) calls this; earlier per-loop variants diverged in
+# mechanism (glob+stat-mtime vs row-scan) but
 # agreed on intent. Returns 1 when no matching run exists.
 almanac_loop_latest_run_for_target() {
   local root="$1"
@@ -639,7 +639,7 @@ almanac_loop_read_run() {
 # THE single source of truth for a run's worker container — the parent dir under
 # which each worker_id resolves to its own subdir. almanac_loop_worker_dir composes
 # off this; dashboard/health walkers that need to iterate every worker of a run
-# (e.g. harden's reviewer health rows) call this directly instead of re-spelling
+# (e.g. converge's worker health rows) call this directly instead of re-spelling
 # "<registry>/<run_id>/workers" each time. One literal "workers" path segment
 # lives here, used everywhere.
 almanac_loop_workers_dir() {
@@ -680,14 +680,13 @@ almanac_loop_worker_file() {
 
 # THE single source of truth for the worker-artifact basenames. The worker
 # orchestrator (worker.sh) seeds these paths into status.tsv on spawn, but
-# callsites that reconstruct a worker's path independently — harden-core's
-# reviewer fan-in (reads the result file straight, never the status row) and
+# a callsite that reconstructs a worker's path independently —
 # worker.sh's watch fallback (rebuilds events.jsonl when the status row is
 # absent) — must agree with that seed on the basename. These thin helpers
 # compose off almanac_loop_worker_file so "events.jsonl" / "result.txt" /
 # "stderr.log" each live in exactly one place: renaming an artifact's
 # storage filename is a one-line change here instead of a coordinated edit
-# across worker.sh + harden-core.sh (where a missed site would silently
+# across the spawn and rebuild sites (where a missed site would silently
 # diverge — the orchestrator records the new name in status.tsv while a
 # rebuilder still looks for the old one).
 almanac_loop_worker_events_file() {
@@ -980,8 +979,8 @@ almanac_loop_hub_stats() {
 # gum selection menu in cmd/hub.sh is a thin TTY layer over them.
 
 # Absolute path to a loop's between-round control file under BASE: BASE joined with
-# the type's stop|steer dot-file basename (`<base>/.harden-stop`, …). Centralises
-# the harden/converge pattern of "look up the signal file, prepend the path" so
+# the type's stop|steer dot-file basename (`<base>/.converge-stop`, …). Centralises
+# the converge/loop pattern of "look up the signal file, prepend the path" so
 # each loop's core stops re-implementing its own _control_file wrapper. Returns 1
 # when the loop type or kind is unknown.
 almanac_loop_run_control_file() {
@@ -993,12 +992,11 @@ almanac_loop_run_control_file() {
 
 # One-shot consume of a between-round control signal: if BASE/.${type}-${kind}
 # exists, emit its contents on stdout and delete it; otherwise return 1 with no
-# output. The consume side of the stop/steer contract — harden's
-# almanac_harden_consume_stop/steer wrappers and converge's two inline
-# `if [ -f $steer ]; cat; rm` blocks were three copies of this idiom; this is
+# output. The consume side of the stop/steer contract — converge's two inline
+# `if [ -f $steer ]; cat; rm` blocks were copies of this idiom; this is
 # the seam they collapse onto. Empty file is treated as "present but empty" —
 # returns 0 with empty stdout — matching the pre-deepening behaviour each
-# caller already implemented (harden treats empty steer as "no directive" via
+# caller already implemented (converge treats empty steer as "no directive" via
 # the `[ -n "$dir" ]` check downstream). Returns 1 when the kind/type is
 # unknown OR when the file is absent — callers that need to distinguish read
 # `almanac_loop_run_control_file` themselves first.
@@ -1018,7 +1016,7 @@ almanac_loop_consume_signal() {
 # signal file's name via the loop adapter (signal_file verb) and its directory
 # via the adapter override (signal_dir verb, defaults to $root), then write CONTENT
 # to <signal_dir>/<signal_file>. signal_dir routes through the loop adapter so
-# loop/harden default to $root while converge scopes signals to the run's plan
+# loop defaults to $root while converge scopes signals to the run's plan
 # dir (stopping one converge run doesn't halt another that shares the workspace);
 # the directory is created if missing so a run that registered but never
 # scaffolded its plan dir (quick abort) still accepts a signal harmlessly.
@@ -1176,8 +1174,7 @@ almanac_loop_run_watch() {
 #
 # Config arrives as `key=value` pairs (the keys the gum menu / --new flags
 # collect): loop takes the spec name (legacy wire key `prd`), mode, provider,
-# model, effort, iterations, oversee;
-# harden takes target, rounds, lenses, provider, model, effort; converge takes
+# model, effort, iterations, oversee; converge takes
 # goal, prompt/exec, rounds, provider, model, effort, oversee, oversee_every.
 
 # Compose the launcher argv for a new run, one token per line, starting with the

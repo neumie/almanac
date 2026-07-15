@@ -40,7 +40,7 @@ echo "=== CLI Dispatch Tests ==="
 # bash 3.2 a single `local name=… file=…$name…` resolves the caller's name —
 # this calls it with a conflicting `name` in scope to catch that regression.
 meta_isolation_check() {
-  local name="harden"   # deliberately wrong; helper must ignore this
+  local name="bogus"   # deliberately wrong; helper must ignore this
   local got
   got="$(almanac_command_meta converge summary)"
   case "$got" in
@@ -53,7 +53,7 @@ meta_isolation_check
 # Registry is non-empty and lists the commands we expect to exist.
 COMMANDS="$(almanac_list_commands)"
 [ -n "$COMMANDS" ] && pass "registry lists commands" || failf "registry is empty"
-for expected in help install uninstall list update sync doctor loop harden converge hub; do
+for expected in help install uninstall list update sync doctor loop converge hub; do
   case $'\n'"$COMMANDS"$'\n' in
     *$'\n'"$expected"$'\n'*) pass "registry includes '$expected'" ;;
     *)                       failf "registry missing '$expected'" ;;

@@ -4,8 +4,8 @@
 # Sources lib/feedback.sh DIRECTLY (not through loop-core) so the feedback
 # engine — almanac_loop_feedback_commands (detection) and
 # almanac_loop_feedback_run (runner) — is its own test surface. These pin the
-# marker-file → command mapping (shared by Loop's prompt and harden's fixer)
-# and the per-loop pass/fail verdict + aggregate exit code the fixer gates on.
+# marker-file → command mapping (used by Loop's prompt)
+# and the per-loop pass/fail verdict + aggregate exit code a caller gates on.
 
 set -euo pipefail
 
@@ -92,7 +92,7 @@ EOF
 
 # Regression: a package.json that omits a feedback script must NOT emit it — else
 # `npm run <missing>` exits "Missing script" every round, a phantom FAIL that jams
-# the harden convergence gate. Only the scripts that actually exist are run.
+# any gate that reads the verdict. Only the scripts that actually exist are run.
 test_npm_feedback_skips_undefined_scripts() {
   local tmp expected actual
   command -v node >/dev/null 2>&1 || { echo "  SKIP: node absent (gate falls back to emit-all)"; return 0; }

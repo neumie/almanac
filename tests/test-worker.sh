@@ -102,7 +102,7 @@ test_worker_start_tracks_background_agent() {
 
   PATH="$fakebin:$PATH" almanac_loop_worker_start \
     "$tmp" \
-    "harden-demo-001" \
+    "loop-demo-001" \
     "reviewer-security" \
     "codex" \
     "gpt-worker" \
@@ -114,15 +114,15 @@ test_worker_start_tracks_background_agent() {
   pid="$(cat "$tmp/worker-pid.txt")"
   wait "$pid"
 
-  status_file="$tmp/.almanac/runs/harden-demo-001/workers/reviewer-security/status.tsv"
-  events_file="$tmp/.almanac/runs/harden-demo-001/workers/reviewer-security/events.jsonl"
-  result_file="$tmp/.almanac/runs/harden-demo-001/workers/reviewer-security/result.txt"
+  status_file="$tmp/.almanac/runs/loop-demo-001/workers/reviewer-security/status.tsv"
+  events_file="$tmp/.almanac/runs/loop-demo-001/workers/reviewer-security/events.jsonl"
+  result_file="$tmp/.almanac/runs/loop-demo-001/workers/reviewer-security/result.txt"
 
   [ -f "$status_file" ] || fail "worker should write status file"
   [ -f "$events_file" ] || fail "worker should write event log"
   [ -f "$result_file" ] || fail "worker should write result file"
   assert_file_contains "$status_file" $'id\treviewer-security' "worker status should record id"
-  assert_file_contains "$status_file" $'run_id\tharden-demo-001' "worker status should record run id"
+  assert_file_contains "$status_file" $'run_id\tloop-demo-001' "worker status should record run id"
   assert_file_contains "$status_file" $'provider\tcodex' "worker status should record provider"
   assert_file_contains "$status_file" $'sandbox\tread-only' "worker status should record sandbox"
   assert_file_contains "$status_file" $'status\tdone' "worker status should mark successful completion"
@@ -141,7 +141,7 @@ test_worker_watch_streams_event_log() {
   local tmp run_id wdir events out rc perfdir
   new_tmpdir
   tmp="$NEW_TMPDIR"
-  run_id="harden-demo-001"
+  run_id="loop-demo-001"
   wdir="$tmp/.almanac/runs/$run_id/workers/reviewer-security"
   mkdir -p "$wdir"
   events="$wdir/events.jsonl"
