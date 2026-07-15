@@ -54,7 +54,7 @@ PROMPT="docs/plans/${SPEC_NAME}/prompt.md"
 
 # Iteration-agent role config resolves through the shared engine helper
 # (almanac_loop_role_field): LOOP_AGENT_<FIELD> -> LOOP_<FIELD> -> default, the
-# same precedence harden's roles use (#66 crit 3 — loop uses the shared role
+# same precedence the shared engine's roles use (#66 crit 3 — loop uses the shared role
 # config). LOOP_PROVIDER/LOOP_MODEL/LOOP_EFFORT still work (the fallback); the
 # new LOOP_AGENT_* keys now override per-role. An explicit provider config wins;
 # absent it, loop's CLI auto-detection (CODEX_THREAD_ID, then installed CLI)

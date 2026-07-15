@@ -15,7 +15,7 @@ docs/plans/*/*-codex-*.log
 docs/plans/*/agent-reports.log
 docs/plans/*/overseer.log
 
-# converge-loop runtime artifacts (one level deeper than loop/harden because
+# converge-loop runtime artifacts (one level deeper than loop because
 # plan dirs live under docs/plans/converge/<slug>/). The static records that
 # survive a run — goal.md, convergence.md, prompt.md, goal.history.log — stay
 # tracked; the per-round event streams and overseer/agent appendix logs get

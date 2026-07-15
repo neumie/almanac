@@ -74,16 +74,14 @@ almanac install codex                        # same, for ~/.codex/AGENTS.md
 
 `almanac help` lists every command and `almanac <command> --help` shows its flags. Dispatch and help are registry-driven (one file per command under `cmd/`), so the listing never drifts from what's installed.
 
-- **Loops** — `loop`, `harden`, `converge`, and `hub` (the interactive front door: list / watch / launch loops)
+- **Loops** — `loop`, `converge`, and `hub` (the interactive front door: list / watch / launch loops)
 - **Providers** — `install`, `uninstall`, `list`
 - **Maintenance** — `update`, `sync`, `doctor`
 
 ```bash
 almanac                                     # loop hub on a TTY, else this help
-almanac harden <target>                     # fan out reviewers; --loop to converge, --watch to supervise
-almanac harden <target> --help              # full flag list (--goal/--approve/--fix/--loop/…)
 almanac converge --goal "…" --prompt "…"    # generic convergence loop (--exec for a shell command)
-almanac hub --new <loop|harden|converge>   # launch a run (add --dry-run to preview)
+almanac hub --new <loop|converge>          # launch a run (add --dry-run to preview)
 almanac install claude-code                 # install skills for an agent
 ```
 
@@ -91,7 +89,6 @@ almanac install claude-code                 # install skills for an agent
 
 ```bash
 almanac loop
-almanac harden lib/role.sh --loop --rounds 3
 almanac converge \
   --goal "Improve the codebase until no major architecture friction remains" \
   --exec "claude -p '/almanac:codebase-improve'" \
@@ -104,15 +101,12 @@ almanac converge \
 bin/almanac
 cmd/
   converge.sh
-  harden.sh
   loop.sh
 lib/
   converge-core.sh
-  harden-core.sh
   loop-launcher.sh
   loops/
     converge.sh
-    harden.sh
     loop.sh
 skills/
   loop/

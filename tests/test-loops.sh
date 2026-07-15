@@ -25,11 +25,9 @@ test_discovery_lists_present_adapters() {
   local list
   list="$(almanac_loop_adapter_list)"
   case "$list" in *loop*) ;; *) fail "loop list should include the loop adapter file" ;; esac
-  case "$list" in *harden*) ;; *) fail "loop list should include the harden adapter file" ;; esac
   case "$list" in *converge*) ;; *) fail "loop list should include the converge adapter file" ;; esac
 
   almanac_loop_adapter_known loop  || fail "loop must be a known loop"
-  almanac_loop_adapter_known harden || fail "harden must be a known loop"
   almanac_loop_adapter_known converge || fail "converge must be a known loop"
   almanac_loop_adapter_known LOOP  || fail "known must normalise case (LOOP -> loop)"
   if almanac_loop_adapter_known bogus; then fail "an undiscovered name must not be known"; fi
@@ -47,8 +45,6 @@ test_new_run_usage_contract() {
   local out
   out="$(almanac_loop_adapter_call loop new_run_usage)"
   case "$out" in *"--prd"*) ;; *) fail "loop new_run_usage should mention --prd" ;; esac
-  out="$(almanac_loop_adapter_call harden new_run_usage)"
-  case "$out" in *"--target"*) ;; *) fail "harden new_run_usage should mention --target" ;; esac
   out="$(almanac_loop_adapter_call converge new_run_usage)"
   case "$out" in *"--goal"*--prompt*--exec*) ;; *) fail "converge new_run_usage should mention goal plus prompt/exec" ;; esac
   echo "  PASS: new_run_usage contract"
@@ -59,11 +55,9 @@ test_signal_file_control_contract() {
   # convention from lib/loops.sh). Adapters that follow the standard
   # `.${name}-${kind}` pattern need not define signal_file at all — the default
   # provides it. Test at the public resolver, not the adapter, so deleting the
-  # three identical adapter functions doesn't break this surface.
+  # per-loop adapter functions doesn't break this surface.
   assert_eq ".loop-stop"   "$(almanac_loop_signal_file loop stop)"   "loop stop file basename"
   assert_eq ".loop-steer"  "$(almanac_loop_signal_file loop steer)"  "loop steer file basename"
-  assert_eq ".harden-stop"  "$(almanac_loop_signal_file harden stop)"  "harden stop file basename"
-  assert_eq ".harden-steer" "$(almanac_loop_signal_file harden steer)" "harden steer file basename"
   assert_eq ".converge-stop" "$(almanac_loop_signal_file converge stop)" "converge stop file basename"
   assert_eq ".converge-steer" "$(almanac_loop_signal_file converge steer)" "converge steer file basename"
 
@@ -97,19 +91,6 @@ test_loop_exec_argv_launch_contract() {
   almanac_loop_adapter_call loop exec_argv bogus "demo-prd" >/dev/null 2>&1 || rc=$?
   assert_eq 2 "$rc" "an unknown loop mode should be rejected"
   echo "  PASS: loop exec_argv launch contract"
-}
-
-test_harden_exec_argv_launch_contract() {
-  local ALMANAC_HOME="/fake/home"
-
-  almanac_loop_adapter_call harden exec_argv "src/foo.sh"
-  assert_eq "bash /fake/home/bin/almanac harden src/foo.sh --loop" \
-    "${_ALMANAC_LOOP_ARGV[*]}" "harden exec argv (no rounds)"
-
-  almanac_loop_adapter_call harden exec_argv "src/foo.sh" "3"
-  assert_eq "bash /fake/home/bin/almanac harden src/foo.sh --loop --rounds 3" \
-    "${_ALMANAC_LOOP_ARGV[*]}" "harden exec argv (with rounds)"
-  echo "  PASS: harden exec_argv launch contract"
 }
 
 test_converge_exec_argv_launch_contract() {
@@ -172,7 +153,6 @@ test_dispatch_rejects_unknown_verb
 test_new_run_usage_contract
 test_signal_file_control_contract
 test_loop_exec_argv_launch_contract
-test_harden_exec_argv_launch_contract
 test_converge_exec_argv_launch_contract
 test_kv_get_picks_value
 

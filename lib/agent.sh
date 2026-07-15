@@ -173,7 +173,7 @@ _almanac_agent_extract() {
 
 # capture: run the provider silently, capturing the raw event stream to
 # EVENTS_FILE and (for adapters with an extract hook) the final result to
-# RESULT_FILE. No stdout — the harden fan-out / ratify / fixer and loop's
+# RESULT_FILE. No stdout — converge's workers and loop's
 # overseer all discard it. A direct redirect (no pipe) keeps $? as the provider's
 # exit so a failure propagates.
 # Usage: almanac_loop_agent_capture <provider> <model> <effort> <sandbox> \

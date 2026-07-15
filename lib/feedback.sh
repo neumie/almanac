@@ -3,8 +3,8 @@
 #
 # The feedback loops are a project's objective gate: the test/typecheck/lint
 # commands implied by its marker files (package.json, Cargo.toml, …). Detection
-# maps marker files to commands (shared by Loop's prompt and harden's fixer, so
-# both run the same gate with no per-project config); the runner executes them
+# maps marker files to commands (used by Loop's prompt so it runs the gate with
+# no per-project config); the runner executes them
 # and reports a pass/fail verdict per loop.
 #
 # Self-contained like lib/role.sh / lib/run.sh: uses only printf/tr/mkdir/eval
@@ -20,7 +20,7 @@
 # loops so a project that has a package.json but no `typecheck` (or `test`/`lint`)
 # script does NOT get `npm run typecheck` run against it — a missing script makes
 # `npm run X` exit with "Missing script", a phantom FAIL that can never go green
-# and so silently jams the harden convergence gate (acceptance is never met even
+# and so silently jams any gate that reads the verdict (it can never go green even
 # when the code is perfect). Parses with node, reading fresh each call (never
 # `require`, which would cache a stale package.json across rounds). Any repo with a
 # package.json is a node project, so node is normally present; if it is absent we

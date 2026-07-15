@@ -4,7 +4,7 @@
 # Per CONTEXT.md's module map, this owns the WRITE/spawn side of a run's workers:
 # write/mark a worker's status.tsv, spawn a provider run in the background
 # (almanac_loop_worker_start — the fan-out), and stream one worker's live event
-# log (almanac_loop_worker_watch). harden's reviewer/fixer fan-out is the
+# log (almanac_loop_worker_watch). A fan-out loop's reviewer/fixer workers are the
 # consumer; the run-level registry, the worker PATH helpers + the worker-health
 # read views live in lib/run.sh (this is the orchestration layer on top of them).
 #

@@ -68,7 +68,7 @@ test_hub_command_renders_registry_overview() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "hub-live" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "converge" "src/app.js" "$$" "hub-live" "2026-05-25T12:00:00Z" >/dev/null
   almanac_loop_update_run_progress "$tmp" "hub-live" "3" "reviewers: security,perf"
   almanac_loop_register_run "$tmp" "loop" "docs/plans/x/prd.md" "$$" "hub-done" "2026-05-25T11:00:00Z" >/dev/null
   almanac_loop_mark_run_status "$tmp" "hub-done" "done" "2026-05-25T11:30:00Z"
@@ -124,7 +124,7 @@ test_hub_watch_renders_run_detail() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "watch-cli" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "converge" "src/app.js" "$$" "watch-cli" "2026-05-25T12:00:00Z" >/dev/null
   almanac_loop_update_run_progress "$tmp" "watch-cli" "4" "lenses=security open-blocking=1"
 
   out="$(cd "$tmp" && ALMANAC_NO_GUM=1 "$ALMANAC_BIN" hub --watch watch-cli </dev/null 2>&1)"
@@ -147,27 +147,10 @@ test_hub_new_dry_run_composes_loop_launch() {
   echo "  PASS: hub --new loop dry-run composes the launch"
 }
 
-# Criterion 3: `almanac hub --new harden … --dry-run` composes the harden
-# convergence-loop launch — its --rounds flag plus the HARDEN_* env its reviewer
-# config rides on.
-test_hub_new_dry_run_composes_harden_launch() {
-  local out
-  out="$("$ALMANAC_BIN" hub --new harden --target src/app.js --rounds 2 --lenses security,perf --provider codex --dry-run </dev/null 2>&1)"
-  assert_contains "$out" "harden src/app.js --loop" "harden dry-run shows the loop launch"
-  assert_contains "$out" "--rounds 2" "harden dry-run shows --rounds"
-  assert_contains "$out" "HARDEN_LENSES=security,perf" "harden dry-run shows the lenses env"
-  assert_contains "$out" "HARDEN_PROVIDER=codex" "harden dry-run shows the provider env"
-  echo "  PASS: hub --new harden dry-run composes the launch"
-}
-
-# Criterion 3: a new run missing its required config (harden target) is rejected
+# Criterion 3: a new run missing its required config (a converge goal) is rejected
 # with a non-zero exit rather than launching a malformed run.
 test_hub_new_missing_required_errors() {
   local rc=0 out
-  out="$("$ALMANAC_BIN" hub --new harden --rounds 2 --dry-run </dev/null 2>&1)" || rc=$?
-  [ "$rc" -ne 0 ] || fail "hub --new harden without a target must exit non-zero"
-  assert_contains "$out" "--target" "missing harden config should use the adapter's hint"
-  rc=0
   out="$("$ALMANAC_BIN" hub --new converge --exec "echo hi" --dry-run </dev/null 2>&1)" || rc=$?
   [ "$rc" -ne 0 ] || fail "hub --new converge without --goal must exit non-zero"
   assert_contains "$out" "--goal" "missing converge config should use the adapter's hint"
@@ -185,7 +168,6 @@ test_hub_new_unknown_type_lists_discovered_loops() {
   out="$("$ALMANAC_BIN" hub --new bogus --dry-run </dev/null 2>&1)" || rc=$?
   [ "$rc" -ne 0 ] || fail "hub --new unknown type must exit non-zero"
   assert_contains "$out" "loop" "unknown-type error should list loop"
-  assert_contains "$out" "harden" "unknown-type error should list harden"
   assert_contains "$out" "converge" "unknown-type error should list converge"
   echo "  PASS: hub --new unknown type lists discovered loops"
 }
@@ -214,8 +196,7 @@ test_hub_new_dry_run_composes_converge_prompt_launch() {
 }
 
 # Criterion 3: `almanac hub --new converge … --dry-run` composes the converge
-# launch — goal + exec on argv, role config in env (CONVERGE_*), same shape
-# split as harden.
+# launch — goal + exec on argv, role config in env (CONVERGE_*).
 test_hub_new_dry_run_composes_converge_launch() {
   local out
   out="$("$ALMANAC_BIN" hub --new converge \
@@ -236,38 +217,11 @@ test_hub_new_dry_run_composes_converge_launch() {
   assert_contains "$out" "CONVERGE_PROVIDER=codex"        "converge dry-run shows the provider env"
   assert_contains "$out" "CONVERGE_MODEL=gpt-5.5"         "converge dry-run shows the model env"
   assert_contains "$out" "CONVERGE_EFFORT=high"           "converge dry-run shows the effort env"
-  # Provider/model/effort must NOT appear as flags — they ride on env, same
-  # split as harden.
+  # Provider/model/effort must NOT appear as flags — they ride on env.
   case "$out" in
     *"--provider codex"*) fail "converge --provider must ride on env, not argv" ;;
   esac
   echo "  PASS: hub --new converge dry-run composes the launch"
-}
-
-test_hub_resume_harden_does_not_append_yes() {
-  local tmp out rc=0
-  new_tmpdir
-  tmp="$NEW_TMPDIR"
-
-  almanac_loop_register_run "$tmp" "harden" "src/missing.js" "2147483647" "harden-resume" "2026-05-25T12:00:00Z" >/dev/null
-  almanac_loop_set_run_config "$tmp" "harden-resume" "lenses=correctness" "rounds=2"
-  almanac_loop_mark_run_status "$tmp" "harden-resume" "done" "2026-05-25T12:10:00Z"
-
-  # Targets are free-form now, so a non-existent path no longer _die's; draft an
-  # (unapproved) rubric for the target so the resumed runner _die's at the
-  # rubric-approval gate instead — still a deterministic "reached the runner"
-  # signal that proves the launcher-only --yes flag was NOT appended to the argv.
-  (cd "$tmp" && "$ALMANAC_BIN" harden "src/missing.js" --goal "x" >/dev/null 2>&1) || true
-
-  out="$(cd "$tmp" && "$ALMANAC_BIN" hub --resume harden-resume </dev/null 2>&1)" || rc=$?
-
-  [ "$rc" -ne 0 ] || fail "resuming a harden run with an unapproved rubric should fail before review"
-  case "$out" in
-    *"Unknown harden option: --yes"*) fail "hub resume must not append launcher-only --yes to harden argv" ;;
-    *) ;;
-  esac
-  assert_contains "$out" "Rubric not approved" "harden resume should reach the harden runner without --yes"
-  echo "  PASS: hub resume harden does not append --yes"
 }
 
 echo "=== Hub Tests ==="
@@ -277,11 +231,9 @@ test_hub_steer_queues_directive
 test_hub_stop_signals_run
 test_hub_watch_renders_run_detail
 test_hub_new_dry_run_composes_loop_launch
-test_hub_new_dry_run_composes_harden_launch
 test_hub_new_dry_run_composes_converge_launch
 test_hub_new_dry_run_composes_converge_prompt_launch
 test_hub_new_missing_required_errors
 test_hub_new_unknown_type_lists_discovered_loops
-test_hub_resume_harden_does_not_append_yes
 echo ""
 echo "All hub tests passed."

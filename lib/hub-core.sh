@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # hub-core.sh — the hub's composable logic, split out from cmd/hub.sh so it is
 # unit-testable in isolation (cmd/hub.sh is a self-executing parse+dispatch
-# shim). Mirrors the harden-core / converge-core split: the cmd file owns argv
+# shim). Mirrors the converge-core split: the cmd file owns argv
 # and terminal handover; this file owns the loop-listing, new-run composer, the
 # interactive menu, and the resume/clone status inverter.
 #
@@ -21,7 +21,7 @@ _almanac_source_sibling run.sh          almanac_loop_run_status_file
 _almanac_source_sibling ui.sh           almanac_loop_ui_choose
 _almanac_source_sibling loop-launcher.sh almanac_loop_launch
 
-# Pipe-joined list of known loop names (e.g. "loop|harden|converge"), for usage
+# Pipe-joined list of known loop names (e.g. "loop|converge"), for usage
 # strings — discovered from the loop-adapter seam, never hard-coded.
 almanac_hub_loop_names_inline() {
   local names=() name
@@ -175,8 +175,8 @@ almanac_hub_menu() {
 # loop-agnostic: the adapter's `status_to_opts` verb inverts its own status
 # schema into key=val pairs the new_run composers consume; the `launch_backed`
 # verb signals whether `--yes` (a launcher-only flag) is safe to append on
-# resume — direct-runner loops (harden, converge) leave it undefined and never
-# get the suffix. Reads $ROOT from the caller (cmd/hub.sh) for the run lookup.
+# resume — the direct-runner loop (converge) leaves it undefined and never
+# gets the suffix. Reads $ROOT from the caller (cmd/hub.sh) for the run lookup.
 almanac_hub_resume_or_clone() {
   local mode="$1" run_id="$2"
   local status_file run_type argv env_raw opts_raw

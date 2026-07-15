@@ -10,7 +10,7 @@
 #   - WORKER HEALTH: the pure classifier + the gather wrapper
 #   - the HUB read-views: running/recent render, overview, per-run detail/watch
 #   - CONTROL: stop/steer signal-file dispatch (via the loop adapter)
-#   - the NEW-RUN composer: argv/env for loop + harden
+#   - the NEW-RUN composer: argv/env for loop + converge
 # The worker ORCHESTRATION (background fan-out) lives in lib/worker.sh and is
 # tested in tests/test-worker.sh.
 
@@ -113,14 +113,14 @@ test_record_set_round_trips_untouched_fields() {
   new_tmpdir; tmp="$NEW_TMPDIR"; file="$tmp/status.tsv"
 
   almanac_loop_record_set "$file" \
-    "id=r1" "type=harden" "target=src/app.js" "pid=42" "status=running" "started_at=T0"
+    "id=r1" "type=converge" "target=src/app.js" "pid=42" "status=running" "started_at=T0"
   # update only live progress
   almanac_loop_record_set "$file" "round=3" "summary=lenses=security open-blocking=2"
   # mark terminal
   almanac_loop_record_set "$file" "status=done" "finished_at=T1"
 
   assert_eq "r1"         "$(almanac_loop_record_get "$file" id)"          "id preserved across sets"
-  assert_eq "harden"     "$(almanac_loop_record_get "$file" type)"        "type preserved"
+  assert_eq "converge"   "$(almanac_loop_record_get "$file" type)"        "type preserved"
   assert_eq "src/app.js" "$(almanac_loop_record_get "$file" target)"      "target preserved"
   assert_eq "42"         "$(almanac_loop_record_get "$file" pid)"         "pid preserved"
   assert_eq "T0"         "$(almanac_loop_record_get "$file" started_at)"  "started_at preserved"
@@ -162,21 +162,21 @@ test_record_set_requires_file_arg() {
 }
 
 test_records_share_identical_key_set_by_construction() {
-  local tmp loop harden loop_keys harden_keys
+  local tmp loop conv loop_keys conv_keys
   new_tmpdir; tmp="$NEW_TMPDIR"
-  loop="$tmp/loop.tsv"; harden="$tmp/harden.tsv"
+  loop="$tmp/loop.tsv"; conv="$tmp/converge.tsv"
 
   # Two loops set DIFFERENT subsets — the key set must still be identical because
   # both writes iterate the one canonical field list.
   almanac_loop_record_set "$loop" \
     "id=a" "type=loop" "target=prd.md" "status=running"
-  almanac_loop_record_set "$harden" \
-    "id=b" "type=harden" "target=src/x.js" "status=running" "round=1" "summary=lenses=security"
+  almanac_loop_record_set "$conv" \
+    "id=b" "type=converge" "target=src/x.js" "status=running" "round=1" "summary=lenses=security"
 
   loop_keys="$(cut -f1 "$loop")"
-  harden_keys="$(cut -f1 "$harden")"
-  assert_eq "$loop_keys" "$harden_keys" \
-    "loop and harden records must carry an identical key set by construction"
+  conv_keys="$(cut -f1 "$conv")"
+  assert_eq "$loop_keys" "$conv_keys" \
+    "loop and converge records must carry an identical key set by construction"
   assert_eq "$(almanac_loop_record_fields)" "$loop_keys" \
     "the shared key set must be the canonical schema"
   echo "  PASS: records share an identical key set by construction"
@@ -214,12 +214,12 @@ test_index_row_projects_status_file_into_tab_row() {
   new_tmpdir; tmp="$NEW_TMPDIR"; file="$tmp/status.tsv"
 
   almanac_loop_record_set "$file" \
-    "id=r1" "type=harden" "target=src/app.js" "pid=4242" \
+    "id=r1" "type=converge" "target=src/app.js" "pid=4242" \
     "status_file=.almanac/runs/r1/status.tsv" "started_at=2026-05-25T12:00:00Z" \
     "status=running"
 
   row="$(almanac_loop_index_row "$file")"
-  expected=$'r1\tharden\tsrc/app.js\t4242\t.almanac/runs/r1/status.tsv\t2026-05-25T12:00:00Z\trunning'
+  expected=$'r1\tconverge\tsrc/app.js\t4242\t.almanac/runs/r1/status.tsv\t2026-05-25T12:00:00Z\trunning'
   assert_eq "$expected" "$row" "index_row must project the canonical 7 columns, tab-joined"
   echo "  PASS: index_row projects status file into the canonical row format"
 }
@@ -229,22 +229,22 @@ test_registers_run_in_registry() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  run_id="$(almanac_loop_register_run "$tmp" "harden" "src/app.js" "4242" "harden-src-app-js-001" "2026-05-25T12:00:00Z")"
-  status_file="$tmp/.almanac/runs/harden-src-app-js-001/status.tsv"
+  run_id="$(almanac_loop_register_run "$tmp" "converge" "src/app.js" "4242" "converge-src-app-js-001" "2026-05-25T12:00:00Z")"
+  status_file="$tmp/.almanac/runs/converge-src-app-js-001/status.tsv"
   index_file="$tmp/.almanac/runs/index.tsv"
 
   expected_index=$(cat <<'EOF'
 id	type	target	pid	status_file	started_at	status
-harden-src-app-js-001	harden	src/app.js	4242	.almanac/runs/harden-src-app-js-001/status.tsv	2026-05-25T12:00:00Z	running
+converge-src-app-js-001	converge	src/app.js	4242	.almanac/runs/converge-src-app-js-001/status.tsv	2026-05-25T12:00:00Z	running
 EOF
 )
 
-  assert_eq "harden-src-app-js-001" "$run_id" "register should print run id"
+  assert_eq "converge-src-app-js-001" "$run_id" "register should print run id"
   [ -f "$status_file" ] || fail "register should write run status file"
   [ -f "$index_file" ] || fail "register should write run index"
   assert_eq "$expected_index" "$(cat "$index_file")" "run index should capture launched run"
-  assert_file_contains "$status_file" $'id\tharden-src-app-js-001' "status should record id"
-  assert_file_contains "$status_file" $'type\tharden' "status should record type"
+  assert_file_contains "$status_file" $'id\tconverge-src-app-js-001' "status should record id"
+  assert_file_contains "$status_file" $'type\tconverge' "status should record type"
   assert_file_contains "$status_file" $'target\tsrc/app.js' "status should record target"
   assert_file_contains "$status_file" $'pid\t4242' "status should record pid"
   assert_file_contains "$status_file" $'status\trunning' "status should start running"
@@ -274,10 +274,10 @@ test_update_run_progress_records_round_and_summary() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "harden" "src/app.js" "4242" "harden-demo-002" "2026-05-25T12:00:00Z" >/dev/null
-  almanac_loop_update_run_progress "$tmp" "harden-demo-002" "2" "reviewers: security,perf,correctness"
+  almanac_loop_register_run "$tmp" "converge" "src/app.js" "4242" "converge-demo-002" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_update_run_progress "$tmp" "converge-demo-002" "2" "reviewers: security,perf,correctness"
 
-  status_file="$tmp/.almanac/runs/harden-demo-002/status.tsv"
+  status_file="$tmp/.almanac/runs/converge-demo-002/status.tsv"
   assert_file_contains "$status_file" $'round\t2' "progress update should record the round/iteration"
   assert_file_contains "$status_file" $'summary\treviewers: security,perf,correctness' "progress update should record the worker/lens summary"
   assert_file_contains "$status_file" $'status\trunning' "progress update must not change lifecycle status"
@@ -291,17 +291,17 @@ test_mark_run_aborted_preserves_progress() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "harden" "src/app.js" "4242" "harden-demo-003" "2026-05-25T12:00:00Z" >/dev/null
-  almanac_loop_update_run_progress "$tmp" "harden-demo-003" "3" "reviewers: security"
-  almanac_loop_mark_run_status "$tmp" "harden-demo-003" "aborted" "2026-05-25T12:30:00Z"
+  almanac_loop_register_run "$tmp" "converge" "src/app.js" "4242" "converge-demo-003" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_update_run_progress "$tmp" "converge-demo-003" "3" "reviewers: security"
+  almanac_loop_mark_run_status "$tmp" "converge-demo-003" "aborted" "2026-05-25T12:30:00Z"
 
-  status_file="$tmp/.almanac/runs/harden-demo-003/status.tsv"
+  status_file="$tmp/.almanac/runs/converge-demo-003/status.tsv"
   index_file="$tmp/.almanac/runs/index.tsv"
   assert_file_contains "$status_file" $'status\taborted' "aborted is a valid terminal state"
   assert_file_contains "$status_file" $'finished_at\t2026-05-25T12:30:00Z' "aborted run should record finish time"
   assert_file_contains "$status_file" $'round\t3' "marking a run must preserve recorded round"
   assert_file_contains "$status_file" $'summary\treviewers: security' "marking a run must preserve recorded summary"
-  assert_file_contains "$index_file" $'harden-demo-003\tharden\tsrc/app.js\t4242\t.almanac/runs/harden-demo-003/status.tsv\t2026-05-25T12:00:00Z\taborted' "index should reflect aborted status"
+  assert_file_contains "$index_file" $'converge-demo-003\tconverge\tsrc/app.js\t4242\t.almanac/runs/converge-demo-003/status.tsv\t2026-05-25T12:00:00Z\taborted' "index should reflect aborted status"
   echo "  PASS: mark run aborted preserves progress"
 }
 
@@ -385,19 +385,19 @@ test_run_is_stale_detects_dead_pid() {
   tmp="$NEW_TMPDIR"
 
   # A running entry whose pid is long dead is stale.
-  almanac_loop_register_run "$tmp" "harden" "src/app.js" "2147483647" "harden-dead" "2026-05-25T12:00:00Z" >/dev/null
-  rc=0; almanac_loop_run_is_stale "$tmp" "harden-dead" || rc=$?
+  almanac_loop_register_run "$tmp" "converge" "src/app.js" "2147483647" "converge-dead" "2026-05-25T12:00:00Z" >/dev/null
+  rc=0; almanac_loop_run_is_stale "$tmp" "converge-dead" || rc=$?
   assert_eq "0" "$rc" "a running entry with a dead pid must be detected as stale"
 
   # A running entry whose pid is alive (this test process) is not stale.
-  almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "harden-alive" "2026-05-25T12:00:00Z" >/dev/null
-  rc=0; almanac_loop_run_is_stale "$tmp" "harden-alive" || rc=$?
+  almanac_loop_register_run "$tmp" "converge" "src/app.js" "$$" "converge-alive" "2026-05-25T12:00:00Z" >/dev/null
+  rc=0; almanac_loop_run_is_stale "$tmp" "converge-alive" || rc=$?
   assert_eq "1" "$rc" "a running entry with a live pid must not be stale"
 
   # A terminal entry is never stale regardless of pid.
-  almanac_loop_register_run "$tmp" "harden" "src/app.js" "2147483647" "harden-done" "2026-05-25T12:00:00Z" >/dev/null
-  almanac_loop_mark_run_status "$tmp" "harden-done" "done" "2026-05-25T12:10:00Z"
-  rc=0; almanac_loop_run_is_stale "$tmp" "harden-done" || rc=$?
+  almanac_loop_register_run "$tmp" "converge" "src/app.js" "2147483647" "converge-done" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_mark_run_status "$tmp" "converge-done" "done" "2026-05-25T12:10:00Z"
+  rc=0; almanac_loop_run_is_stale "$tmp" "converge-done" || rc=$?
   assert_eq "1" "$rc" "a finished run is never stale"
   echo "  PASS: run is stale detects dead pid"
 }
@@ -411,12 +411,12 @@ test_list_runs_returns_all_registered_runs() {
   rc=0; almanac_loop_list_runs "$tmp" >/dev/null 2>&1 || rc=$?
   [ "$rc" -ne 0 ] || fail "listing runs with no registry should report no runs"
 
-  almanac_loop_register_run "$tmp" "harden" "src/app.js" "11" "harden-a" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "converge" "src/app.js" "11" "converge-a" "2026-05-25T12:00:00Z" >/dev/null
   almanac_loop_register_run "$tmp" "loop" "docs/plans/demo/prd.md" "22" "loop-b" "2026-05-25T12:01:00Z" >/dev/null
 
   out="$(almanac_loop_list_runs "$tmp")"
   assert_eq "2" "$(printf '%s\n' "$out" | grep -c '[^[:space:]]')" "list should return one row per run, no header"
-  assert_contains "$out" "harden-a" "list should include the harden run"
+  assert_contains "$out" "converge-a" "list should include the converge run"
   assert_contains "$out" "loop-b" "list should include the loop run"
   case "$out" in
     id*) fail "list should not include the index header row" ;;
@@ -429,12 +429,12 @@ test_read_run_returns_single_run_status() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "harden" "src/app.js" "4242" "harden-read" "2026-05-25T12:00:00Z" >/dev/null
-  almanac_loop_update_run_progress "$tmp" "harden-read" "4" "reviewers: security,perf"
+  almanac_loop_register_run "$tmp" "converge" "src/app.js" "4242" "converge-read" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_update_run_progress "$tmp" "converge-read" "4" "reviewers: security,perf"
 
-  out="$(almanac_loop_read_run "$tmp" "harden-read")"
-  assert_contains "$out" $'id\tharden-read' "read should return the run id"
-  assert_contains "$out" $'type\tharden' "read should return the run type"
+  out="$(almanac_loop_read_run "$tmp" "converge-read")"
+  assert_contains "$out" $'id\tconverge-read' "read should return the run id"
+  assert_contains "$out" $'type\tconverge' "read should return the run type"
   assert_contains "$out" $'round\t4' "read should return the live round"
   assert_contains "$out" $'summary\treviewers: security,perf' "read should return the worker/lens summary"
 
@@ -459,7 +459,7 @@ test_worker_health_of_reads_state() {
   local tmp run_id wdir events now health
   new_tmpdir
   tmp="$NEW_TMPDIR"
-  run_id="harden-demo-001"
+  run_id="converge-demo-001"
   wdir="$tmp/.almanac/runs/$run_id/workers/reviewer-security"
   mkdir -p "$wdir"
   events="$wdir/events.jsonl"
@@ -495,21 +495,21 @@ test_hub_render_lists_running_with_live_status() {
 
   # A live run (this process's pid), a crashed run (dead pid, never marked), and
   # a finished run.
-  almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "harden-live" "2026-05-25T12:00:00Z" >/dev/null
-  almanac_loop_update_run_progress "$tmp" "harden-live" "2" "reviewers: security,perf"
+  almanac_loop_register_run "$tmp" "converge" "src/app.js" "$$" "converge-live" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_update_run_progress "$tmp" "converge-live" "2" "reviewers: security,perf"
   almanac_loop_register_run "$tmp" "loop" "docs/plans/x/prd.md" "2147483647" "loop-dead" "2026-05-25T12:01:00Z" >/dev/null
-  almanac_loop_register_run "$tmp" "harden" "src/old.js" "$$" "harden-fin" "2026-05-25T11:00:00Z" >/dev/null
-  almanac_loop_mark_run_status "$tmp" "harden-fin" "done" "2026-05-25T11:30:00Z"
+  almanac_loop_register_run "$tmp" "converge" "src/old.js" "$$" "converge-fin" "2026-05-25T11:00:00Z" >/dev/null
+  almanac_loop_mark_run_status "$tmp" "converge-fin" "done" "2026-05-25T11:30:00Z"
 
   out="$(almanac_loop_hub_render "$tmp" running)"
-  assert_contains "$out" "harden-live" "running list includes the live harden run"
+  assert_contains "$out" "converge-live" "running list includes the live converge run"
   assert_contains "$out" "round 2" "running list shows the live round"
   assert_contains "$out" "reviewers: security,perf" "running list shows the live summary"
   assert_contains "$out" "running" "live run is shown running"
   assert_contains "$out" "loop-dead" "running list includes the crashed run"
   assert_contains "$out" "stale" "a running entry with a dead pid is surfaced as stale"
   case "$out" in
-    *harden-fin*) fail "running list must exclude finished runs" ;;
+    *converge-fin*) fail "running list must exclude finished runs" ;;
   esac
   echo "  PASS: hub render lists running with live status"
 }
@@ -519,14 +519,14 @@ test_hub_render_recent_newest_first_capped() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "harden" "a.js" "$$" "fin-old" "2026-05-25T10:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "converge" "a.js" "$$" "fin-old" "2026-05-25T10:00:00Z" >/dev/null
   almanac_loop_mark_run_status "$tmp" "fin-old" "done" "2026-05-25T10:10:00Z"
   almanac_loop_register_run "$tmp" "loop" "b/prd.md" "$$" "fin-mid" "2026-05-25T11:00:00Z" >/dev/null
   almanac_loop_mark_run_status "$tmp" "fin-mid" "failed" "2026-05-25T11:10:00Z"
-  almanac_loop_register_run "$tmp" "harden" "c.js" "$$" "fin-new" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "converge" "c.js" "$$" "fin-new" "2026-05-25T12:00:00Z" >/dev/null
   almanac_loop_mark_run_status "$tmp" "fin-new" "aborted" "2026-05-25T12:10:00Z"
   # A still-running run never appears under recent.
-  almanac_loop_register_run "$tmp" "harden" "d.js" "$$" "still-live" "2026-05-25T12:05:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "converge" "d.js" "$$" "still-live" "2026-05-25T12:05:00Z" >/dev/null
 
   out="$(almanac_loop_hub_render "$tmp" recent)"
   assert_contains "$out" "fin-new" "recent includes finished runs"
@@ -551,7 +551,7 @@ test_hub_overview_degrades_without_gum() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "ov-live" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "converge" "src/app.js" "$$" "ov-live" "2026-05-25T12:00:00Z" >/dev/null
   almanac_loop_register_run "$tmp" "loop" "p/prd.md" "$$" "ov-done" "2026-05-25T11:00:00Z" >/dev/null
   almanac_loop_mark_run_status "$tmp" "ov-done" "done" "2026-05-25T11:30:00Z"
 
@@ -579,8 +579,6 @@ test_hub_overview_empty_registry_shows_empty_states() {
 test_run_signal_file_maps_type_to_dotfile() {
   assert_eq ".loop-stop"   "$(almanac_loop_signal_file loop stop)"   "loop stop file basename"
   assert_eq ".loop-steer"  "$(almanac_loop_signal_file loop steer)"  "loop steer file basename"
-  assert_eq ".harden-stop"  "$(almanac_loop_signal_file harden stop)"  "harden stop file basename"
-  assert_eq ".harden-steer" "$(almanac_loop_signal_file harden steer)" "harden steer file basename"
   assert_eq ".converge-stop" "$(almanac_loop_signal_file converge stop)" "converge stop file basename"
   assert_eq ".converge-steer" "$(almanac_loop_signal_file converge steer)" "converge steer file basename"
   if almanac_loop_signal_file bogus stop >/dev/null 2>&1; then
@@ -598,9 +596,9 @@ test_consume_signal_returns_contents_and_deletes_file() {
   tmp="$NEW_TMPDIR"
 
   # Steer-shaped consume: contents flow through, file is removed.
-  file="$tmp/.harden-steer"
+  file="$tmp/.converge-steer"
   printf 'redirect: stop adding perf tests\n' > "$file"
-  out="$(almanac_loop_consume_signal harden "$tmp" steer)"
+  out="$(almanac_loop_consume_signal converge "$tmp" steer)"
   rc=$?
   assert_eq "0" "$rc" "consume must return 0 when the signal file exists"
   assert_eq "redirect: stop adding perf tests" "$out" \
@@ -608,11 +606,11 @@ test_consume_signal_returns_contents_and_deletes_file() {
   [ ! -f "$file" ] || fail "consume must delete the signal file after reading"
 
   # Stop-shaped consume: an empty file is still 'present', returns 0 with empty
-  # stdout. Matches harden's pre-deepening _consume_stop semantics (touch + rm,
-  # no content carried), so a `touch .harden-stop` still trips the loop.
-  file="$tmp/.harden-stop"
+  # stdout. An empty stop file is still 'present' (touch + rm, no content
+  # carried), so a `touch .converge-stop` still trips the loop.
+  file="$tmp/.converge-stop"
   : > "$file"
-  out="$(almanac_loop_consume_signal harden "$tmp" stop)"
+  out="$(almanac_loop_consume_signal converge "$tmp" stop)"
   rc=$?
   assert_eq "0" "$rc" "consume must return 0 for an empty signal file"
   assert_eq "" "$out" "consume must emit nothing for an empty signal file"
@@ -628,7 +626,7 @@ test_consume_signal_returns_nonzero_when_absent() {
 
   # Missing file: nonzero return, no output, no side effects.
   rc=0
-  out="$(almanac_loop_consume_signal harden "$tmp" steer)" || rc=$?
+  out="$(almanac_loop_consume_signal converge "$tmp" steer)" || rc=$?
   assert_eq "1" "$rc" "consume must return 1 when the signal file is absent"
   assert_eq "" "$out" "consume must emit nothing when the signal file is absent"
 
@@ -638,7 +636,7 @@ test_consume_signal_returns_nonzero_when_absent() {
   [ "$rc" -ne 0 ] || fail "consume must return non-zero for unknown loop type"
 
   rc=0
-  out="$(almanac_loop_consume_signal harden "$tmp" bogus)" || rc=$?
+  out="$(almanac_loop_consume_signal converge "$tmp" bogus)" || rc=$?
   [ "$rc" -ne 0 ] || fail "consume must return non-zero for unknown signal kind"
 
   echo "  PASS: consume signal returns nonzero when absent or unknown"
@@ -752,12 +750,12 @@ test_run_detail_renders_run_status() {
   new_tmpdir
   tmp="$NEW_TMPDIR"
 
-  almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "detail-run" "2026-05-25T12:00:00Z" >/dev/null
+  almanac_loop_register_run "$tmp" "converge" "src/app.js" "$$" "detail-run" "2026-05-25T12:00:00Z" >/dev/null
   almanac_loop_update_run_progress "$tmp" "detail-run" "3" "lenses=security,perf open-blocking=2"
 
   out="$(almanac_loop_run_detail "$tmp" "detail-run")"
   assert_contains "$out" "detail-run" "detail shows the run id"
-  assert_contains "$out" "harden" "detail shows the run type"
+  assert_contains "$out" "converge" "detail shows the run type"
   assert_contains "$out" "src/app.js" "detail shows the target"
   assert_contains "$out" "3" "detail shows the live round"
   assert_contains "$out" "open-blocking=2" "detail shows the live summary"
@@ -802,28 +800,12 @@ test_new_run_argv_loop_composes_flags() {
   echo "  PASS: new-run argv composes loop flags"
 }
 
-test_new_run_argv_harden_composes_loop() {
-  local flat
-  flat="$(almanac_loop_new_run_argv harden target=src/app.js rounds=3 | tr '\n' ' ')"
-  assert_contains "$flat" "harden src/app.js --loop" "harden argv launches the convergence loop"
-  assert_contains "$flat" "--rounds 3" "harden argv carries --rounds when set"
-
-  # Rounds omitted -> no --rounds (harden falls back to its own default budget).
-  flat="$(almanac_loop_new_run_argv harden target=src/app.js | tr '\n' ' ')"
-  case "$flat" in
-    *"--rounds"*) fail "no --rounds flag when rounds is unset" ;;
-  esac
-  echo "  PASS: new-run argv composes harden loop launch"
-}
-
 test_new_run_argv_rejects_unknown_and_missing() {
   local rc
   rc=0; almanac_loop_new_run_argv bogus target=x >/dev/null 2>&1 || rc=$?
   assert_eq "1" "$rc" "an unknown run type must return 1"
   rc=0; almanac_loop_new_run_argv loop mode=afk >/dev/null 2>&1 || rc=$?
   assert_eq "2" "$rc" "a loop run without a prd must return 2"
-  rc=0; almanac_loop_new_run_argv harden rounds=2 >/dev/null 2>&1 || rc=$?
-  assert_eq "2" "$rc" "a harden run without a target must return 2"
   rc=0; almanac_loop_new_run_argv converge exec="echo hi" >/dev/null 2>&1 || rc=$?
   assert_eq "2" "$rc" "a converge run without a goal must return 2"
   rc=0; almanac_loop_new_run_argv converge goal="ship it" >/dev/null 2>&1 || rc=$?
@@ -843,7 +825,7 @@ test_new_run_argv_converge_composes_flags() {
   assert_contains "$flat" "--rounds 5" "argv carries --rounds"
   assert_contains "$flat" "--no-oversee" "argv carries --no-oversee when oversee=off"
   assert_contains "$flat" "--oversee-every 2" "argv carries --oversee-every"
-  # Provider/model/effort are env, NOT argv (same split as harden)
+  # Provider/model/effort are env, NOT argv
   case "$flat" in
     *"--provider"*) fail "provider must ride on env, not argv" ;;
     *"--model"*)    fail "model must ride on env, not argv" ;;
@@ -877,21 +859,11 @@ test_new_run_env_maps_converge_config() {
   assert_contains "$out" "CONVERGE_PROVIDER=codex" "converge env carries CONVERGE_PROVIDER"
   assert_contains "$out" "CONVERGE_MODEL=gpt-5.5" "converge env carries CONVERGE_MODEL"
   assert_contains "$out" "CONVERGE_EFFORT=high"   "converge env carries CONVERGE_EFFORT"
-  echo "  PASS: new-run env maps converge config"
-}
-
-test_new_run_env_maps_harden_config() {
-  local out
-  out="$(almanac_loop_new_run_env harden lenses=security,perf provider=codex model=gpt-5.5 effort=high)"
-  assert_contains "$out" "HARDEN_LENSES=security,perf" "harden env carries HARDEN_LENSES"
-  assert_contains "$out" "HARDEN_PROVIDER=codex" "harden env carries HARDEN_PROVIDER"
-  assert_contains "$out" "HARDEN_MODEL=gpt-5.5" "harden env carries HARDEN_MODEL"
-  assert_contains "$out" "HARDEN_EFFORT=high" "harden env carries HARDEN_EFFORT"
 
   # Loop config rides on flags (argv), not env — so its env stream is empty.
   out="$(almanac_loop_new_run_env loop provider=codex model=gpt-5.5)"
   assert_eq "" "$out" "loop new-run emits no env lines (config via flags)"
-  echo "  PASS: new-run env maps harden config"
+  echo "  PASS: new-run env maps converge config"
 }
 
 test_status_to_opts_inverts_new_run_for_loop() {
@@ -933,28 +905,6 @@ test_status_to_opts_handles_loop_once_mode() {
   echo "  PASS: status_to_opts treats missing iterations as once-mode"
 }
 
-test_status_to_opts_inverts_new_run_for_harden() {
-  local tmp status_file opts flat
-  new_tmpdir; tmp="$NEW_TMPDIR"
-
-  almanac_loop_register_run "$tmp" "harden" "src/app.js" "$$" "harden-r" "2026-05-25T12:00:00Z" >/dev/null
-  almanac_loop_set_run_config "$tmp" "harden-r" \
-    "provider=codex" "model=gpt-5.5" "effort=high" "lenses=security,perf" "rounds=3"
-  status_file="$(almanac_loop_run_status_file "$tmp" "harden-r")"
-
-  opts="$(almanac_loop_adapter_call harden status_to_opts "$status_file")"
-  case "$opts" in *target=src/app.js*)   ;; *) fail "harden status_to_opts must carry target" ;; esac
-  case "$opts" in *lenses=security,perf*) ;; *) fail "harden status_to_opts must carry lenses" ;; esac
-  case "$opts" in *rounds=3*)            ;; *) fail "harden status_to_opts must carry rounds" ;; esac
-  case "$opts" in *provider=codex*)      ;; *) fail "harden status_to_opts must carry provider" ;; esac
-
-  split_lines_into opt_arr <<< "$opts"
-  flat="$(almanac_loop_new_run_argv harden "${opt_arr[@]}" | tr '\n' ' ')"
-  assert_contains "$flat" "harden src/app.js --loop" "round-trip relaunches the harden loop on the same target"
-  assert_contains "$flat" "--rounds 3" "round-trip carries --rounds"
-  echo "  PASS: status_to_opts inverts harden status into new_run opts"
-}
-
 test_status_to_opts_inverts_new_run_for_converge() {
   local tmp status_file opts flat
   new_tmpdir; tmp="$NEW_TMPDIR"
@@ -982,14 +932,12 @@ test_status_to_opts_inverts_new_run_for_converge() {
 }
 
 test_launch_backed_signals_launcher_only_loops() {
-  # loop runs through the launcher (which accepts --yes); harden + converge exec
-  # their direct runners and would reject --yes. The hub's resume path uses this
+  # loop runs through the launcher (which accepts --yes); converge execs its
+  # direct runner and would reject --yes. The hub's resume path uses this
   # verb to decide whether to append --yes — the only place that policy lives.
   local rc
   rc=0; almanac_loop_adapter_call loop launch_backed >/dev/null 2>&1 || rc=$?
   assert_eq "0" "$rc" "loop adapter must declare itself launcher-backed"
-  rc=0; almanac_loop_adapter_call harden launch_backed >/dev/null 2>&1 || rc=$?
-  assert_eq "2" "$rc" "harden adapter must NOT implement launch_backed (direct-runner)"
   rc=0; almanac_loop_adapter_call converge launch_backed >/dev/null 2>&1 || rc=$?
   assert_eq "2" "$rc" "converge adapter must NOT implement launch_backed (direct-runner)"
   echo "  PASS: launch_backed signals launcher-only loops"
@@ -1010,18 +958,18 @@ test_hub_stats_groups_by_type_provider_model() {
   almanac_loop_set_run_config "$tmp" "r3" "provider=claude" "model=opus"
   almanac_loop_mark_run_status "$tmp" "r3" "failed" "2026-05-26T12:30:00Z"
 
-  # 1 harden run with codex/gpt-5.4: done → expect 100%.
-  almanac_loop_register_run "$tmp" "harden" "src/x" "4" "h1" "2026-05-26T13:00:00Z" >/dev/null
+  # 1 converge run with codex/gpt-5.4: done → expect 100%.
+  almanac_loop_register_run "$tmp" "converge" "src/x" "4" "h1" "2026-05-26T13:00:00Z" >/dev/null
   almanac_loop_set_run_config "$tmp" "h1" "provider=codex" "model=gpt-5.4"
   almanac_loop_mark_run_status "$tmp" "h1" "done" "2026-05-26T13:30:00Z"
 
   out=$(almanac_loop_hub_stats "$tmp")
   assert_contains "$out" "type" "stats prints a header row"
   assert_contains "$out" "loop" "stats includes the loop (claude/opus) bucket"
-  assert_contains "$out" "harden" "stats includes the harden (codex/gpt-5.4) bucket"
+  assert_contains "$out" "converge" "stats includes the converge (codex/gpt-5.4) bucket"
   assert_contains "$out" "opus" "stats groups by model"
   assert_contains "$out" "67%" "stats computes success rate (2 done / 3 loop runs = 67%)"
-  assert_contains "$out" "100%" "stats computes 100% for the single harden done run"
+  assert_contains "$out" "100%" "stats computes 100% for the single converge done run"
   echo "  PASS: hub_stats groups by (type, provider, model) and reports counts + success rate"
 }
 
@@ -1036,7 +984,7 @@ test_hub_stats_empty_registry_returns_nonzero() {
 # --- Worker path helpers ------------------------------------------------------
 #
 # Pin almanac_loop_worker_{dir,status_file,file} in isolation. These three pure
-# path-builders sit beneath every worker write/read in the engine — harden's
+# path-builders sit beneath every worker write/read in the engine — the
 # reviewer/fixer fan-out, the worker watch, the hub's worker views — so a single
 # format bug (trailing slash, missing slug, etc) would silently fan out across
 # the system. The lifecycle tests above exercise them transitively; these tests
@@ -1083,8 +1031,8 @@ test_worker_file_joins_filename_under_worker_dir() {
 test_plan_dir_composes_root_docs_plans_type_slug() {
   local tmp actual
   new_tmpdir; tmp="$NEW_TMPDIR"
-  actual="$(almanac_loop_plan_dir "harden" "$tmp" "src-app-js")"
-  assert_eq "$tmp/docs/plans/harden/src-app-js" "$actual" \
+  actual="$(almanac_loop_plan_dir "loop" "$tmp" "src-app-js")"
+  assert_eq "$tmp/docs/plans/loop/src-app-js" "$actual" \
     "plan_dir = <root>/docs/plans/<type>/<slug>"
   actual="$(almanac_loop_plan_dir "converge" "$tmp" "say-hello")"
   assert_eq "$tmp/docs/plans/converge/say-hello" "$actual" \
@@ -1095,8 +1043,8 @@ test_plan_dir_composes_root_docs_plans_type_slug() {
 test_plan_container_composes_root_docs_plans_type() {
   local tmp actual
   new_tmpdir; tmp="$NEW_TMPDIR"
-  actual="$(almanac_loop_plan_container "harden" "$tmp")"
-  assert_eq "$tmp/docs/plans/harden" "$actual" \
+  actual="$(almanac_loop_plan_container "loop" "$tmp")"
+  assert_eq "$tmp/docs/plans/loop" "$actual" \
     "plan_container = <root>/docs/plans/<type>"
   actual="$(almanac_loop_plan_container "converge" "$tmp")"
   assert_eq "$tmp/docs/plans/converge" "$actual" \
@@ -1122,8 +1070,8 @@ test_plan_dir_passes_through_caller_slug() {
   new_tmpdir; tmp="$NEW_TMPDIR"
   # plan_dir is a pure path joiner — it must NOT re-slugify. Caller-supplied
   # slugs (raw strings) are emitted verbatim so the helper stays single-purpose.
-  actual="$(almanac_loop_plan_dir "harden" "$tmp" "Already Has Spaces")"
-  assert_eq "$tmp/docs/plans/harden/Already Has Spaces" "$actual" \
+  actual="$(almanac_loop_plan_dir "converge" "$tmp" "Already Has Spaces")"
+  assert_eq "$tmp/docs/plans/converge/Already Has Spaces" "$actual" \
     "plan_dir must not slugify its slug argument (slugification is the caller's job)"
   echo "  PASS: plan_dir does not re-slugify its slug argument"
 }
@@ -1203,14 +1151,11 @@ test_run_steer_writes_steerfile_with_directive
 test_run_detail_renders_run_status
 test_run_watch_one_shot_renders_detail
 test_new_run_argv_loop_composes_flags
-test_new_run_argv_harden_composes_loop
 test_new_run_argv_rejects_unknown_and_missing
 test_new_run_argv_converge_composes_flags
-test_new_run_env_maps_harden_config
 test_new_run_env_maps_converge_config
 test_status_to_opts_inverts_new_run_for_loop
 test_status_to_opts_handles_loop_once_mode
-test_status_to_opts_inverts_new_run_for_harden
 test_status_to_opts_inverts_new_run_for_converge
 test_launch_backed_signals_launcher_only_loops
 test_hub_stats_groups_by_type_provider_model

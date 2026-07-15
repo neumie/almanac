@@ -2,7 +2,7 @@
 # role.sh - Role config resolution (role -> provider/model/effort)
 #
 # A role is a configurable slot a loop fills with an agent config: loop's
-# `agent`; harden's `conductor`/`reviewer`/`fixer`. Resolution layers most
+# `agent`; converge's `agent`/`overseer`. Resolution layers most
 # specific first — lens -> role -> consumer-wide -> default — over env keys
 # named <PREFIX>[_<ROLE>][_<LENS>]_<FIELD> (uppercased, non-alnum -> `_`).
 #

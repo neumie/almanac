@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# loop-launcher.sh — the single almanac launcher (loop + harden + converge).
+# loop-launcher.sh — the single almanac launcher (loop + converge).
 #
 # almanac_loop_launch <type> [native flags…] interactively configures and starts
 # a loop run. It is loop-agnostic: one launcher for every consumer — `almanac
-# loop`, `almanac harden`, the hub's New-run flow, and the loop skill launcher
+# loop`, the hub's New-run flow, and the loop skill launcher
 # all route here, so the config UX is identical everywhere (the PRD's "almanac
 # launcher, not per-loop reimplementations").
 #
@@ -95,9 +95,9 @@ _almanac_launch_need_positive_int() {
 # interactive value is prompted with the "(blank = default)" hint, and a blank
 # reply is accepted (echoed as empty) so the downstream runner picks its own
 # default. Sibling to _almanac_launch_need_positive_int (mandatory); used by
-# harden + converge launches for `--rounds` — two adapters sharing the idiom
-# verbatim, lifted here so the "(blank = default)" wording and validation
-# semantics live in one place. Echoes the resolved value (or empty).
+# converge launches for `--rounds`, lifted here so the "(blank = default)"
+# wording and validation semantics live in one place (any future adapter
+# reuses it). Echoes the resolved value (or empty).
 _almanac_launch_need_positive_int_optional() {
   local header="$1" current="$2"
   [ -n "$current" ] || current="$(almanac_loop_ui_input "$header (blank = default)")" || return 1
@@ -113,10 +113,10 @@ _almanac_launch_need_positive_int_optional() {
 # (the helper this dispatches to short-circuits, the pipe closes, the caller's
 # `read` returns false).
 #
-# Pre-extraction this 3-line block lived verbatim in loop/harden/converge
-# adapters — three sites diverging only in the model+effort label strings
-# (loop: "Model"/"Thinking effort", harden: "Reviewer model"/"Reviewer thinking
-# effort", converge: "Model"/"Thinking effort"). The dependency between the
+# Pre-extraction this 3-line block lived verbatim in loop/converge
+# adapters — two sites diverging only in the model+effort label strings
+# (loop: "Model"/"Thinking effort", converge: "Model"/"Thinking effort").
+# The dependency between the
 # three calls (model+effort menus REQUIRE provider) was structural; encoding
 # that rule in one place makes "add a 4th loop adapter" a one-line call to this
 # helper instead of a copy-pasted 3-line dance an adapter could subtly mis-order
@@ -133,9 +133,9 @@ _almanac_launch_need_role_triple() {
 }
 
 # Export the consumer-wide role config (PROVIDER always, MODEL/EFFORT conditional)
-# under PREFIX (e.g. LOOP_, HARDEN_, CONVERGE_). Empty model/effort UNSET the
+# under PREFIX (e.g. LOOP_, CONVERGE_). Empty model/effort UNSET the
 # var so a stale value inherited from the parent env can't leak into the runner.
-# Single source of truth for the export shape — adding a 4th adapter can't
+# Single source of truth for the export shape — adding a 3rd adapter can't
 # forget the unset, and the prefix convention lives in exactly one place.
 # Sibling to lib/loops.sh::_almanac_loop_emit_role_env (the printf form used by
 # `new_run_env` verbs); both helpers share the prefix+field convention but
@@ -178,7 +178,7 @@ almanac_loop_launch_usage() {
   declare -F "$fn" >/dev/null 2>&1 && "$fn"
 }
 
-# Public entry: configure and launch a run of TYPE (loop|harden|converge|…).
+# Public entry: configure and launch a run of TYPE (loop|converge|…).
 # Remaining args are that type's native flags; missing fields are prompted by
 # the adapter's `launch` verb, which also execs the runner. The launcher does
 # not enumerate loop types — discovery is via the loop-adapter seam, so adding

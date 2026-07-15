@@ -53,7 +53,7 @@ The `almanac` CLI is **registry-driven**: a command is valid iff `cmd/<name>.sh`
 
 **`almanac help` is generated** — it walks `almanac_list_commands` and prints each command's `# summary:` under its `# group:` section. Never hand-edit a command list into it.
 
-**Arg parsing.** Guard a required `--flag VALUE` option with `_need_value <flag> "$#"` (call it the moment the flag matches, before shifting). Parse errors are **terse** `_die` one-liners to stderr — no usage dump (that's what `--help` is for); the missing-required-arg case may add a `see 'almanac <cmd> --help'` pointer. Use `_heading` for section titles, never `echo -e "${_BOLD}…"`. `cmd/hub.sh` keeps its own per-flag messages (more specific than `_need_value`'s generic text) — acceptable, still terse. Heavy command logic lives in a `lib/<cmd>-core.sh` (see `hub-core.sh`/`harden-core.sh`); the `cmd/` file stays a parse+dispatch shim so the logic is unit-testable.
+**Arg parsing.** Guard a required `--flag VALUE` option with `_need_value <flag> "$#"` (call it the moment the flag matches, before shifting). Parse errors are **terse** `_die` one-liners to stderr — no usage dump (that's what `--help` is for); the missing-required-arg case may add a `see 'almanac <cmd> --help'` pointer. Use `_heading` for section titles, never `echo -e "${_BOLD}…"`. `cmd/hub.sh` keeps its own per-flag messages (more specific than `_need_value`'s generic text) — acceptable, still terse. Heavy command logic lives in a `lib/<cmd>-core.sh` (see `hub-core.sh`); the `cmd/` file stays a parse+dispatch shim so the logic is unit-testable.
 
 ## Symlink Map
 
