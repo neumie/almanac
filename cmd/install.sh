@@ -104,59 +104,172 @@ _install_symlink() {
   fi
 }
 
-_install_codex() {
-  local skills_dir="$HOME/.agents/skills/almanac"
-  local legacy_skills_dir="$HOME/.codex/skills/almanac"
-  local legacy_prompts_dir="$HOME/.codex/prompts"
+_shared_manifest_owns() {
+  local manifest="$1"
+  local wanted_name="$2"
+  local wanted_target="$3"
+  local name target
 
-  [[ -d "$HOME/.codex" ]] || _die "~/.codex not found — is Codex installed?"
-  mkdir -p "$skills_dir"
+  [[ -f "$manifest" ]] || return 1
+  while IFS=$'\t' read -r name target; do
+    [[ "$name" == "$wanted_name" && "$target" == "$wanted_target" ]] && return 0
+  done < "$manifest"
+  return 1
+}
 
-  # Migrate from old layout: ~/.agents/skills/almanac as a single dir-symlink
-  # to skills/. Replace with a real directory of per-skill flat symlinks.
-  if [[ -L "$skills_dir" ]]; then
-    rm "$skills_dir"
-    mkdir -p "$skills_dir"
-  fi
+_shared_manifest_has_name() {
+  local manifest="$1"
+  local wanted_name="$2"
+  local name target
 
-  almanac_validate_unique_names || _die "duplicate skill names — fix before installing"
+  [[ -f "$manifest" ]] || return 1
+  while IFS=$'\t' read -r name target; do
+    [[ "$name" == "$wanted_name" ]] && return 0
+  done < "$manifest"
+  return 1
+}
 
-  local count=0
+_shared_has_current_links() {
+  local skills_dir="$1"
+  local dir name skill_target
+
   while IFS= read -r dir; do
     dir="${dir%/}"
     [ -f "$dir/SKILL.md" ] || continue
-    local name
     name=$(basename "$dir")
+    skill_target="$skills_dir/$name"
+    [[ -L "$skill_target" ]] || continue
+    [[ "$(readlink "$skill_target")" == "$dir" ]] && return 0
+  done < <(almanac_list_skills)
+  return 1
+}
 
-    local skill_target="$skills_dir/$name"
-    [[ -L "$skill_target" || -e "$skill_target" ]] && rm -rf "$skill_target"
-    ln -s "$dir" "$skill_target"
+_link_shared_agent_skills() {
+  local owner="$1"
+  local skills_dir="$HOME/.agents/skills/almanac"
+  local state_dir="$skills_dir/.almanac-install"
+  local owners_dir="$state_dir/owners"
+  local manifest="$state_dir/manifest.tsv"
+  local manifest_tmp="$state_dir/manifest.tsv.tmp.$$"
+  local legacy_directory_link=false
+  local infer_legacy_codex=false
+  local dir name skill_target actual_target old_name old_target
 
-    count=$((count + 1))
+  # Older installs used one directory symlink. Only migrate the exact Almanac
+  # source for this checkout; never replace an unrelated shared-skills link.
+  if [[ -L "$skills_dir" ]]; then
+    [[ "$(readlink "$skills_dir")" == "$ALMANAC_HOME/skills" ]] || \
+      _die "Refusing to replace non-Almanac skill directory: $skills_dir"
+    rm "$skills_dir"
+    legacy_directory_link=true
+  fi
+  mkdir -p "$skills_dir"
+
+  almanac_validate_unique_names || _die "duplicate skill names — fix before installing"
+
+  # Before Pi support, this shared location was owned by the Codex installer.
+  # Preserve that ownership when a Pi install migrates an existing layout.
+  if [[ "$owner" == "pi" && ! -d "$owners_dir" ]]; then
+    if [[ "$legacy_directory_link" == true ]] || _shared_has_current_links "$skills_dir"; then
+      infer_legacy_codex=true
+    fi
+  fi
+
+  # Preflight every collision before changing any link. Exact manifest targets
+  # permit moving between Almanac checkouts without trusting path substrings.
+  while IFS= read -r dir; do
+    dir="${dir%/}"
+    [ -f "$dir/SKILL.md" ] || continue
+    name=$(basename "$dir")
+    skill_target="$skills_dir/$name"
+    [[ -e "$skill_target" || -L "$skill_target" ]] || continue
+    [[ -L "$skill_target" ]] || \
+      _die "Refusing to replace non-Almanac skill: $skill_target"
+    actual_target=$(readlink "$skill_target")
+    if [[ "$actual_target" != "$dir" ]] && \
+       ! _shared_manifest_owns "$manifest" "$name" "$actual_target"; then
+      _die "Refusing to replace non-Almanac skill link: $skill_target"
+    fi
   done < <(almanac_list_skills)
 
-  # Clean up dangling skill-dir symlinks from deleted skills.
-  for link in "$skills_dir"/*; do
-    [[ -L "$link" ]] || continue
-    [[ -e "$link" ]] || rm "$link"
-  done
+  mkdir -p "$owners_dir"
+  : > "$manifest_tmp"
+  LINKED_SHARED_SKILL_COUNT=0
+  while IFS= read -r dir; do
+    dir="${dir%/}"
+    [ -f "$dir/SKILL.md" ] || continue
+    name=$(basename "$dir")
+    skill_target="$skills_dir/$name"
 
-  # Clean up legacy Codex install locations from older almanac versions.
-  for link in "$legacy_skills_dir"/*; do
-    [[ -L "$link" ]] || continue
-    [[ "$(readlink "$link")" == *almanac* ]] || continue
-    rm "$link"
-  done
-  [[ -d "$legacy_skills_dir" ]] && rmdir "$legacy_skills_dir" 2>/dev/null || true
+    if [[ -e "$skill_target" || -L "$skill_target" ]]; then
+      [[ -L "$skill_target" ]] || \
+        _die "Refusing to replace non-Almanac skill: $skill_target"
+      actual_target=$(readlink "$skill_target")
+      if [[ "$actual_target" != "$dir" ]] && \
+         ! _shared_manifest_owns "$manifest" "$name" "$actual_target"; then
+        _die "Refusing to replace non-Almanac skill link: $skill_target"
+      fi
+      rm "$skill_target"
+    fi
+    ln -s "$dir" "$skill_target"
+    printf '%s\t%s\n' "$name" "$dir" >> "$manifest_tmp"
+    LINKED_SHARED_SKILL_COUNT=$((LINKED_SHARED_SKILL_COUNT + 1))
+  done < <(almanac_list_skills)
 
-  for link in "$legacy_prompts_dir"/*.md; do
+  # Remove deleted skills only when the prior manifest proves exact ownership.
+  if [[ -f "$manifest" ]]; then
+    while IFS=$'\t' read -r old_name old_target; do
+      [[ "$old_name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || continue
+      _shared_manifest_has_name "$manifest_tmp" "$old_name" && continue
+      skill_target="$skills_dir/$old_name"
+      [[ -L "$skill_target" ]] || continue
+      [[ "$(readlink "$skill_target")" == "$old_target" ]] || continue
+      rm "$skill_target"
+    done < "$manifest"
+  fi
+
+  mv "$manifest_tmp" "$manifest"
+  [[ "$infer_legacy_codex" == true ]] && : > "$owners_dir/codex"
+  : > "$owners_dir/$owner"
+}
+
+_install_codex() {
+  local legacy_skills_dir="$HOME/.codex/skills/almanac"
+  local legacy_prompts_dir="$HOME/.codex/prompts"
+  local dir name link
+
+  [[ -d "$HOME/.codex" ]] || _die "~/.codex not found — is Codex installed?"
+  _link_shared_agent_skills codex
+
+  # Clean up legacy Codex install locations from older Almanac versions.
+  # Exact current source targets avoid deleting unrelated links.
+  if [[ -L "$legacy_skills_dir" && "$(readlink "$legacy_skills_dir")" == "$ALMANAC_HOME/skills" ]]; then
+    rm "$legacy_skills_dir"
+  elif [[ -d "$legacy_skills_dir" ]]; then
+    while IFS= read -r dir; do
+      dir="${dir%/}"
+      [ -f "$dir/SKILL.md" ] || continue
+      name=$(basename "$dir")
+      link="$legacy_skills_dir/$name"
+      [[ -L "$link" ]] || continue
+      [[ "$(readlink "$link")" == "$dir" ]] || continue
+      rm "$link"
+    done < <(almanac_list_skills)
+    rmdir "$legacy_skills_dir" 2>/dev/null || true
+  fi
+
+  while IFS= read -r dir; do
+    dir="${dir%/}"
+    [ -f "$dir/SKILL.md" ] || continue
+    name=$(basename "$dir")
+    link="$legacy_prompts_dir/$name.md"
     [[ -L "$link" ]] || continue
-    [[ "$(readlink "$link")" == *almanac* ]] || continue
+    [[ "$(readlink "$link")" == "$dir/SKILL.md" ]] || continue
     rm "$link"
-  done
+  done < <(almanac_list_skills)
   [[ -d "$legacy_prompts_dir" ]] && rmdir "$legacy_prompts_dir" 2>/dev/null || true
 
-  _success "Linked $count skill dirs at ~/.agents/skills/almanac/<name>"
+  _success "Linked $LINKED_SHARED_SKILL_COUNT skill dirs at ~/.agents/skills/almanac/<name>"
   _info "Skills can be invoked as \$<name> or from /skills — restart codex to reload"
 
   # Report optional deps (gum styles loop dashboards; optional).
@@ -169,7 +282,7 @@ _install_codex() {
     if [[ ! -e "$agents_target" && ! -L "$agents_target" ]]; then
       ln -s "$agents_md" "$agents_target"
       _success "Installed global AGENTS.md -> ~/.codex/AGENTS.md"
-    elif [[ -L "$agents_target" ]] && readlink "$agents_target" | grep -q "almanac"; then
+    elif [[ -L "$agents_target" ]] && [[ "$(readlink "$agents_target")" == "$agents_md" ]]; then
       rm "$agents_target"
       ln -s "$agents_md" "$agents_target"
       _success "Updated global AGENTS.md -> ~/.codex/AGENTS.md"
@@ -182,6 +295,16 @@ _install_codex() {
       _info "Skipped ~/.codex/AGENTS.md — custom file exists (use --global-config to override)"
     fi
   fi
+}
+
+_install_pi() {
+  _link_shared_agent_skills pi
+
+  _success "Linked $LINKED_SHARED_SKILL_COUNT skill dirs at ~/.agents/skills/almanac/<name>"
+  _info "Skills can be invoked as /skill:<name> — run /reload in Pi to load them"
+
+  # Report optional deps (gum styles loop dashboards; optional).
+  almanac_report_gum
 }
 
 # --- main ---
@@ -209,12 +332,12 @@ case "$PROVIDER" in
   claude-code)
     _install_claude_code
     ;;
-  opencode|cursor|codex)
-    if [[ "$PROVIDER" == "codex" ]]; then
-      _install_codex
-    else
-      _install_symlink "$PROVIDER"
-    fi
+  opencode|cursor|codex|pi)
+    case "$PROVIDER" in
+      codex) _install_codex ;;
+      pi) _install_pi ;;
+      *) _install_symlink "$PROVIDER" ;;
+    esac
     ;;
   *)
     _die "No installer for provider: $PROVIDER"

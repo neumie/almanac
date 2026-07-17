@@ -189,11 +189,11 @@ Loop ready for <name>.
 
 Where `{{SKILL_SCRIPTS}}` is the absolute path to this skill's scripts. Resolve in this order:
 
-1. `~/.agents/skills/almanac/loop/scripts` — set by `almanac install codex`; use this when running in Codex.
-2. `~/.claude/skills/almanac/loop/scripts` — set by `almanac install claude-code`; use this when running in Claude Code.
+1. `~/.agents/skills/almanac/loop/scripts` — set by `almanac install codex` or `almanac install pi`; use this in Codex or Pi.
+2. `~/.claude/skills/almanac/loop/scripts` — set by `almanac install claude-code`; use this in Claude Code.
 3. `$ALMANAC_HOME/skills/loop/loop/scripts` — fallback when invoked outside an installed provider.
 
-Print the literal provider install path in user-facing instructions (`~/.agents/...` for Codex, `~/.claude/...` for Claude Code) so users can run the scripts directly.
+Print the literal provider install path in user-facing instructions (`~/.agents/...` for Codex/Pi, `~/.claude/...` for Claude Code) so users can run the scripts directly.
 
 ## Modes
 

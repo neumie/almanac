@@ -73,6 +73,7 @@ check "providers/claude-code/hooks/session-start"
 check "providers/opencode/README.md"
 check "providers/cursor/README.md"
 check "providers/codex/README.md"
+check "providers/pi/README.md"
 
 # Provider install-marker metadata (read by _is_installed; one line per file,
 # the path that signals "installed" — ~ expands to $HOME).
@@ -80,6 +81,7 @@ check "providers/claude-code/install-marker"
 check "providers/codex/install-marker"
 check "providers/cursor/install-marker"
 check "providers/opencode/install-marker"
+check "providers/pi/install-marker"
 
 # Tests
 check "tests/test-structure.sh"
@@ -99,6 +101,8 @@ check "tests/test-loop-run-registry.sh"
 check "tests/test-loop-smoke.sh"
 check "tests/test-converge.sh"
 check "tests/test-hub.sh"
+check "tests/test-install.sh"
+check "tests/test-uninstall.sh"
 
 # Docs
 check "docs/ARCHITECTURE.md"

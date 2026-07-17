@@ -2,13 +2,13 @@
 
 Personal agent toolkit — curated skills for LLM coding agents.
 
-Skills follow the [Agent Skills Open Standard](https://agentskills.io/specification) and work across Claude Code, OpenCode, Cursor, Codex, and [25+ compatible agents](https://agentskills.io).
+Skills follow the [Agent Skills Open Standard](https://agentskills.io/specification) and work across Claude Code, OpenCode, Cursor, Codex, Pi, and [25+ compatible agents](https://agentskills.io).
 
 ## What are skills?
 
 Skills are portable instruction sets that teach coding agents *how* to do things — commit code, create PRs, run TDD, fix CI, and more. Each skill is a single Markdown file (`SKILL.md`) with YAML frontmatter. Agents discover and load them automatically.
 
-Run any skill as a slash command in your agent (e.g. `/commit`, `/ship`, `/loop`, `/converge-loop`).
+Run any skill through your agent's skill command (for example `/commit` in Claude Code, `$commit` in Codex, or `/skill:commit` in Pi).
 
 Skills are organized by category in the repo (`skills/git/`, `skills/productivity/`, `skills/other/`, …) and flattened at install time so Claude Code's flat skill discovery finds them.
 
@@ -43,23 +43,24 @@ almanac install claude-code
 almanac install opencode
 almanac install cursor
 almanac install codex
+almanac install pi
 ```
 
-`almanac install codex` links skills into `~/.agents/skills/almanac/<name>`, so skills can be invoked as `$ship`, `$commit`, etc. or browsed from `/skills` after restarting Codex.
+`almanac install codex` and `almanac install pi` link skills into the shared Agent Skills location `~/.agents/skills/almanac/<name>`. Codex exposes them as `$ship`, `$commit`, etc. after restart; Pi exposes them as `/skill:ship`, `/skill:commit`, etc. after `/reload` or restart. Because both harnesses discover the shared location, either installer makes the skills available to both. Almanac tracks provider ownership, so uninstalling one retains the links while the other remains installed.
 
 Or manually symlink:
 
 ```bash
 ln -s ~/.almanac/skills ~/.config/opencode/skills/almanac   # OpenCode
 ln -s ~/.almanac/skills ~/.cursor/skills/almanac             # Cursor
-ln -s ~/.almanac/skills ~/.agents/skills/almanac             # Codex
+ln -s ~/.almanac/skills ~/.agents/skills/almanac             # Codex + Pi
 ```
 
 </details>
 
 ### Global config
 
-The installer symlinks a versioned global instruction file into each provider, all pointing at the same canonical source (`providers/_shared/AGENTS.md`):
+For providers with a global instruction target, the installer symlinks one versioned file from the canonical source (`providers/_shared/AGENTS.md`):
 
 - `claude-code` → `~/.claude/CLAUDE.md`
 - `codex` → `~/.codex/AGENTS.md`
@@ -82,7 +83,7 @@ almanac install codex                        # same, for ~/.codex/AGENTS.md
 almanac                                     # loop hub on a TTY, else this help
 almanac converge --goal "…" --prompt "…"    # generic convergence loop (--exec for a shell command)
 almanac hub --new <loop|converge>          # launch a run (add --dry-run to preview)
-almanac install claude-code                 # install skills for an agent
+almanac install pi                          # install skills for Pi
 ```
 
 ### Loop examples

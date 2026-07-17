@@ -131,53 +131,147 @@ PY
   _success "Uninstalled almanac from Claude Code"
 }
 
-_uninstall_codex() {
+_shared_current_link_exists() {
+  local skills_dir="$1"
+  local dir name target
+
+  while IFS= read -r dir; do
+    dir="${dir%/}"
+    [ -f "$dir/SKILL.md" ] || continue
+    name=$(basename "$dir")
+    target="$skills_dir/$name"
+    [[ -L "$target" ]] || continue
+    [[ "$(readlink "$target")" == "$dir" ]] && return 0
+  done < <(almanac_list_skills)
+  return 1
+}
+
+_shared_owner_remains() {
+  local owners_dir="$1"
+  local marker
+
+  for marker in "$owners_dir"/*; do
+    [[ -f "$marker" ]] && return 0
+  done
+  return 1
+}
+
+_remove_shared_agent_skills() {
+  local owner="$1"
   local skills_dir="$HOME/.agents/skills/almanac"
+  local state_dir="$skills_dir/.almanac-install"
+  local owners_dir="$state_dir/owners"
+  local manifest="$state_dir/manifest.tsv"
+  local dir name expected_target target marker
+
+  REMOVED_SHARED_SKILL_COUNT=0
+  SHARED_SKILLS_RETAINED=false
+
+  # A state-less shared install predates Pi support and therefore belongs to
+  # Codex. A Pi uninstall must not claim or remove it.
+  if [[ "$owner" == "pi" && ! -d "$owners_dir" ]]; then
+    if [[ -L "$skills_dir" ]] || _shared_current_link_exists "$skills_dir"; then
+      SHARED_SKILLS_RETAINED=true
+      return
+    fi
+  fi
+
+  # Older Codex installs used one directory symlink. Remove only the exact
+  # source for this checkout, never a path that merely contains "almanac".
+  if [[ -L "$skills_dir" ]]; then
+    if [[ "$owner" == "codex" && "$(readlink "$skills_dir")" == "$ALMANAC_HOME/skills" ]]; then
+      rm "$skills_dir"
+      _info "Removed legacy skill resource link ~/.agents/skills/almanac"
+    else
+      SHARED_SKILLS_RETAINED=true
+    fi
+    return
+  fi
+
+  if [[ -d "$owners_dir" ]]; then
+    marker="$owners_dir/$owner"
+    if [[ ! -f "$marker" ]]; then
+      SHARED_SKILLS_RETAINED=true
+      return
+    fi
+    rm "$marker"
+    if _shared_owner_remains "$owners_dir"; then
+      SHARED_SKILLS_RETAINED=true
+      return
+    fi
+  fi
+
+  if [[ -f "$manifest" ]]; then
+    while IFS=$'\t' read -r name expected_target; do
+      [[ "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || continue
+      target="$skills_dir/$name"
+      [[ -L "$target" ]] || continue
+      [[ "$(readlink "$target")" == "$expected_target" ]] || continue
+      rm "$target"
+      REMOVED_SHARED_SKILL_COUNT=$((REMOVED_SHARED_SKILL_COUNT + 1))
+    done < "$manifest"
+  else
+    # Backward-compatible cleanup for old Codex installs: exact current source
+    # targets only. Moved or foreign links are intentionally left untouched.
+    while IFS= read -r dir; do
+      dir="${dir%/}"
+      [ -f "$dir/SKILL.md" ] || continue
+      name=$(basename "$dir")
+      target="$skills_dir/$name"
+      [[ -L "$target" ]] || continue
+      [[ "$(readlink "$target")" == "$dir" ]] || continue
+      rm "$target"
+      REMOVED_SHARED_SKILL_COUNT=$((REMOVED_SHARED_SKILL_COUNT + 1))
+    done < <(almanac_list_skills)
+  fi
+
+  [[ -f "$manifest" ]] && rm "$manifest"
+  [[ -d "$owners_dir" ]] && rmdir "$owners_dir" 2>/dev/null || true
+  [[ -d "$state_dir" ]] && rmdir "$state_dir" 2>/dev/null || true
+  [[ -d "$skills_dir" ]] && rmdir "$skills_dir" 2>/dev/null || true
+}
+
+_uninstall_codex() {
   local legacy_skills_dir="$HOME/.codex/skills/almanac"
   local prompts_dir="$HOME/.codex/prompts"
+  local dir name target
 
-  if [[ -L "$skills_dir" ]] && [[ "$(readlink "$skills_dir")" == *almanac* ]]; then
-    rm "$skills_dir"
-    _info "Removed legacy skill resource link ~/.agents/skills/almanac"
+  _remove_shared_agent_skills codex
+  if [[ "$SHARED_SKILLS_RETAINED" == true ]]; then
+    _info "Kept shared skill links for another installed harness"
+  else
+    _info "Removed $REMOVED_SHARED_SKILL_COUNT skill symlinks from ~/.agents/skills/almanac/"
   fi
-
-  if [[ -L "$legacy_skills_dir" ]] && [[ "$(readlink "$legacy_skills_dir")" == *almanac* ]]; then
-    rm "$legacy_skills_dir"
-    _info "Removed legacy skill resource link ~/.codex/skills/almanac"
-  fi
-
-  local count=0
-  for target in "$skills_dir"/*; do
-    [[ -L "$target" ]] || continue
-    [[ "$(readlink "$target")" == *almanac* ]] || continue
-    rm "$target"
-    count=$((count + 1))
-  done
-
-  [[ -d "$skills_dir" ]] && rmdir "$skills_dir" 2>/dev/null || true
-
-  _info "Removed $count skill symlinks from ~/.agents/skills/almanac/"
 
   local legacy_count=0
-  for target in "$legacy_skills_dir"/*; do
-    [[ -L "$target" ]] || continue
-    [[ "$(readlink "$target")" == *almanac* ]] || continue
-    rm "$target"
-    legacy_count=$((legacy_count + 1))
-  done
+  if [[ -L "$legacy_skills_dir" && "$(readlink "$legacy_skills_dir")" == "$ALMANAC_HOME/skills" ]]; then
+    rm "$legacy_skills_dir"
+    _info "Removed legacy skill resource link ~/.codex/skills/almanac"
+  elif [[ -d "$legacy_skills_dir" ]]; then
+    while IFS= read -r dir; do
+      dir="${dir%/}"
+      [ -f "$dir/SKILL.md" ] || continue
+      name=$(basename "$dir")
+      target="$legacy_skills_dir/$name"
+      [[ -L "$target" ]] || continue
+      [[ "$(readlink "$target")" == "$dir" ]] || continue
+      rm "$target"
+      legacy_count=$((legacy_count + 1))
+    done < <(almanac_list_skills)
+  fi
 
   [[ -d "$legacy_skills_dir" ]] && rmdir "$legacy_skills_dir" 2>/dev/null || true
   [[ "$legacy_count" -gt 0 ]] && _info "Removed $legacy_count legacy skill symlinks from ~/.codex/skills/almanac/"
 
   local prompt_count=0
   while IFS= read -r dir; do
+    dir="${dir%/}"
     [ -f "$dir/SKILL.md" ] || continue
-    local name
     name=$(basename "$dir")
-    local target="$prompts_dir/$name.md"
+    target="$prompts_dir/$name.md"
 
     [[ -L "$target" ]] || continue
-    [[ "$(readlink "$target")" == *almanac* ]] || continue
+    [[ "$(readlink "$target")" == "$dir/SKILL.md" ]] || continue
     rm "$target"
     prompt_count=$((prompt_count + 1))
   done < <(almanac_list_skills)
@@ -186,14 +280,25 @@ _uninstall_codex() {
 
   _info "Removed $prompt_count slash prompt symlinks from ~/.codex/prompts/"
 
-  # Remove global AGENTS.md symlink if it points to almanac
+  # Remove global AGENTS.md only when it points to this checkout's source.
   local agents_md="$HOME/.codex/AGENTS.md"
-  if [[ -L "$agents_md" ]] && [[ "$(readlink "$agents_md")" == *almanac* ]]; then
+  local agents_source="$ALMANAC_HOME/providers/_shared/AGENTS.md"
+  if [[ -L "$agents_md" ]] && [[ "$(readlink "$agents_md")" == "$agents_source" ]]; then
     rm "$agents_md"
     _info "Removed AGENTS.md symlink from ~/.codex/"
   fi
 
   _success "Uninstalled almanac from Codex"
+}
+
+_uninstall_pi() {
+  _remove_shared_agent_skills pi
+  if [[ "$SHARED_SKILLS_RETAINED" == true ]]; then
+    _info "Kept shared skill links for Codex or another installer"
+  else
+    _info "Removed $REMOVED_SHARED_SKILL_COUNT skill symlinks from ~/.agents/skills/almanac/"
+  fi
+  _success "Uninstalled almanac from Pi"
 }
 
 # --- main ---
@@ -215,6 +320,9 @@ case "$PROVIDER" in
     ;;
   codex)
     _uninstall_codex
+    ;;
+  pi)
+    _uninstall_pi
     ;;
   *)
     _warn "No uninstaller for $PROVIDER — remove manually"

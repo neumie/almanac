@@ -43,7 +43,7 @@ bash ~/.almanac/skills/loop/scripts/once.sh auth-system
 ```
 
 Use the installed provider path if you are not running from the repo:
-- Codex: `~/.agents/skills/almanac/loop/scripts`
+- Codex or Pi: `~/.agents/skills/almanac/loop/scripts`
 - Claude Code: `~/.claude/skills/almanac/loop/scripts`
 
 Runs one pass. You review the result before continuing. Good for:
