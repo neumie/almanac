@@ -8,6 +8,7 @@ metadata:
     - commits-squash
     - push
     - pr-create
+    - pr-watch
 ---
 
 # Ship
@@ -89,4 +90,4 @@ Replace any skipped steps with their skip message (e.g., `Commit: nothing to com
 After the summary, use the workflow count from the pre-run:
 
 - If workflows exist (count > 0): invoke the `pr-watch` skill on the PR immediately — do not ask.
-- If no workflows (count is 0): ask **"Merge?"** — if yes, try `gh pr merge <number> --squash --delete-branch`. If it fails (e.g., git worktree conflict), merge via API: `gh api repos/{owner}/{repo}/pulls/{number}/merge -X PUT -f merge_method=squash`, then delete the remote branch: `gh api repos/{owner}/{repo}/git/refs/heads/{branch} -X DELETE`.
+- If no workflows (count is 0): ask **"Merge?"** — if yes, follow the `pr-watch` skill's Merge Procedure. It detects the repository's enabled merge methods; never assume squash, merge commit, or rebase.

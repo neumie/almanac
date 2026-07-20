@@ -10,6 +10,8 @@ metadata:
 
 Watch a PR's CI checks until they complete. If checks fail, attempt to fix them automatically. Report the result with a suggested next step.
 
+Every merge-ready command in this skill must resolve `<method-flag>` from repository settings using **Merge Method Detection** below. Never print the placeholder literally.
+
 ## Detect the PR and CI
 
 These commands run automatically when the skill loads — output replaces each line below:
@@ -27,7 +29,7 @@ If the workflow count is 0, report and suggest merge:
 
 ```
 No CI workflows configured — nothing to watch.
-Ready to merge: gh pr merge #42 --squash --delete-branch
+Ready to merge: gh pr merge #42 <method-flag> --delete-branch
 ```
 
 ## Watch Checks
@@ -57,7 +59,7 @@ Watching PR #42 (feat/add-tdd-and-test-write-skills)...
   CI: 5/5 passed
 
 Result: All checks passed
-Ready to merge: gh pr merge #42 --squash --delete-branch
+Ready to merge: gh pr merge #42 <method-flag> --delete-branch
 ```
 
 ### Some checks failed (fix attempts remaining)
@@ -82,7 +84,7 @@ Watching PR #42...
   CI: 5/5 passed
 
 Result: All checks passed (1 fix applied)
-Ready to merge: gh pr merge #42 --squash --delete-branch
+Ready to merge: gh pr merge #42 <method-flag> --delete-branch
 ```
 
 ### Some checks failed (no fix attempts remaining)
@@ -116,9 +118,44 @@ Needs manual investigation.
 
 When the user asks to merge after watching:
 
-1. Try `gh pr merge <number> --squash --delete-branch`
-2. If it fails (e.g., git worktree conflict), merge via API instead:
+### Merge Method Detection
+
+Query repository settings before suggesting or performing a merge:
+
+```bash
+gh api repos/{owner}/{repo} --jq '{merge: .allow_merge_commit, squash: .allow_squash_merge, rebase: .allow_rebase_merge}'
+```
+
+Map enabled methods to CLI flags and API values:
+
+| Setting | CLI flag | API value |
+| --- | --- | --- |
+| `merge: true` | `--merge` | `merge` |
+| `squash: true` | `--squash` | `squash` |
+| `rebase: true` | `--rebase` | `rebase` |
+
+- If the user explicitly requested a method, use it only when enabled. Otherwise stop and list enabled methods.
+- If exactly one method is enabled, use it.
+- If multiple methods are enabled and the user did not choose one, ask. Never infer a global preference.
+- If no method is enabled or the settings query fails, stop and report the error.
+
+Record the selected `<method-flag>` and `<method-api>`.
+
+### Execute
+
+1. Try `gh pr merge <number> <method-flag> --delete-branch`.
+2. If it fails, check whether the PR merged before the failure:
    ```bash
-   gh api repos/{owner}/{repo}/pulls/{number}/merge -X PUT -f merge_method=squash
-   gh api repos/{owner}/{repo}/git/refs/heads/{branch} -X DELETE
+   gh pr view <number> --json state,mergedAt,headRefName
    ```
+3. If the PR is still open, merge via API using the detected method:
+   ```bash
+   gh api repos/{owner}/{repo}/pulls/{number}/merge -X PUT -f merge_method=<method-api>
+   ```
+4. Delete the remote branch only after confirming the PR is merged. A missing branch means cleanup already succeeded:
+   ```bash
+   if gh api repos/{owner}/{repo}/git/ref/heads/<branch> --silent 2>/dev/null; then
+     gh api repos/{owner}/{repo}/git/refs/heads/<branch> -X DELETE
+   fi
+   ```
+5. Verify the PR state is `MERGED` and report the method used.
