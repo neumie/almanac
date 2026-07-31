@@ -1,93 +1,104 @@
 ---
 name: code-review
-description: Use when reviewing changes since a fixed point (branch, commit, tag, PR base). Two parallel axes — Standards (repo conventions + Fowler smell baseline) and Spec (matches the originating issue or spec).
+description: Use when reviewing changes since a fixed point (branch, commit, tag, or PR base). Runs independent behavior, architecture, security, and verification/operations reviews.
 metadata:
+  dependencies:
+    - codebase-design
   upstream: mattpocock/skills/skills/engineering/code-review
   upstream-sha: 2a0b5240731b927caa9ac0bf43c3e2af9dc3f0a7
-  adapted-date: "2026-07-10"
+  adapted-date: "2026-07-31"
 ---
 
 # Code Review
 
-Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
+Review the diff between `HEAD` and a fixed point through four independent lenses:
 
-- **Standards** — does the code conform to this repo's documented coding standards?
-- **Spec** — does the code faithfully implement the originating issue / spec?
+- **Behavior** — spec conformance, scope, correctness, and reliability.
+- **Architecture** — module design, maintainability, and repository standards.
+- **Security** — trust boundaries, authorization, privacy, abuse resistance, and supply chain.
+- **Verification & Operations** — tests, compatibility, performance, accessibility where relevant, and operability.
 
-Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
+Run each lens in a separate read-only context so one kind of strength cannot mask another kind of failure. A finding must satisfy the evidence bar in [review-lenses.md](references/review-lenses.md); generic advice and hypothetical risks are not findings.
+
+This is a review workflow. Do not edit the reviewed code unless the user separately asks for fixes.
 
 ## Process
 
 ### 1. Pin the fixed point
 
-Whatever the user said is the fixed point — a commit SHA, branch name, tag, `main`, `HEAD~5`, etc. If they didn't specify one, ask for it.
+Whatever the user supplied is the fixed point: a commit SHA, branch, tag, `main`, `HEAD~5`, PR base, or similar. If they did not supply one, ask for it.
 
-Capture the diff command once: `git diff <fixed-point>...HEAD` (three-dot, so the comparison is against the merge-base). Also note the list of commits via `git log <fixed-point>..HEAD --oneline`.
+Resolve it before doing any review:
 
-Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here — not inside two parallel sub-agents.
+```sh
+git rev-parse <fixed-point>
+git diff --name-status <fixed-point>...HEAD
+git diff --stat <fixed-point>...HEAD
+git log <fixed-point>..HEAD --oneline
+```
 
-### 2. Identify the spec source
+The canonical committed patch is `git diff <fixed-point>...HEAD` (three-dot, against the merge-base). If the user asked to review current work and the working tree is dirty, add `git diff HEAD` as a clearly labelled supplemental patch; never silently omit it.
 
-Look for the originating spec, in this order:
+Fail early on an invalid ref or an empty combined patch. Capture the diff commands and commit list once and give the same scope to every reviewer.
 
-1. Issue references in the commit messages (`#123`, `Closes #45`, etc.) — fetch with `gh issue view <number> --comments`.
-2. A path the user passed as an argument.
-3. A spec file under `docs/plans/<name>/spec.md` (or legacy `prd.md`), `docs/`, or `specs/` matching the branch name or feature.
-4. If nothing is found, ask the user where the spec is. If they say there isn't one, the **Spec** sub-agent will skip and report "no spec available".
+### 2. Gather shared context
 
-### 3. Identify the standards sources
+Find sources before spawning reviewers.
 
-Anything in the repo that documents how code should be written, such as `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, or `docs/` style guides.
+**Spec**, in this order:
 
-On top of whatever the repo documents, the Standards axis always carries the **smell baseline** below — a fixed set of Fowler code smells (_Refactoring_, ch.3) that applies even when a repo documents nothing. Two rules bind it:
+1. Issue references in commits (`#123`, `Closes #45`, and similar), fetched with `gh issue view <number> --comments`.
+2. A path supplied by the user.
+3. A branch-matching file under `docs/plans/`, `docs/`, or `specs/` (`spec.md`, legacy `prd.md`, or equivalent).
+4. Ask once if none is found. If the user confirms there is no spec, continue: the Behavior reviewer marks spec conformance unverified but still reviews correctness and reliability.
 
-- **The repo overrides.** A documented repo standard always wins; where it endorses something the baseline would flag, suppress the smell.
-- **Always a judgement call.** Each smell is a labelled heuristic ("possible Feature Envy"), never a hard violation — and, like any standard here, skip anything tooling already enforces.
+**Repository rules:** relevant `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, style guides, and local instructions for changed directories.
 
-Each smell reads *what it is* → *how to fix*; match it against the diff:
+**Architecture context:** relevant `CONTEXT.md`, `CONTEXT-MAP.md`, ADRs, dependency rules, and module documentation. Follow the `codebase-design` skill for architecture vocabulary and principles.
 
-- **Mysterious Name** — a function, variable, or type whose name doesn't reveal what it does or holds. → rename it; if no honest name comes, the design's murky.
-- **Duplicated Code** — the same logic shape appears in more than one hunk or file in the change. → extract the shared shape, call it from both.
-- **Feature Envy** — a method that reaches into another object's data more than its own. → move the method onto the data it envies.
-- **Data Clumps** — the same few fields or params keep travelling together (a type wanting to be born). → bundle them into one type, pass that.
-- **Primitive Obsession** — a primitive or string standing in for a domain concept that deserves its own type. → give the concept its own small type.
-- **Repeated Switches** — the same `switch`/`if`-cascade on the same type recurs across the change. → replace with polymorphism, or one map both sites share.
-- **Shotgun Surgery** — one logical change forces scattered edits across many files in the diff. → gather what changes together into one module.
-- **Divergent Change** — one file or module is edited for several unrelated reasons. → split so each module changes for one reason.
-- **Speculative Generality** — abstraction, parameters, or hooks added for needs the spec doesn't have. → delete it; inline back until a real need shows.
-- **Message Chains** — long `a.b().c().d()` navigation the caller shouldn't depend on. → hide the walk behind one method on the first object.
-- **Middle Man** — a class or function that mostly just delegates onward. → cut it, call the real target direct.
-- **Refused Bequest** — a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
+**Risk signals:** note whether the patch touches authentication, authorization, external input, secrets, personal data, persistence, migrations, public APIs, dependencies, infrastructure, concurrency, caching, or user interfaces. These signals focus conditional checks; they do not predetermine findings.
 
-### 4. Spawn both sub-agents in parallel
+Read [review-lenses.md](references/review-lenses.md) in full. Identify the repository's normal validation commands. Run practical static checks and targeted tests once centrally, then pass their results to reviewers. Do not duplicate formatter or linter output as hand-written findings; report failed commands separately. Record any expensive or unavailable checks as unverified rather than implying they passed.
 
-Send a single message with two `Agent` tool calls. Use the `general-purpose` subagent for both.
+### 3. Spawn four reviewers in parallel
 
-**Standards sub-agent prompt** — include:
+Spawn one read-only general-purpose sub-agent per lens in a single parallel batch. Give each a fresh context. If the host cannot run parallel sub-agents, run the lenses sequentially with fresh contexts; never collapse them into one review prompt.
 
-- The full diff command and commit list.
-- The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full — the sub-agent has no other access to it.
-- The brief: "Report — per file/hunk where relevant — (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls — documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. Under 400 words."
+Every prompt must include:
 
-**Spec sub-agent prompt** — include:
+- the fixed point, exact diff command(s), changed-file list, and commit list;
+- the relevant spec, rules, architecture-context paths, and validation output;
+- the shared finding bar, severity scale, and output schema from `review-lenses.md`;
+- the applicable lens contract from `review-lenses.md`, pasted in full because a child may not inherit this skill;
+- instructions to inspect surrounding definitions, callers, tests, and configuration where needed to prove impact, not just read isolated diff hunks;
+- instructions to remain read-only and return either evidence-backed findings or `No findings`.
 
-- The diff command and commit list.
-- The path or fetched contents of the spec.
-- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
+Use these lens briefs:
 
-If the spec is missing, skip the Spec sub-agent and note this in the final report.
+1. **Behavior:** compare the patch with the spec and apply the Behavior contract. Find missing or unintended behavior, concrete correctness defects, violated invariants, edge cases, and failure-mode problems.
+2. **Architecture:** follow the `codebase-design` skill and apply the Architecture contract. Check changed module interfaces, seams, dependency direction, locality, testability, documented decisions, repository standards, and maintainability smells.
+3. **Security:** apply the Security contract. Trace changed data and control flow across trust boundaries; check authorization at the operation/object level and seek a concrete exploit or abuse path before reporting.
+4. **Verification & Operations:** apply that contract. Assess whether tests prove changed behavior and conditionally check compatibility, migrations, performance, accessibility/UX states, rollout safety, and observability.
 
-### 5. Aggregate
+### 4. Aggregate without masking
 
-Present the two reports under `## Standards` and `## Spec` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings — the two axes are deliberately separate (see _Why two axes_).
+Present findings first, grouped under these headings and sorted by severity within each:
 
-End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes — that's the reranking the separation exists to prevent.
+- `## Behavior`
+- `## Architecture`
+- `## Security`
+- `## Verification & Operations`
 
-## Why two axes
+Keep lens attribution. Deduplicate only when two reports identify the same root cause and consequence; retain both lens labels on the surviving finding. Do not promote stylistic preferences into blockers and do not include pre-existing issues unless the patch materially worsens them.
 
-A change can pass one axis and fail the other:
+Then add:
 
-- Code that follows every standard but implements the wrong thing → **Standards pass, Spec fail.**
-- Code that does exactly what the issue asked but breaks the project's conventions → **Spec pass, Standards fail.**
+- `## Validation` — commands actually run and their exact pass/fail status.
+- `## Coverage & Residual Risk` — missing spec, unreadable context, checks not run, conditional areas judged not applicable, and unresolved uncertainty.
+- `## Summary` — counts by severity and lens plus the worst issue in each lens.
 
-Reporting them separately stops one axis from masking the other.
+Use `Blocked` when a concrete P0 or P1 remains; otherwise use `No blocking findings`. The latter is not a claim that the change is safe or bug-free. Never say the review or tests passed when required context or validation was unavailable.
+
+## Why Separate Lenses
+
+A patch can implement the requested behavior while weakening authorization, follow every style rule while creating a shallow module, or carry excellent tests for the wrong behavior. Independent contexts and separate reporting prevent one success from averaging away an unrelated failure.

@@ -15,13 +15,13 @@ Skills are organized by category in the repo (`skills/git/`, `skills/productivit
 ### Skill highlights
 
 | Skill | Use |
-|-------|-----|
+| ------- | ----- |
 | `loop` | Build a spec slice queue task-by-task, with each iteration committed. |
 | `converge-loop` | Repeat one custom exec command toward a mutable `goal.md` until an overseer says done. |
 | `spec-create` | Synthesize a conversation or idea into `docs/plans/<name>/spec.md` for the loops to consume. |
 | `to-tickets` | Split a spec into blocked tracer-bullet tickets for GitHub or `docs/plans/`. |
 | `implement` | Implement one agent-ready ticket through TDD, review, queue update, and commit. |
-| `code-review` | Review changes since a fixed point on two parallel axes — repo standards and spec conformance. |
+| `code-review` | Review changes through parallel behavior, architecture, security, and verification/operations lenses. |
 | `codebase-design` | Shared vocabulary for deep modules, interfaces, seams, adapters, and testability. |
 | `domain-model` | Maintain `CONTEXT.md` domain language and ADRs while design decisions crystallize. |
 | `prototype-build` | Build throwaway logic or UI prototypes to answer design questions before production code. |
@@ -36,8 +36,7 @@ bash install.sh
 almanac install claude-code
 ```
 
-<details>
-<summary>Other agents</summary>
+### Other agents
 
 ```bash
 almanac install opencode
@@ -55,8 +54,6 @@ ln -s ~/.almanac/skills ~/.config/opencode/skills/almanac   # OpenCode
 ln -s ~/.almanac/skills ~/.cursor/skills/almanac             # Cursor
 ln -s ~/.almanac/skills ~/.agents/skills/almanac             # Codex + Pi
 ```
-
-</details>
 
 ### Global config
 
@@ -140,7 +137,7 @@ skills/
 Thirteen skills are adapted from upstream repositories:
 
 | Skill | Upstream |
-|-------|----------|
+| ------- | ---------- |
 | code-review | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | codebase-design | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | codebase-improve | [mattpocock/skills](https://github.com/mattpocock/skills) |
