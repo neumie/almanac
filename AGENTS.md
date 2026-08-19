@@ -2,7 +2,7 @@
 
 ## Skill Authoring
 
-**Naming.** `noun-verb` (`pr-create`, `ci-fix`, `session-recap`). Never `verb-noun` — breaks alphabetical grouping by topic. Lowercase alphanumeric + hyphens, no `--`, no leading/trailing `-`. Name must match directory exactly.
+**Naming.** Use either one clear canonical word (`commit`, `push`, `unslop`) or a topic-first `noun-verb` compound (`pr-create`, `ci-fix`, `session-recap`). Never `verb-noun` — it breaks alphabetical grouping by topic. Lowercase alphanumeric + hyphens, no `--`, no leading/trailing `-`. Name must match directory exactly.
 
 **Categories.** Skills live nested at `skills/<category>/<name>/SKILL.md`. Current categories: `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (PRD → issues → autonomous loop), `comms/` (client/team-facing comms — emails, release notes, etc.), `other/`. Add new categories freely — validator just walks the tree. Names must be unique across the whole tree (validator hard-fails on collisions). The category is purely organizational; install-time symlinks flatten everything to `~/.claude/skills/almanac/<name>` because Claude Code skill discovery is flat (only direct children of the skills dir are scanned).
 
@@ -46,6 +46,7 @@ Delegate with "Follow the `<skill-name>` skill" — never duplicate. Declare har
 The `almanac` CLI is **registry-driven**: a command is valid iff `cmd/<name>.sh` exists. `almanac_list_commands` (in `lib/core.sh`, globbing `cmd/*.sh` — mirrors `almanac_providers`) is the single source of truth for the command set; `bin/almanac` dispatch, `cmd/help.sh`, and `tests/test-cli.sh` all derive from it. **Adding a command is one new file in `cmd/` — never edit the dispatcher or hand-maintain a command list anywhere.** The dispatcher guards the name to `^[a-z][a-z-]*$` before touching the filesystem (path-traversal safe).
 
 **Command file contract** (enforced by `tests/test-cli.sh` — it fails the build if a command skips any of this):
+
 - Declares three header comment lines, read by help generation via `almanac_command_meta`: `# summary:` (one line for `almanac help`), `# usage:` (synopsis), `# group:` (`loops` | `providers` | `maintenance` | `other`).
 - Sets `set -euo pipefail` and sources at least one `lib/` file (`core.sh` for the `_` helpers, or a `*-core.sh` that loads it).
 - Handles `-h|--help` → prints usage to **stdout**, `exit 0`.

@@ -5,29 +5,34 @@ Two-layer design: provider-agnostic core + provider-specific adapters.
 ## Layer 1: Core (provider-agnostic)
 
 ### `skills/`
+
 The open standard. Each skill is a directory with a `SKILL.md` file following the [Agent Skills Open Standard](https://agentskills.io/specification). Skills are natively discovered by Claude Code, OpenCode, Cursor, Codex, Pi, and 25+ compatible agents.
 
 Skills are organized by category — `git/`, `agents-md/`, `loop/`, `comms/`, `productivity/`, `other/` — for filesystem hygiene. The category is purely organizational; install-time symlinks flatten everything to `~/.claude/skills/almanac/<name>` because Claude Code's skill discovery only scans direct children of the skills root. Names must be unique across the whole tree (validator enforces).
 
 Skills use progressive disclosure:
+
 1. **Metadata** (~100 tokens) — name + description, loaded at startup
 2. **Instructions** (<5000 tokens) — SKILL.md body, loaded on activation
 3. **Resources** (on demand) — scripts/, references/, assets/
 
-Some skills are adapted from upstream sources ([mattpocock/skills](https://github.com/mattpocock/skills), [contember/agent-canvas](https://github.com/contember/agent-canvas)) and track their upstream via `metadata.upstream-sha` in frontmatter. Run `almanac sync` to check for updates.
+Some skills are adapted from upstream sources ([mattpocock/skills](https://github.com/mattpocock/skills), [contember/agent-canvas](https://github.com/contember/agent-canvas), [theclaymethod/unslop](https://github.com/theclaymethod/unslop)) and track their upstream via `metadata.upstream-sha` in frontmatter. Run `almanac sync` to check for updates.
 
-Reference material (templates, patterns, guardrails) lives in `skills/<category>/<name>/references/` directories, loaded on demand by the skills that use them. Shared design/domain/interview/implementation skills (`codebase-design`, `domain-model`, `grilling`, `implement`) own reusable vocabulary, decision-record rules, interview mechanics, and one-ticket execution. Consumers such as `codebase-improve`, `tdd`, `spec-create`, `grill-me`, `grill-with-docs`, and `loop` declare `metadata.dependencies` and delegate rather than copying those rules. The planning pipeline is `spec-create` → `to-tickets` → `implement`; `loop` repeatedly selects agent-ready tickets and delegates each iteration to `implement`.
+Reference material (templates, patterns, guardrails) lives in `skills/<category>/<name>/references/` directories, loaded on demand by the skills that use them. Runtime-heavy skills may also bundle scripts and immutable calibration assets: `unslop` keeps its Python scanners in `scripts/`, voice presets in `presets/`, and the minimal silhouette/impostor fixtures in `assets/`, while upstream-only benchmarks remain outside Almanac. Shared design/domain/interview/implementation skills (`codebase-design`, `domain-model`, `grilling`, `implement`) own reusable vocabulary, decision-record rules, interview mechanics, and one-ticket execution. Consumers such as `codebase-improve`, `tdd`, `spec-create`, `grill-me`, `grill-with-docs`, and `loop` declare `metadata.dependencies` and delegate rather than copying those rules. The planning pipeline is `spec-create` → `to-tickets` → `implement`; `loop` repeatedly selects agent-ready tickets and delegates each iteration to `implement`.
 
 ## Layer 2: Adapters (provider-specific)
 
 ### `providers/claude-code/`
+
 Full local plugin:
+
 - `.claude-plugin/plugin.json` — plugin manifest
 - `skills/` — symlink to shared `../../skills`
 - `hooks/hooks.json` — lifecycle hooks (SessionStart, Stop)
 - `agents/` — extensible directory
 
 ### `providers/{opencode,cursor,codex,pi}/`
+
 Setup stubs with symlink instructions for each provider's skill discovery path. Codex and Pi have first-class installers that link skill directories into their shared Agent Skills location, `~/.agents/skills/almanac/<name>`. Codex exposes `$skill` invocation and `/skills` browsing; Pi exposes `/skill:<name>` commands and hot-reloads the links with `/reload`. Shared installs keep exact target ownership in `.almanac-install/manifest.tsv` plus one marker under `owners/` per installed harness. Install preflights collisions before replacing links; uninstall removes only exact manifest targets and retains all links while another owner remains.
 
 ### Agent instruction files (`AGENTS.md` / `CLAUDE.md`)
@@ -45,7 +50,7 @@ In-repo guidance follows the `agents-md-map` convention: `AGENTS.md` is the cano
 **Module map.**
 
 | Path | Owns |
-|------|------|
+| ------ | ------ |
 | `cmd/loop.sh` | Loop launcher entrypoint. |
 | `cmd/converge.sh` | Generic converge launch plus slug status/watch/stop. |
 | `cmd/hub.sh` | Hub parse+dispatch shim (TTY menu / non-interactive actions). |
@@ -53,6 +58,7 @@ In-repo guidance follows the `agents-md-map` convention: `AGENTS.md` is the cano
 | `lib/hub-core.sh` | Hub composable logic: loop listing, new-run composer, interactive menu, resume/clone inverter. |
 | `lib/loops/loop.sh` | Loop adapter contract. |
 | `lib/loops/converge.sh` | Converge loop control contract for hub stop/steer signals. |
+| `skills/comms/unslop/` | Fact-preserving prose audit/rewrite flows, taught-voice tooling, scanners, presets, and calibration assets. |
 | `skills/loop/to-tickets/` | Tracer-bullet ticket publisher for GitHub or `docs/plans/`. |
 | `skills/loop/implement/` | Single-ticket TDD, review, queue-update, and commit workflow. |
 | `skills/loop/loop/` | User-facing Loop skill and scripts. |
@@ -83,6 +89,7 @@ The **loop-adapter seam** mirrors the provider one for loops, and lives in **`li
 ## Validation (`lib/almanac-core.sh`)
 
 `almanac_validate_skill()` checks against the Agent Skills Open Standard:
+
 - Name format (regex, length, no consecutive hyphens, matches directory)
 - Description presence + length (≤220 chars to keep auto-listing compact)
 - Description starts with `Use when` (a leading YAML quote is stripped first) — agents under-trigger without an explicit trigger up front; the rule is in the validator, with a negative case in `tests/test-skills.sh`
