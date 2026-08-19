@@ -15,23 +15,24 @@ description: Use when [specific trigger condition]. [What it does].
 Step-by-step instructions for the agent...
 ```
 
-2. **Name rules** (Agent Skills Open Standard):
+1. **Name rules** (Agent Skills Open Standard):
    - 1-64 characters, lowercase alphanumeric + hyphens
+   - Use one clear canonical word (`commit`, `push`, `unslop`) or a topic-first `noun-verb` compound (`pr-create`, `ci-fix`); never `verb-noun`
    - No leading/trailing hyphens, no consecutive hyphens (`--`)
    - Must match the directory name exactly
    - Must be unique across the whole tree — `skills/git/foo/` and `skills/other/foo/` collide (validator hard-fails)
 
-3. **Description**: must start with `Use when` (validator-enforced; a leading YAML quote is allowed) and state the trigger explicitly — agents tend to under-trigger. Hard cap 220 chars (validator-enforced) to keep the aggregated listing compact.
+2. **Description**: must start with `Use when` (validator-enforced; a leading YAML quote is allowed) and state the trigger explicitly — agents tend to under-trigger. Hard cap 220 chars (validator-enforced) to keep the aggregated listing compact.
 
-4. **Optional frontmatter**: `license`, `compatibility` (max 500 chars), `metadata` (key-value map), `allowed-tools`, `disable-model-invocation` (bool — strips skill from auto-listing; user-invocable via `/almanac:<name>`; orchestrators can still load it via path)
+3. **Optional frontmatter**: `license`, `compatibility` (max 500 chars), `metadata` (key-value map), `allowed-tools`, `disable-model-invocation` (bool — strips skill from auto-listing; user-invocable via `/almanac:<name>`; orchestrators can still load it via path)
 
-5. **Optional directories**: `scripts/` (executable code), `references/` (docs loaded on demand), `assets/` (templates, data)
+4. **Optional directories**: `scripts/` (executable code), `references/` (docs loaded on demand), `assets/` (templates, data)
 
-6. **Keep SKILL.md under 500 lines.** Move detailed reference material to `references/`.
+5. **Keep SKILL.md under 500 lines.** Move detailed reference material to `references/`.
 
-7. **Loop consumers**: if a loop uses shared role config, document its consumer prefix and role env vars in its skill docs and architecture notes. Follow the shared pattern: `<CONSUMER>_<ROLE>_{PROVIDER,MODEL,EFFORT}` first, then `<CONSUMER>_{PROVIDER,MODEL,EFFORT}`, then defaults. Example: converge uses `CONVERGE_AGENT_*` and `CONVERGE_OVERSEER_*`.
+6. **Loop consumers**: if a loop uses shared role config, document its consumer prefix and role env vars in its skill docs and architecture notes. Follow the shared pattern: `<CONSUMER>_<ROLE>_{PROVIDER,MODEL,EFFORT}` first, then `<CONSUMER>_{PROVIDER,MODEL,EFFORT}`, then defaults. Example: converge uses `CONVERGE_AGENT_*` and `CONVERGE_OVERSEER_*`.
 
-8. **Validate**: `bash tests/test-skills.sh`
+7. **Validate**: `bash tests/test-skills.sh`
 
 When renaming a skill, update dependent `metadata.dependencies` entries plus README and architecture references in the same change.
 
@@ -57,15 +58,16 @@ esac
 # … guard required values with `_need_value --flag "$#"`; _die terse on errors …
 ```
 
-2. **Contract** (enforced by `bash tests/test-cli.sh`): the three `# summary:`/`# usage:`/`# group:` headers, `set -euo pipefail`, a `lib/` source, and a `-h|--help` arm that prints to stdout and exits 0. Commands are *sourced* into `bin/almanac` (not exec'd) — finish with `exit`, not `return`; `$ALMANAC_HOME` is already exported.
-3. Put heavy logic in `lib/foo-core.sh` (mirror `hub-core.sh`) so the `cmd/` file stays a thin, testable parse+dispatch shim.
-4. Add `cmd/foo.sh` to `tests/test-structure.sh` and run `bash tests/test-cli.sh && bash tests/test-structure.sh`.
+1. **Contract** (enforced by `bash tests/test-cli.sh`): the three `# summary:`/`# usage:`/`# group:` headers, `set -euo pipefail`, a `lib/` source, and a `-h|--help` arm that prints to stdout and exits 0. Commands are *sourced* into `bin/almanac` (not exec'd) — finish with `exit`, not `return`; `$ALMANAC_HOME` is already exported.
+2. Put heavy logic in `lib/foo-core.sh` (mirror `hub-core.sh`) so the `cmd/` file stays a thin, testable parse+dispatch shim.
+3. Add `cmd/foo.sh` to `tests/test-structure.sh` and run `bash tests/test-cli.sh && bash tests/test-structure.sh`.
 
 ## Adapting an Upstream Skill
 
-When adapting from upstream sources (e.g. [mattpocock/skills](https://github.com/mattpocock/skills), [contember/agent-canvas](https://github.com/contember/agent-canvas)):
+When adapting from upstream sources (e.g. [mattpocock/skills](https://github.com/mattpocock/skills), [contember/agent-canvas](https://github.com/contember/agent-canvas), [theclaymethod/unslop](https://github.com/theclaymethod/unslop)):
 
 1. Add upstream tracking metadata. The value is `owner/repo/path`; `sync` appends `/SKILL.md`. Note `mattpocock/skills` nests skills under a `skills/<category>/` dir, so the path repeats `skills/`:
+
 ```yaml
 metadata:
   upstream: mattpocock/skills/skills/<category>/<skill-name>
@@ -73,7 +75,9 @@ metadata:
   adapted-date: "YYYY-MM-DD"
 ```
 
-2. Adapt the content — don't just copy. Trim Anthropic-specific tooling, align with Almanac conventions.
+1. Adapt the content — don't just copy. Trim provider-specific tooling and upstream-only maintenance/eval machinery, align with Almanac conventions, and vendor only runtime resources the adapted flow can actually reach. If a script reads repository-relative data, relocate the minimal data under the skill and update the resolver so installed symlinks work.
+
+2. For script commands that need the installed skill directory, document both `~/.agents/skills/almanac/<name>/...` (Codex/Pi) and `~/.claude/skills/almanac/<name>/...` (Claude Code). Never use `${CLAUDE_SKILL_DIR}`.
 
 3. Run `almanac sync` to verify tracking works.
 

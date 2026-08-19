@@ -24,6 +24,7 @@ Skills are organized by category in the repo (`skills/git/`, `skills/productivit
 | `code-review` | Review changes through parallel behavior, architecture, security, and verification/operations lenses. |
 | `codebase-design` | Shared vocabulary for deep modules, interfaces, seams, adapters, and testability. |
 | `domain-model` | Maintain `CONTEXT.md` domain language and ADRs while design decisions crystallize. |
+| `unslop` | Audit or rewrite AI-sounding prose while preserving facts, register, and a taught human voice. |
 | `prototype-build` | Build throwaway logic or UI prototypes to answer design questions before production code. |
 
 ## Install
@@ -107,6 +108,13 @@ lib/
     converge.sh
     loop.sh
 skills/
+  comms/
+    unslop/
+      SKILL.md
+      assets/
+      presets/
+      references/
+      scripts/
   loop/
     converge-loop/
       SKILL.md
@@ -134,7 +142,7 @@ skills/
 
 ### Upstream sync
 
-Thirteen skills are adapted from upstream repositories:
+Fourteen skills are adapted from upstream repositories:
 
 | Skill | Upstream |
 | ------- | ---------- |
@@ -147,6 +155,7 @@ Thirteen skills are adapted from upstream repositories:
 | grill-with-docs | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | grilling | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | implement | [mattpocock/skills](https://github.com/mattpocock/skills) |
+| unslop | [theclaymethod/unslop](https://github.com/theclaymethod/unslop) |
 | prototype-build | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | spec-create | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | tdd | [mattpocock/skills](https://github.com/mattpocock/skills) |
@@ -157,7 +166,7 @@ Run `almanac sync` to check for updates.
 ## Adding a skill
 
 1. Create `skills/<category>/<name>/SKILL.md` with YAML frontmatter
-2. Use `noun-verb` naming (e.g. `pr-create`, `ci-fix`) — lowercase, hyphens only
+2. Use one clear canonical word or `noun-verb` naming (e.g. `unslop`, `pr-create`, `ci-fix`) — lowercase, hyphens only
 3. Description starts with "Use when..."
 4. Run `bash tests/test-skills.sh` to validate
 
