@@ -2,7 +2,7 @@
 
 Generate several radically different UI variants on one route, switchable from a floating bottom bar. User flips between variants, picks one or combines parts, then the rest is deleted.
 
-If the question is logic or state, use `references/logic.md`.
+If the question is logic or state, use [logic.md](logic.md).
 
 ## Good Fit
 

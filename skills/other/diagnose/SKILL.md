@@ -3,20 +3,21 @@ name: diagnose
 description: "Use when debugging hard bugs or perf regressions. Disciplined loop — reproduce, minimise, hypothesise, instrument, fix, regression-test. Triggers: debug this, broken, throwing, failing."
 metadata:
   upstream: mattpocock/skills/skills/engineering/diagnosing-bugs
-  upstream-sha: f400de7c1937377fec7ff9bae3b0c072670f1e81
-  adapted-date: "2026-06-19"
+  upstream-sha: 061c25a524acaa93d4534e9e08a793c0a5fe45fd
+  adapted-date: "2026-09-07"
 ---
 
 # Diagnose
 
 Discipline for hard bugs. Skip phases only when explicitly justified.
 
-Domain context runs automatically when the skill loads — output replaces each line below:
+Read `CONTEXT.md` if it exists and use its vocabulary. Read relevant ADRs under `docs/adr/` before exploring the codebase. If neither exists, proceed without them.
 
-- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null || true`
-- ADR list: !`ls docs/adr/ 2>/dev/null || true`
+## Redact
 
-If `CONTEXT.md` content is present above, use that vocabulary. If `ADR list` showed files, read the relevant ones before exploring the codebase. If both were empty, proceed silently.
+Before showing commands, outputs, or captured artifacts, replace every secret with `<REDACTED>`. Keep credentials in environment variables rather than literal commands, logs, or fixtures. Avoid tracing that expands secret values into output.
+
+Captured requests, HAR files, and logs can contain auth headers, cookies, tokens, and private data. Quote only the redacted lines that carry the diagnostic signal. If that is not enough, explain the missing signal and ask the user for a safe way to obtain it, not an unredacted secret.
 
 ## Phase 1 — Build a feedback loop
 
@@ -35,7 +36,9 @@ Spend disproportionate effort here. **Be aggressive. Be creative. Refuse to give
 7. **Property / fuzz loop.** If bug is "sometimes wrong output", run 1000 random inputs and look for failure mode.
 8. **Bisection harness.** If bug appeared between two known states (commit, dataset, version), automate "boot at state X, check, repeat" so you can `git bisect run` it.
 9. **Differential loop.** Run same input through old-version vs new-version (or two configs) and diff outputs.
-10. **HITL bash script.** Last resort. If human must click, drive _them_ with `~/.claude/skills/almanac/diagnose/scripts/hitl-loop.template.sh` so loop is still structured. Captured output feeds back to you.
+10. **HITL bash script.** Last resort. If a human must click, copy and adapt [hitl-loop.template.sh](scripts/hitl-loop.template.sh) to keep the loop structured. Capture observations only; signing in is a user-performed step, never a credential-capture prompt.
+
+The installed template is at `~/.agents/skills/almanac/diagnose/scripts/hitl-loop.template.sh` for Codex/Pi or `~/.claude/skills/almanac/diagnose/scripts/hitl-loop.template.sh` for Claude Code.
 
 Build the right feedback loop → bug is 90% fixed.
 
@@ -55,16 +58,16 @@ Goal is not clean repro but **higher reproduction rate**. Loop trigger 100×, pa
 
 ### When you genuinely cannot build a loop
 
-Stop and say so explicitly. List what you tried. Ask user for: (a) access to whatever environment reproduces it, (b) captured artifact (HAR file, log dump, core dump, screen recording with timestamps), or (c) permission to add temporary production instrumentation. Do **not** proceed to hypothesise without a loop.
+Stop and say so explicitly. List what you tried. Ask user for: (a) access to whatever environment reproduces it, (b) redacted captured artifact (HAR file, log dump, core dump, screen recording with timestamps), or (c) permission to add temporary production instrumentation. Do **not** proceed to hypothesise without a loop.
 
 ### Completion criterion — a tight loop that goes red
 
-Phase 1 is done when the loop is **tight** and **red-capable**: you can name **one command** — a script path, a test invocation, a curl — that you have **already run at least once** (paste the invocation and its output), and that is:
+Phase 1 is done when the loop is **tight** and **red-capable**: you can name **one command** — a script path, a test invocation, a curl — that you have **already run at least once** (show the invocation and its output with secrets redacted), and that is:
 
 - [ ] **Red-capable** — it drives the actual bug code path and asserts the **user's exact symptom**, so it can go red on this bug and green once fixed. Not "runs without erroring" — it must catch this specific bug.
 - [ ] **Deterministic** — same verdict every run (flaky bugs: a pinned, high reproduction rate, per above).
 - [ ] **Fast** — seconds, not minutes.
-- [ ] **Agent-runnable** — you can run it unattended; a human in the loop only via `~/.claude/skills/almanac/diagnose/scripts/hitl-loop.template.sh`.
+- [ ] **Agent-runnable** — you can run it unattended; a human in the loop only via the [HITL template](scripts/hitl-loop.template.sh).
 
 Do not proceed to Phase 2 until you have a loop you believe in.
 
@@ -96,7 +99,7 @@ Generate **3–5 ranked hypotheses** before testing any. Single-hypothesis gener
 
 Each hypothesis must be **falsifiable**: state the prediction it makes.
 
-> Format: "If <X> is the cause, then <changing Y> will make bug disappear / <changing Z> will make it worse."
+> Format: "If `<X>` is the cause, then `<changing Y>` will make bug disappear / `<changing Z>` will make it worse."
 
 Can't state prediction → hypothesis is a vibe — discard or sharpen.
 
@@ -122,7 +125,7 @@ Write regression test **before the fix** — but only if there is a **correct se
 
 Correct seam = test exercises **real bug pattern** as it occurs at call site. If only available seam is too shallow (single-caller test when bug needs multiple callers, unit test that can't replicate trigger chain), regression test there gives false confidence.
 
-**If no correct seam exists, that itself is the finding.** Note it. Codebase architecture prevents bug from being locked down. Flag for next phase.
+**If no correct seam exists, that itself is the finding.** Note it. Codebase architecture prevents bug from being locked down. Document that verification gap in the final report.
 
 If correct seam exists:
 
@@ -132,7 +135,7 @@ If correct seam exists:
 4. Watch it pass.
 5. Re-run Phase 1 feedback loop against original (un-minimised) scenario.
 
-## Phase 6 — Cleanup + post-mortem
+## Phase 6 — Cleanup
 
 Required before declaring done:
 
@@ -142,4 +145,4 @@ Required before declaring done:
 - [ ] Throwaway prototypes deleted (or moved to clearly-marked debug location)
 - [ ] Hypothesis that turned out correct stated in commit / PR message — so next debugger learns
 
-**Then ask: what would have prevented this bug?** If answer involves architectural change (no good test seam, tangled callers, hidden coupling) hand off to the `codebase-improve` skill with specifics. Make recommendation **after** fix is in, not before — you have more information now than when you started.
+Report the cause, fix, commands run, and any remaining verification gaps. Do not turn debugging cleanup into an unsolicited architecture review.

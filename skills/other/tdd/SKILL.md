@@ -6,8 +6,8 @@ metadata:
     - codebase-design
     - code-review
   upstream: mattpocock/skills/skills/engineering/tdd
-  upstream-sha: 9a2e1d2a1ad856b0d5903dd002209ff8c32c9a48
-  adapted-date: "2026-07-10"
+  upstream-sha: 8fc086710806190ee7c4baa32089cb877a75736a
+  adapted-date: "2026-09-07"
 ---
 
 # Test-Driven Development
@@ -20,11 +20,13 @@ When exploring the codebase, use `CONTEXT.md` vocabulary (if it exists) so test 
 
 Tests verify behavior through public interfaces, not implementation details. Code can change entirely; tests shouldn't. A good test reads like a specification — "user can checkout with valid cart" tells you exactly what capability exists — and survives refactors because it doesn't care about internal structure.
 
-See `~/.claude/skills/almanac/tdd/references/tests.md` for examples and `~/.claude/skills/almanac/tdd/references/mocking.md` for mocking guidelines.
+See [tests.md](references/tests.md) for examples and [mocking.md](references/mocking.md) for mocking guidelines.
 
 ## Seams — Where Tests Go
 
-A **seam** is the public boundary you test at: the interface where you observe behavior without reaching inside. Tests live at seams, never against internals. Follow the `codebase-design` skill for seam, interface, and deep-module vocabulary.
+A **seam** is where you test the public interface and observe behavior without reaching inside. Tests live at seams, never against internals.
+
+When interface shape, module depth, or seam placement is in question, follow the `codebase-design` skill for the shared module, interface, depth, seam, adapter, leverage, and locality vocabulary. Consult it as a reference, not as a separate design session.
 
 **Test only at pre-agreed seams.** Before writing any test, write down the seams under test and confirm them with the user. No test is written at an unconfirmed seam. You can't test everything — agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
 
@@ -40,4 +42,4 @@ Ask: "What's the public interface, and which seams should we test?"
 
 - **Red before green.** Write the failing test first, then only enough code to pass it. Don't anticipate future tests or add speculative features.
 - **One slice at a time.** One seam, one test, one minimal implementation per cycle.
-- **Refactoring is not part of the loop.** It belongs to the review stage after the cycles are done, not the red -> green implementation cycle — follow the `code-review` skill there. See `~/.claude/skills/almanac/tdd/references/refactoring.md` for candidates. Never refactor while RED.
+- **Refactoring is not part of the loop.** It belongs to the review stage after the cycles are done, not the red -> green implementation cycle — follow the `code-review` skill there. See [refactoring.md](references/refactoring.md) for candidates. Never refactor while RED.

@@ -34,7 +34,7 @@ Step-by-step instructions for the agent...
 
 7. **Validate**: `bash tests/test-skills.sh`
 
-When renaming a skill, update dependent `metadata.dependencies` entries plus README and architecture references in the same change.
+When renaming a skill, update the directory, frontmatter name, headings, dependent `metadata.dependencies` entries, and references in README, architecture, and this guide in the same change. For example, `branch-recap` lives at `skills/productivity/branch-recap/SKILL.md`. Re-run the relevant provider installer to refresh installed links after a rename; reload or restart the agent to refresh discovery.
 
 ## Adding a CLI Command
 
@@ -79,7 +79,9 @@ metadata:
 
 2. For script commands that need the installed skill directory, document both `~/.agents/skills/almanac/<name>/...` (Codex/Pi) and `~/.claude/skills/almanac/<name>/...` (Claude Code). Never use `${CLAUDE_SKILL_DIR}`.
 
-3. Run `almanac sync` to verify tracking works.
+3. When updating, compare the recorded upstream blob with the current `SKILL.md` and inspect changes to reachable bundled resources too. Adapt the delta rather than replacing local workflows. Keep provider-specific agent manifests out of shared skills. Record the reviewed blob in `metadata.upstream-sha` and the review date in `metadata.adapted-date`, even when the delta is already covered by the local adaptation. A matching SHA means the upstream change was reviewed, not that the local file is byte-identical.
+
+4. Run `bash tests/test-skills.sh` and `almanac sync` to verify format and tracking. Sync checks `SKILL.md` hashes only; it does not detect resource-only upstream changes.
 
 ## Adding Reference Material
 

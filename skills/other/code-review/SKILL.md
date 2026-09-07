@@ -5,8 +5,8 @@ metadata:
   dependencies:
     - codebase-design
   upstream: mattpocock/skills/skills/engineering/code-review
-  upstream-sha: 2a0b5240731b927caa9ac0bf43c3e2af9dc3f0a7
-  adapted-date: "2026-07-31"
+  upstream-sha: e28d7acbf7b3bb4d7817b7eb5d9c105af03f6ec4
+  adapted-date: "2026-09-07"
 ---
 
 # Code Review

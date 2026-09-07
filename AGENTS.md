@@ -2,7 +2,7 @@
 
 ## Skill Authoring
 
-**Naming.** Use either one clear canonical word (`commit`, `push`, `unslop`) or a topic-first `noun-verb` compound (`pr-create`, `ci-fix`, `session-recap`). Never `verb-noun` — it breaks alphabetical grouping by topic. Lowercase alphanumeric + hyphens, no `--`, no leading/trailing `-`. Name must match directory exactly.
+**Naming.** Use either one clear canonical word (`commit`, `push`, `unslop`) or a topic-first `noun-verb` compound (`pr-create`, `ci-fix`, `branch-recap`). Never `verb-noun` — it breaks alphabetical grouping by topic. Lowercase alphanumeric + hyphens, no `--`, no leading/trailing `-`. Name must match directory exactly.
 
 **Categories.** Skills live nested at `skills/<category>/<name>/SKILL.md`. Current categories: `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (PRD → issues → autonomous loop), `comms/` (client/team-facing comms — emails, release notes, etc.), `other/`. Add new categories freely — validator just walks the tree. Names must be unique across the whole tree (validator hard-fails on collisions). The category is purely organizational; install-time symlinks flatten everything to `~/.claude/skills/almanac/<name>` because Claude Code skill discovery is flat (only direct children of the skills dir are scanned).
 

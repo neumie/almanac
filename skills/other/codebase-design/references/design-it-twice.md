@@ -9,7 +9,7 @@ Use this parallel sub-agent pattern when the user wants alternative interfaces f
 Before spawning sub-agents, write a user-facing explanation of the chosen candidate:
 
 - Constraints the new interface must satisfy
-- Dependencies it relies on and their category from `references/deepening.md`
+- Dependencies it relies on and their category from [deepening.md](deepening.md)
 - A rough illustrative code sketch to ground constraints, not a proposal
 
 Show this to the user, then proceed. The user can read while sub-agents work.

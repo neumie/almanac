@@ -1,10 +1,10 @@
 ---
 name: prototype-build
-description: Use when building throwaway logic or UI prototypes to answer design questions before production implementation; terminal state app or UI variants.
+description: Use when building throwaway logic or UI prototypes to answer design questions before production implementation; shareable HTML state demos or UI variants.
 metadata:
   upstream: mattpocock/skills/skills/engineering/prototype
-  upstream-sha: e75d5331ceffd9b2c5a9554c3db124d848afa054
-  adapted-date: "2026-07-13"
+  upstream-sha: a0044501fe0d385b4d8575b610188ede9b236ccf
+  adapted-date: "2026-09-07"
 ---
 
 # Prototype Build
@@ -15,15 +15,15 @@ A prototype is **throwaway code that answers a question**. The question decides 
 
 Identify the question from the prompt, nearby code, or by asking if the user is around:
 
-- **Logic / state model question**: read `~/.claude/skills/almanac/prototype-build/references/logic.md`. Build a tiny interactive terminal app that pushes state through hard cases.
-- **UI shape question**: read `~/.claude/skills/almanac/prototype-build/references/ui.md`. Generate several radically different UI variants switchable from one route.
+- **Logic / state model question**: read [logic.md](references/logic.md). Build a single shareable HTML file with free-play buttons and tabbed guided walkthroughs that let non-developers push state through hard cases.
+- **UI shape question**: read [ui.md](references/ui.md). Generate several radically different UI variants switchable from one route.
 
 If ambiguous and user is unavailable, default to the branch matching surrounding code: backend module means logic; page/component means UI. State the assumption at the top of the prototype.
 
 ## Rules
 
 1. **Throwaway from day one.** Place code near where it informs real work, but name it so readers know it is a prototype.
-2. **One command to run.** Use the project's existing task runner. Do not add a package manager or runtime just for the prototype.
+2. **Trivial to run.** A logic demo is one HTML file the user double-clicks, with no server or install. A UI prototype uses one command in the project's existing task runner. Do not add a package manager or runtime just for the prototype.
 3. **No persistence by default.** State lives in memory unless persistence is the question.
 4. **Skip polish.** No tests, no broad error handling, no abstractions beyond what makes it runnable.
 5. **Surface state.** After every logic action or UI variant switch, show the relevant state.

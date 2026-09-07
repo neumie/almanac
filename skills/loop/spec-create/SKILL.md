@@ -1,16 +1,17 @@
 ---
 name: spec-create
 description: Use when turning a conversation or idea into docs/plans/<name>/spec.md. Synthesizes existing context into user stories, module design, testing decisions. Do NOT interview — just synthesize.
-disable-model-invocation: true
 metadata:
   dependencies:
     - codebase-design
   upstream: mattpocock/skills/skills/engineering/to-spec
-  upstream-sha: f3cca8d3dbdb7c22e11447f1d13011a78ca6efba
-  adapted-date: "2026-07-13"
+  upstream-sha: 3f52599ae2a4347aee5a07432c2707518e691a7f
+  adapted-date: "2026-09-07"
 ---
 
-Synthesize the current conversation context and codebase understanding into a spec (you may know this document as a PRD). Do NOT interview the user — just synthesize what you already know.
+# Spec Create
+
+Synthesize the current conversation context and codebase understanding into a spec. Do NOT interview the user; just synthesize what you already know.
 
 ## Process
 
@@ -29,13 +30,17 @@ Before anything else:
 
 If this session included a `/grill-me` grilling, those crystallized decisions are in the conversation — use them. If `CONTEXT.md` content is present, use its vocabulary throughout the spec. Respect ADRs in the area you're touching. Also explore the repo to understand the current state of the codebase, if you haven't already.
 
-1. Sketch out the seams where the feature should be tested. Prefer existing seams to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can. Fewer seams are better; one seam is ideal.
+### 1. Sketch modules and testing seams
+
+Sketch out the seams where the feature should be tested. Prefer existing seams to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can. Fewer seams are better; one seam is ideal.
 
 Also sketch the major modules you will need to build or modify to complete the implementation. Follow the `codebase-design` skill for seam, interface, and deep-module vocabulary.
 
 Check with the user that these modules match their expectations. Check with the user which modules they want tests written for.
 
-2. Write the spec using the template below and save it to `docs/plans/<name>/spec.md`:
+### 2. Write the spec
+
+Use the template below and save it to `docs/plans/<name>/spec.md`:
 
 ```bash
 mkdir -p docs/plans/<name>
@@ -76,7 +81,7 @@ A list of implementation decisions that were made. This can include:
 
 Do NOT include specific file paths or code snippets. They may end up being outdated very quickly.
 
-Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it within the relevant decision and note briefly that it came from a prototype. Trim to the decision-rich parts — not a working demo.
+Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it within the relevant decision and note briefly that it came from a prototype. Trim to the decision-rich parts, not a working demo.
 
 ## Testing Decisions
 

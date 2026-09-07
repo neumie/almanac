@@ -3,8 +3,8 @@ name: codebase-design
 description: Use when designing module interfaces, seams, deep modules, testability, AI-navigable architecture, or when another skill needs design vocabulary.
 metadata:
   upstream: mattpocock/skills/skills/engineering/codebase-design
-  upstream-sha: 16620c24528b737408e78d95dd6a0e01a98d3d63
-  adapted-date: "2026-06-19"
+  upstream-sha: 3f63c8146dd2604b419c929e9876b90c30d410e9
+  adapted-date: "2026-09-07"
 ---
 
 # Codebase Design
@@ -48,5 +48,5 @@ Good interfaces make testing natural:
 
 ## Going Deeper
 
-- For dependency categories and safe deepening, read `~/.claude/skills/almanac/codebase-design/references/deepening.md`.
-- For alternative interface exploration, read `~/.claude/skills/almanac/codebase-design/references/design-it-twice.md`.
+- For dependency categories and safe deepening, read [deepening.md](references/deepening.md).
+- For alternative interface exploration, read [design-it-twice.md](references/design-it-twice.md).

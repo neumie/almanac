@@ -9,7 +9,7 @@ Render architecture reviews as one self-contained HTML file in the OS temp direc
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Architecture review - {{repo name}}</title>
+    <title>Architecture review for {{repo name}}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
       import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
@@ -37,7 +37,7 @@ Repo name, date, and compact legend: solid box = module, dashed line = seam, red
 
 ## Candidate Card
 
-Diagrams carry the weight. Prose stays sparse and uses `LANGUAGE.md` terms.
+Diagrams carry the weight. Prose stays sparse and uses the `codebase-design` vocabulary and the project's `CONTEXT.md` domain terms.
 
 Each candidate is one `<article>`:
 

@@ -1,11 +1,10 @@
 ---
 name: to-tickets
 description: Use when breaking a plan, spec, or conversation into tracer-bullet tickets for GitHub or docs/plans, with blocking edges and agent/human readiness.
-disable-model-invocation: true
 metadata:
   upstream: mattpocock/skills/skills/engineering/to-tickets
-  upstream-sha: 23140c577f71c98993523f0dbec74f250561b708
-  adapted-date: "2026-07-13"
+  upstream-sha: e868c831fcfb1e124e010bcdf84a429ec879160f
+  adapted-date: "2026-09-07"
 ---
 
 # To Tickets
@@ -135,7 +134,7 @@ The end-to-end behavior this ticket delivers.
 
 - Blocked by #<issue-number>
 
-Or: None — can start immediately.
+Or: None (can start immediately).
 ```
 
 Do not close or modify a parent issue. Avoid file-level implementation instructions unless a prototype snippet encodes a decision more precisely than prose.

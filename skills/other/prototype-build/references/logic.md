@@ -1,32 +1,30 @@
 # Logic Prototype
 
-Build a tiny interactive terminal app that lets the user drive a state model by hand. Use this when the question is about business logic, state transitions, or data shape.
+Build a single self-contained HTML file that lets anyone drive a state model by clicking buttons. Use this when the question is about business logic, state transitions, or data shape. The demo should be shareable with a designer, PM, or domain expert without installing anything.
 
 ## Good Fit
 
 - "Does this state machine handle X then Y?"
 - "Can this data model represent this edge case?"
-- "What should the API feel like before writing it?"
-- Any case where user should press buttons and watch state change.
+- "What should the interface feel like before writing it?"
+- Any case where someone should press buttons and watch state change.
 
-If the question is visual, use `references/ui.md`.
+If the question is visual, use [ui.md](ui.md).
 
 ## Process
 
 ### 1. State The Question
 
-Before writing code, write one paragraph in the prototype README or top-of-file comment:
+Before writing code, write a visible intro at the top of the demo:
 
 - What state model is being prototyped
 - What question the prototype answers
 
-### 2. Pick The Language
+Use domain language, not implementation terms. Someone returning to the demo later should understand what they are evaluating.
 
-Use the host project's runtime and conventions. If the project has no obvious runtime, ask.
+### 2. Isolate Portable Logic
 
-### 3. Isolate Portable Logic
-
-Put the actual logic behind a small pure interface that could be lifted into real code later. The terminal shell is throwaway; logic should not be.
+Put the logic in an inline script as a small pure module that could be lifted or translated into the real codebase later. The page is throwaway; the validated logic is the part worth retaining.
 
 Good shapes:
 
@@ -35,33 +33,38 @@ Good shapes:
 - Small pure function set over a plain data type
 - Class/module with clear method surface when ongoing internal state is load-bearing
 
-Keep logic pure: no I/O, no terminal code, no logging for control flow.
+Keep logic independent of the page: no DOM, I/O, or logging for control flow. Button handlers call its interface, never reach into its internals. If the production runtime differs, treat the demo as a model of behavior, not proof that production code works.
 
-### 4. Build Small TUI
+### 3. Build The Shareable File
 
-Build the lightest terminal UI that exposes state:
+Use plain HTML/CSS/JavaScript, all inline. No framework, bundler, external assets, CDN, or server. It must work when opened directly as a local file.
 
-1. Initialize one in-memory state object.
-2. Render current state and keyboard shortcuts.
-3. Read one key or line.
-4. Dispatch to a handler.
-5. Re-render full frame.
-6. Loop until quit.
+Lay it out in this order:
 
-Use native ANSI escape codes if useful. Avoid adding dependencies unless project already uses one.
+1. **Title and explanation** of the question.
+2. **Current state**, shown as readable labelled fields, not a raw JSON dump. Re-render after each action and call out important changes.
+3. **Free-play buttons**, one per action, so the recipient can explore in any order.
+4. **Guided walkthroughs**, one scenario per tab. Explain the setup and what to watch for, then provide ordered buttons that perform real actions and advance the walkthrough. Starting a walkthrough resets to a known state.
 
-### 5. Make It Runnable
+Both free play and walkthroughs use the same logic interface. Show why an illegal action is rejected without corrupting state. If free play invalidates a walkthrough's setup, restart it rather than pretending its steps still apply.
 
-Add one command to existing task runner (`package.json`, `Makefile`, `justfile`, `pyproject.toml`). If no runner exists, put the command at top of the prototype README.
+Include a happy path, a tricky edge case, and an attempted illegal action. Keep the presentation restrained: clear typography, spacing, and one accent color. State and actions matter more than polish.
 
-### 6. Capture The Answer
+### 4. Hand It Over
 
-When prototype answers its question, record the answer and delete or absorb the prototype.
+Give the user the absolute file path and open it if appropriate. They should be able to double-click it and explore without a run command. Use synthetic data; a shareable file must not embed credentials or private production data.
+
+Adjust actions or scenarios as feedback exposes mistaken assumptions in the model.
+
+### 5. Capture The Answer
+
+Follow the cleanup rules in [Prototype Build](../SKILL.md): record the question and answer durably, then delete or absorb the prototype. Lift or translate the validated logic into real code; do not preserve a prototype-only branch or ship the HTML shell.
 
 ## Anti-Patterns
 
-- Adding tests
-- Wiring to real DB unless persistence is the question
+- Adding a test suite to a throwaway demo
+- Wiring to a real database unless persistence is the question
 - Generalizing beyond one question
-- Mixing logic and TUI
-- Shipping the TUI shell
+- Mixing domain logic and DOM manipulation
+- Requiring a framework, build step, server, or network access to open the file
+- Shipping the HTML shell as production code

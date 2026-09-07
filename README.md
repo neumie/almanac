@@ -21,11 +21,13 @@ Skills are organized by category in the repo (`skills/git/`, `skills/productivit
 | `spec-create` | Synthesize a conversation or idea into `docs/plans/<name>/spec.md` for the loops to consume. |
 | `to-tickets` | Split a spec into blocked tracer-bullet tickets for GitHub or `docs/plans/`. |
 | `implement` | Implement one agent-ready ticket through TDD, review, queue update, and commit. |
+| `branch-recap` | Recap the current branch's goal, changes, PR/CI status, and possible next steps. |
 | `code-review` | Review changes through parallel behavior, architecture, security, and verification/operations lenses. |
 | `codebase-design` | Shared vocabulary for deep modules, interfaces, seams, adapters, and testability. |
 | `domain-model` | Maintain `CONTEXT.md` domain language and ADRs while design decisions crystallize. |
+| `grilling` | Stress-test decisions in dependency-aware question rounds, with context and recommendations. |
 | `unslop` | Audit or rewrite AI-sounding prose while preserving facts, register, and a taught human voice. |
-| `prototype-build` | Build throwaway logic or UI prototypes to answer design questions before production code. |
+| `prototype-build` | Build shareable HTML logic demos or throwaway UI variants to answer design questions. |
 
 ## Install
 
@@ -108,6 +110,9 @@ lib/
     converge.sh
     loop.sh
 skills/
+  productivity/
+    branch-recap/
+      SKILL.md
   comms/
     unslop/
       SKILL.md
@@ -161,7 +166,7 @@ Fourteen skills are adapted from upstream repositories:
 | tdd | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | to-tickets | [mattpocock/skills](https://github.com/mattpocock/skills) |
 
-Run `almanac sync` to check for updates.
+Run `almanac sync` to check for updates, or `almanac sync --diff` to inspect upstream changes. Local skills such as `branch-recap` have no upstream tracking and are not checked by sync.
 
 ## Adding a skill
 

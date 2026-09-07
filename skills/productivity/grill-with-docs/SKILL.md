@@ -1,17 +1,18 @@
 ---
 name: grill-with-docs
 description: Use when stress-testing a plan against the existing domain model + decisions. Challenges terminology, cross-references code, updates CONTEXT.md and ADRs inline as decisions crystallize.
-disable-model-invocation: true
 metadata:
   dependencies:
     - grilling
     - domain-model
   upstream: mattpocock/skills/skills/engineering/grill-with-docs
-  upstream-sha: bed05d2bd3245306267cea57cd696b5dd94d50fe
-  adapted-date: "2026-06-19"
+  upstream-sha: 62b9efb6f991d1b229adee7506962f13ced0c499
+  adapted-date: "2026-09-07"
 ---
 
-Use the `grilling` skill for the interview loop. Use the `domain-model` skill to maintain domain language and ADRs as decisions crystallize.
+# Grill With Docs
+
+Follow the `grilling` skill for the interview loop. Follow the `domain-model` skill to maintain domain language and ADRs as decisions crystallize.
 
 ## Domain awareness
 

@@ -1,10 +1,10 @@
 ---
 name: domain-model
-description: Use when pinning down domain terms, ubiquitous language, CONTEXT.md glossary entries, ADRs, or when another skill needs domain-model maintenance.
+description: Use when discussing codebase terminology, writing or editing CONTEXT.md glossary entries or ADRs, or when another skill needs domain-model maintenance.
 metadata:
   upstream: mattpocock/skills/skills/engineering/domain-modeling
-  upstream-sha: d0f7e1a5ccb06a7184056ff9af02b67bc77f9dda
-  adapted-date: "2026-06-19"
+  upstream-sha: 9b97707e19ef1f590aada356f2b3f6bb881f91be
+  adapted-date: "2026-09-07"
 ---
 
 # Domain Model
@@ -53,7 +53,7 @@ When the user states how something works, check whether code agrees. If code con
 
 ### Update CONTEXT.md Inline
 
-When a term is resolved, update `CONTEXT.md` immediately. Do not batch. Use `~/.claude/skills/almanac/domain-model/references/context-format.md`.
+When a term is resolved, update `CONTEXT.md` immediately. Do not batch. Use [context-format.md](references/context-format.md).
 
 `CONTEXT.md` is a glossary, not a spec, scratchpad, or implementation note. Keep implementation details out.
 
@@ -65,4 +65,4 @@ Offer an ADR only when all three are true:
 2. **Surprising without context**: future readers will wonder why.
 3. **Real trade-off**: there were genuine alternatives.
 
-If any are missing, skip the ADR. Use `~/.claude/skills/almanac/domain-model/references/adr-format.md`.
+If any are missing, skip the ADR. Use [adr-format.md](references/adr-format.md).

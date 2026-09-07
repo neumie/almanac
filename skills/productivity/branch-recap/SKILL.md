@@ -1,10 +1,9 @@
 ---
-name: session-recap
-description: "Use when summarizing the current branch or session. Gathers git log, diff, branch, PR status, uncommitted changes. Triggers: recap, catch me up, what did I do, where was I."
-disable-model-invocation: true
+name: branch-recap
+description: "Use when recapping the current branch or picking up unfinished branch work: catch me up, what did I do, where was I."
 ---
 
-# Session Recap
+# Branch Recap
 
 Summarize what happened on the current branch so the user can pick up where they left off.
 
@@ -29,8 +28,8 @@ If any output was empty, that information is unavailable for this repo — skip 
 
 Print a concise summary using this structure. Omit any section that has no content.
 
-```
-## Session Recap: <branch-name>
+```text
+## Branch Recap: <branch-name>
 
 ### Goal
 <1-2 sentences describing WHY this work exists — the initial task or motivation.

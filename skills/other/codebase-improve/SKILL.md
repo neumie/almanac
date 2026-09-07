@@ -5,9 +5,10 @@ metadata:
   dependencies:
     - codebase-design
     - domain-model
+    - grilling
   upstream: mattpocock/skills/skills/engineering/improve-codebase-architecture
-  upstream-sha: b56969e92f0705d70700f908b8ec929a1edfa782
-  adapted-date: "2026-07-13"
+  upstream-sha: a578dd0a34ad0a8886abe7e7642b100106ba86d6
+  adapted-date: "2026-09-07"
 ---
 
 # Improve Codebase Architecture
@@ -25,14 +26,9 @@ Scope the scan before exploring. Deepening pays off when future changes land in 
 - If the user names a module, subsystem, or pain point, focus there.
 - Otherwise inspect a useful stretch of `git log --oneline` for recurring files and areas. Start with those hot spots; widen only when history is scattered.
 
-These commands run automatically when the skill loads — output replaces each line below:
+Read `CONTEXT.md` if present and use its vocabulary throughout. Read relevant ADRs under `docs/adr/` before exploring.
 
-- CONTEXT.md: !`cat CONTEXT.md 2>/dev/null || true`
-- ADR list: !`ls docs/adr/ 2>/dev/null || true`
-
-If `CONTEXT.md` content is present above, use that vocabulary throughout. If `ADR list` showed files, read the relevant ones before exploring.
-
-Then use the Agent tool with `subagent_type=Explore` to walk the codebase. Don't follow rigid heuristics — explore organically and note where you experience friction:
+Then use a read-only exploration sub-agent to walk the scoped codebase when available; otherwise explore directly. Don't follow rigid heuristics; note where you experience friction:
 
 - Where does understanding one concept require bouncing between many small modules?
 - Where are modules **shallow** — interface nearly as complex as the implementation?
@@ -48,7 +44,7 @@ Write a self-contained HTML file to the OS temp directory so nothing lands in th
 
 The report uses Tailwind via CDN for layout and Mermaid via CDN for diagrams where a graph, flow, or sequence reliably communicates the structure. Mix Mermaid with hand-crafted CSS/SVG visuals: use Mermaid when relationships are graph-shaped, and hand-built divs/SVG for mass diagrams, cross-sections, and collapse diagrams. Each candidate gets a before/after visualization.
 
-See `~/.claude/skills/almanac/codebase-improve/HTML-REPORT.md` for the full HTML scaffold, diagram patterns, and styling guidance.
+See [HTML-REPORT.md](HTML-REPORT.md) for the full HTML scaffold, diagram patterns, and styling guidance.
 
 For each candidate, render a card with:
 
@@ -69,11 +65,8 @@ Do NOT propose interfaces yet. After the file is written, ask the user: "Which o
 
 ### 3. Grilling loop
 
-Once the user picks a candidate, drop into a grilling conversation. Walk the decision tree with them — constraints, dependencies, the shape of the deepened module, what sits behind the seam, what tests survive.
+Once the user picks a candidate, follow the `grilling` skill to resolve constraints, dependencies, the shape of the deepened module, what sits behind the seam, and which tests survive.
 
-Side effects happen inline as decisions crystallize:
+Follow the `domain-model` skill as naming and design decisions crystallize; it owns glossary updates and ADR eligibility. For a rejected candidate, offer an ADR only when the reason is load-bearing for future explorers, not merely "not worth it right now."
 
-- **Naming a deepened module after a concept not in `CONTEXT.md`?** Add the term to `CONTEXT.md`. Create the file lazily if it doesn't exist.
-- **Sharpening a fuzzy term during the conversation?** Update `CONTEXT.md` right there.
-- **User rejects the candidate with a load-bearing reason?** Offer an ADR so future reviews don't re-suggest it. Only offer when the reason would actually be needed by a future explorer.
-- **Want to explore alternative interfaces for the deepened module?** Follow `~/.claude/skills/almanac/codebase-design/references/design-it-twice.md`.
+To explore alternative interfaces, follow the `codebase-design` skill and its design-it-twice reference.
