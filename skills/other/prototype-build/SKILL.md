@@ -16,7 +16,7 @@ A prototype is **throwaway code that answers a question**. The question decides 
 Identify the question from the prompt, nearby code, or by asking if the user is around:
 
 - **Logic / state model question**: read [logic.md](references/logic.md). Build a single shareable HTML file with free-play buttons and tabbed guided walkthroughs that let non-developers push state through hard cases.
-- **UI shape question**: read [ui.md](references/ui.md). Generate several radically different UI variants switchable from one route.
+- **UI shape question**: read [ui.md](references/ui.md). Generate radically different UI variants in parallel, with one subagent per variant, switchable from one route.
 
 If ambiguous and user is unavailable, default to the branch matching surrounding code: backend module means logic; page/component means UI. State the assumption at the top of the prototype.
 

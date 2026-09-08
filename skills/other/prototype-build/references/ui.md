@@ -24,15 +24,21 @@ Use only when no existing page can host the idea. Follow existing routing conven
 
 ### 1. State Question And Pick Variant Count
 
-Default to three variants. Cap at five. Write one line near prototype:
+Default to three variants; use at most five unless the user requests a different count. Honor an explicit count such as ten. Write one line near prototype:
 
 > Three variants of settings page, switchable via `?variant=`, on existing `/settings` route.
 
-### 2. Generate Radically Different Variants
+### 2. Generate Variants In Parallel — One Subagent Per Variant
 
-Each variant should differ structurally: layout, hierarchy, primary affordance. Not just color or copy.
+The coordinator owns the question, research, shared data/props, minimal shell, switcher, and final integration. Establish that small common contract first, then launch **one implementation subagent per variant in parallel**. Do not give one worker all variants to build serially.
 
-Respect project component library and styling system.
+- Give each agent a distinct structural direction: layout, hierarchy, and primary affordance, not just different colors or copy. Share the same research, fixture data, component APIs, and constraints so comparisons stay fair.
+- Keep assignments bounded: one variant module, its export contract, intended use, and tradeoff. Agents should not repeat the shared research, build their own shell, or start their own review/delegation chains.
+- Isolate writers in separate worktrees or draft directories. If worktree isolation is unavailable or the checkout is dirty, have agents write draft artifacts in separate directories for one integrator to apply. Do not have parallel agents edit a shared checkout, registry, styles, or switcher.
+- Use the harness's delegation workflow and available concurrency. Queue excess variants when capacity is limited; report the limit rather than silently reverting to one serial implementation worker. If delegation is unavailable or the user requests no subagents, state the constraint and use a single writer.
+- Collect all variant outputs, then integrate with one writer. Run shared checks once after integration; visually verify each variant at the target viewport. Keep browser verification serial or use isolated browser sessions. Follow project review requirements without adding a prototype-specific test framework.
+
+Respect the project's component library and styling system. Share data and basic primitives, not so much layout that the variants stop disagreeing.
 
 ### 3. Wire Variants
 
@@ -70,6 +76,8 @@ Once a variant wins, write down which one and why. Delete losing variants and sw
 
 ## Anti-Patterns
 
+- One worker implementing all variants serially when parallel delegation is available
+- Parallel variant agents modifying the same checkout or shared shell
 - Variants differing only in color/copy
 - Sharing layout so much variants stop disagreeing
 - Real mutations
