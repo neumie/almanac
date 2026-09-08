@@ -22,6 +22,8 @@ Skills are organized by category in the repo (`skills/git/`, `skills/productivit
 | `to-tickets` | Split a spec into blocked tracer-bullet tickets for GitHub or `docs/plans/`. |
 | `implement` | Implement one agent-ready ticket through TDD, review, queue update, and commit. |
 | `branch-recap` | Recap the current branch's goal, changes, PR/CI status, and possible next steps. |
+| `explain` | Explain code, concepts, systems, or supplied text in clear, context-appropriate technical language. |
+| `wait-what` | Re-explain the immediately preceding assistant response when the user did not understand it. |
 | `code-review` | Review changes through parallel behavior, architecture, security, and verification/operations lenses. |
 | `codebase-design` | Shared vocabulary for deep modules, interfaces, seams, adapters, and testability. |
 | `domain-model` | Maintain `CONTEXT.md` domain language and ADRs while design decisions crystallize. |
@@ -113,6 +115,10 @@ skills/
   productivity/
     branch-recap/
       SKILL.md
+    explain/
+      SKILL.md
+    wait-what/
+      SKILL.md
   comms/
     unslop/
       SKILL.md
@@ -147,7 +153,7 @@ skills/
 
 ### Upstream sync
 
-Fourteen skills are adapted from upstream repositories:
+Fifteen skills are adapted from upstream repositories:
 
 | Skill | Upstream |
 | ------- | ---------- |
@@ -165,8 +171,9 @@ Fourteen skills are adapted from upstream repositories:
 | spec-create | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | tdd | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | to-tickets | [mattpocock/skills](https://github.com/mattpocock/skills) |
+| wait-what | [mattpocock/skills](https://github.com/mattpocock/skills) |
 
-Run `almanac sync` to check for updates, or `almanac sync --diff` to inspect upstream changes. Local skills such as `branch-recap` have no upstream tracking and are not checked by sync.
+Run `almanac sync` to check for updates, including the tracked `wait-what` adaptation, or `almanac sync --diff` to inspect upstream changes. Local skills such as `branch-recap` and `explain` have no upstream tracking and are not checked by sync.
 
 ## Adding a skill
 

@@ -2,7 +2,7 @@
 
 ## Adding a Skill
 
-1. Pick a category — `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (spec/tickets/implementation/loops — spec-create, to-tickets, implement, loop, converge-loop), `comms/` (client/team-facing comms), `productivity/`, or `other/`. Add a new category freely if none fit. Create `skills/<category>/<name>/SKILL.md`:
+1. Pick a category — `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (spec/tickets/implementation/loops — spec-create, to-tickets, implement, loop, converge-loop), `comms/` (client/team-facing comms), `productivity/` (for example, explain and wait-what), or `other/`. Add a new category freely if none fit. Create `skills/<category>/<name>/SKILL.md`:
 
 ```yaml
 ---
@@ -24,7 +24,7 @@ Step-by-step instructions for the agent...
 
 2. **Description**: must start with `Use when` (validator-enforced; a leading YAML quote is allowed) and state the trigger explicitly — agents tend to under-trigger. Hard cap 220 chars (validator-enforced) to keep the aggregated listing compact.
 
-3. **Optional frontmatter**: `license`, `compatibility` (max 500 chars), `metadata` (key-value map), `allowed-tools`, `disable-model-invocation` (bool — strips skill from auto-listing; user-invocable via `/almanac:<name>`; orchestrators can still load it via path)
+3. **Optional frontmatter**: `license`, `compatibility` (max 500 chars), `metadata` (key-value map), `allowed-tools`, `disable-model-invocation` (bool — strips skill from auto-listing; user-invocable via `/almanac:<name>`; orchestrators can still load it via path). A delegating skill records its hard dependency as `metadata.dependencies` with the referenced skill name (for example, `wait-what` → `explain`).
 
 4. **Optional directories**: `scripts/` (executable code), `references/` (docs loaded on demand), `assets/` (templates, data)
 
