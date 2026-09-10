@@ -1,6 +1,7 @@
 ---
 name: branch-recap
 description: "Use when recapping the current branch or picking up unfinished branch work: catch me up, what did I do, where was I."
+disable-model-invocation: true
 ---
 
 # Branch Recap
