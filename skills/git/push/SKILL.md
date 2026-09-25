@@ -1,6 +1,9 @@
 ---
 name: push
 description: "Use when pushing commits to a remote. Checks tracking, shows what will be pushed, sets upstream if needed, handles diverged branches safely. Triggers: push, prepare for PR."
+metadata:
+  dependencies:
+    - commit
 ---
 
 # Push
@@ -21,7 +24,7 @@ These commands run automatically when the skill loads — output replaces each l
 
 From the output:
 
-- Warn if there are uncommitted changes (dirty working tree)
+- If there are uncommitted changes: commit your own in-scope work first (follow the `commit` skill) without asking. Warn about, and leave out of the push, only changes that are not yours or are unrelated to the task.
 - Note the current branch name and recent commits
 - If `@{u}` returned a tracking branch, note it
 - If the tracking branch is not `origin/<current-branch>`, treat it like a mismatched upstream that must be repaired on push
@@ -36,13 +39,15 @@ From the output:
 ### Step 4: Safety checks
 
 - **main/master branch:** Regular push is fine. Force-push is **NEVER** allowed — refuse and explain why.
-- **Diverged branch:** `git status` shows "diverged" — warn and suggest rebasing first (use the rebase skill).
+- **Rewritten history after your own rebase or squash** (this session, not main/master): push without asking, using a lease pinned to the remote tip recorded before the rewrite (`<old-remote-tip>` from the rebase or commits-squash skill). This is safe only because that skill verified `<old-remote-tip>` was an ancestor of the pre-rewrite local tip; the lease then rejects the push if anyone pushed since. If it is rejected, stop and ask. If the branch does not exist on the remote, no force is needed: push normally with `-u`. If it exists on the remote but no tip was recorded before the rewrite, do not force-push: stop and ask.
+- **Diverged branch** (not from your own rewrite): `git status` shows "diverged" — warn and suggest rebasing first (use the rebase skill).
 - **Force-push requested:** Warn explicitly that this rewrites remote history. If target is main/master, **REFUSE**. For other branches, proceed only with `--force-with-lease` (never bare `--force`).
 
 ## Phase 2 — Execute
 
 ### Step 1: Push
 
+- After your own rebase or squash of a pushed branch (see Step 4) — this takes precedence over the cases below: `git push -u --force-with-lease=<branch-name>:<old-remote-tip> origin HEAD:refs/heads/<branch-name>`
 - If tracking is exactly `origin/<branch-name>`: `git push`
 - If no tracking exists, or tracking points somewhere else such as `origin/main`: `git push -u origin HEAD:refs/heads/<branch-name>`
 - If user confirmed force (non-main): `git push --force-with-lease`
@@ -93,7 +98,7 @@ If no PR exists, skip this step.
 ## Edge Cases
 
 - **Nothing to push** (up to date): Report and stop.
-- **Diverged branch:** Suggest rebase first. Do not force-push without explicit user request.
-- **Push rejected** (non-fast-forward): Explain the situation, suggest pulling or rebasing.
+- **Diverged branch:** Suggest rebase first. Do not force-push without explicit user request, except the lease-pinned push after your own rebase or squash (Step 4).
+- **Push rejected** (non-fast-forward): If you just rebased or squashed, do not pull — use the lease-pinned push from Step 4. Otherwise explain the situation and suggest rebasing.
 - **No remote configured:** Report error, suggest `git remote add origin <url>`.
 - **Authentication failure:** Report and suggest checking credentials or SSH keys.

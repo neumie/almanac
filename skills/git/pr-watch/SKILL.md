@@ -136,7 +136,7 @@ Map enabled methods to API values:
 
 - If the user explicitly requested a method, use it only when enabled. Otherwise stop and list enabled methods.
 - If exactly one method is enabled, use it.
-- If multiple methods are enabled and the user did not choose one, ask. Never infer a global preference.
+- If multiple methods are enabled and the user did not choose one, use `rebase` when it is enabled — linear history is the default. Ask only when rebase is disabled and more than one other method remains.
 - If no method is enabled or the settings query fails, stop and report the error.
 
 Record the selected `<method-api>`.

@@ -90,4 +90,4 @@ Replace any skipped steps with their skip message (e.g., `Commit: nothing to com
 After the summary, use the workflow count from the pre-run:
 
 - If workflows exist (count > 0): invoke the `pr-watch` skill on the PR immediately — do not ask.
-- If no workflows (count is 0): ask **"Merge?"** — if yes, follow the `pr-watch` skill's Merge Procedure. It detects the repository's enabled merge methods; never assume squash, merge commit, or rebase.
+- If no workflows (count is 0): ask **"Merge?"** — if yes, follow the `pr-watch` skill's Merge Procedure. It picks the method from repository settings (rebase when enabled); do not ask which method.

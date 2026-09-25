@@ -2,6 +2,9 @@
 name: pr-create
 description: "Use when creating a GitHub pull request. Pushes branch if needed, generates title + description from commits, creates PR via gh CLI. Triggers: create/open/submit PR."
 compatibility: Requires gh CLI (GitHub CLI) for PR creation.
+metadata:
+  dependencies:
+    - push
 ---
 
 # Create PR
@@ -38,7 +41,7 @@ From the pre-run output, use `main` if it exists, otherwise `master`. Store as `
 
 ### Step 4: Check unpushed commits
 
-- If `@{u}` was empty: branch is not pushed, run `git push -u origin <branch>` in Phase 2.
+- If `@{u}` was empty: branch is not pushed; push it in Phase 2.
 - If `@{u}` exists: `git log @{u}..HEAD --oneline 2>/dev/null` to see unpushed commits.
 
 ### Step 5: Generate PR content
@@ -65,8 +68,7 @@ From the pre-run output, use `main` if it exists, otherwise `master`. Store as `
 
 ### Step 1: Push if needed
 
-- If branch not pushed: `git push -u origin <branch-name>`
-- If unpushed commits exist: `git push`
+- If the branch is not pushed, or has unpushed or rewritten commits: follow the `push` skill (it sets upstream and handles the lease-pinned push after your own rebase or squash without asking).
 
 ### Step 2: Create the PR
 

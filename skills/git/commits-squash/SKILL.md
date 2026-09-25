@@ -53,6 +53,8 @@ Then **set `<anchor>` to the Merge-base SHA** from the pre-run output. Every com
 
 If Merge-base SHA is empty (no shared history), **STOP** and report — the branch is not based on `<base>` and squashing is unsafe.
 
+If the branch was pushed, record its remote tip before any reset: `git fetch origin <current-branch> --quiet`, then `git rev-parse --verify -q origin/<current-branch>` — save as `<old-remote-tip>` (the push skill pins its force-push lease to it). Run `git merge-base --is-ancestor <old-remote-tip> HEAD`; if it fails, the remote has commits the local branch lacks, so **STOP** and ask, showing them with `git log --format='%h %an %s' HEAD..<old-remote-tip>`.
+
 ### Step 2: Check prerequisites
 
 - From `git status` output: if uncommitted changes exist, follow the `commit` skill first, then continue.
@@ -145,7 +147,7 @@ If a commit fails this check, go back and regroup.
 - **Single commit on branch:** Nothing to squash. Report and stop.
 - **No commits ahead of base:** Nothing to squash. Report and stop.
 - **Uncommitted changes:** Commit first (via `commit` skill), then squash.
-- **Already pushed:** Warn that squashing will require force-push to update remote. Proceed — the `push` skill handles force-push safely.
+- **Already pushed:** squashing requires a force-push. Proceed — the `push` skill's rewritten-history case pushes with a lease pinned to `<old-remote-tip>` (Step 1), with no confirmation.
 - **Merge commits on branch:** Warn that squash will flatten merge history. Proceed.
 - **All commits already clean:** Report and stop — don't squash for the sake of it.
 - **Branch diverged from base (base moved forward):** Handled by anchoring on the merge-base — do **not** mix in a rebase. If the user wants the branch caught up to `<base>`, hand off to the `rebase` skill after squashing.

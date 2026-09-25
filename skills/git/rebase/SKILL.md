@@ -1,6 +1,10 @@
 ---
 name: rebase
 description: "Use when rebasing the current branch onto main or another base. Auto-detects base, handles conflicts, supports squashing. Triggers: rebase, sync with main, clean history before PR."
+metadata:
+  dependencies:
+    - commit
+    - push
 ---
 
 # Rebase
@@ -14,6 +18,8 @@ A rebase must preserve both sides of history: replay the feature branch on top o
 Before rebasing, capture the original branch tip and merge base. After rebasing or squashing, audit the final PR diff against that snapshot. Files that changed only on the updated base must not appear in the final PR diff unless you intentionally edited and reviewed them.
 
 ## Ask the user when unsure
+
+This section governs conflict resolution and the post-rebase audit. Starting a rebase the user requested is never an "unsure" case; Phase 2 lists the only pre-rebase questions.
 
 Bias toward caution over cleverness. A rebase rewrites history and can silently drop another developer's work, and the damage often surfaces only days later. When you cannot proceed with high confidence, **stop and ask the user a specific question** instead of guessing — asking is always cheaper than reverting a bad rebase.
 
@@ -47,7 +53,7 @@ Pick `<base-name>` and `<base-ref>` from the pre-run output:
 
 ### Step 2: Check prerequisites
 
-- From `git status`: if uncommitted changes, **STOP**. Ask the user to commit or stash first.
+- From `git status`: if the only uncommitted changes are your own work for the current task, commit them first (follow the `commit` skill) and continue. If anything uncommitted is not yours or is unrelated to the task, **STOP** and ask the user to commit or stash it.
 - If `ls .git/rebase-*` returned a path, an in-progress rebase exists. Ask the user if they want to `--continue`, `--abort`, or `--skip`.
 
 ### Step 3: Fetch latest
@@ -60,7 +66,8 @@ git fetch origin
 
 - `git rev-parse HEAD` — save this as `<old-tip>`
 - `git merge-base HEAD <base-ref>` — save this as `<old-base>`
-- `git log <base-ref>..HEAD --oneline` — commits on this branch
+- `git rev-parse --verify -q origin/<current-branch>` — if the branch was pushed, save this as `<old-remote-tip>` (the push skill uses it to pin the force-push lease). Then run `git merge-base --is-ancestor <old-remote-tip> <old-tip>`. If it fails, the remote branch has commits the local branch lacks (someone else, CI, or another worktree pushed): **STOP** and ask before rebasing, showing them with `git log --format='%h %an %s' <old-tip>..<old-remote-tip>`.
+- `git log --format='%h %ae %s' <base-ref>..HEAD` — commits on this branch, with author emails. Compare against `git config user.email`.
 - `git log HEAD..<base-ref> --oneline` — new commits on base since divergence
 - `git diff --stat <base-ref>..HEAD` — summary of branch changes
 - `git diff --name-status <old-base>..<old-tip>` — original feature file set
@@ -76,22 +83,23 @@ If the original feature file set contains files unrelated to the user's requeste
 - Report: **"N files potentially conflicting: `<list>`"**
 - Treat files that changed only on base as protected. They are not feature changes, and if they appear in the final PR diff after the rebase/squash, investigate before committing or pushing.
 
-## Phase 2 — Confirm
+## Phase 2 — Report, then proceed
 
-Present to the user:
+A rebase the user asked for, directly or through a flow they started, needs no second confirmation. `<old-tip>` is saved, so `git reset --hard <old-tip>` undoes it. Report, then go straight to Phase 3:
 
 - **Current branch** and **base branch**
 - **Commits to rebase:** count and list
 - **New commits on base:** count
 - **Potential conflict files** (if any)
-- Options:
-  - a) **Rebase** — replay commits on updated base
-  - b) **Rebase and squash** — combine all commits into one (if user requested)
-  - c) **Cancel**
 
-If Phase 1 surfaced anything unusual — files in the feature set unrelated to the requested work, protected base files that overlap with branch changes, or a larger-than-expected conflict set — call it out prominently here and recommend the user review before choosing.
+Stop and ask before rebasing only when there is a real decision to make:
 
-Wait for confirmation. Do not start the rebase until the user has chosen.
+- Phase 1 found files in the feature set that are unrelated to the requested work (see Step 4).
+- A branch commit has a human author other than `git config user.email` (ignore Co-Authored-By trailers and bots acting for the user).
+- The remote-ancestry check in Step 4 failed.
+- The request leaves unclear which commits belong on the branch. Do not ask about squashing: squash only when the user said so.
+
+Predicted conflicts are not a reason to ask up front. Handle them in Phase 3, where the stop-and-ask rules above still apply.
 
 ## Phase 3 — Execute
 
@@ -192,7 +200,7 @@ If either command reports a file you cannot confidently explain, or you are unsu
 ## Edge Cases
 
 - **Already up to date:** Report and stop.
-- **Dirty working tree:** STOP. Ask to commit or stash.
+- **Dirty working tree:** commit your own in-scope work first; STOP and ask about anything else (see Step 2).
 - **Rebase in progress:** Detect via `.git/rebase-merge` or `.git/rebase-apply`. Ask user: continue, abort, or skip.
 - **Merge commits on branch:** Warn that rebase will linearize history, removing merge commits.
-- **Branch already pushed:** Warn that rebasing will require a force-push to update the remote. Suggest using the push skill with force after rebase.
+- **Branch already pushed:** the remote now needs a lease-protected force-push. Only after Phase 4 verification and the diff-preservation audit pass with nothing unexplained, follow the `push` skill's rewritten-history case with `<old-remote-tip>` — no confirmation. Skip the push only if the user asked for a local-only rebase; then report that the remote still has the pre-rebase history.
