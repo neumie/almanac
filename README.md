@@ -25,6 +25,7 @@ Skills are organized by category in the repo (`skills/git/`, `skills/productivit
 | `explain` | Explain code, concepts, systems, or supplied text in clear, context-appropriate technical language. |
 | `wait-what` | Re-explain the immediately preceding assistant response when the user did not understand it. |
 | `code-review` | Review changes through parallel behavior, architecture, security, and verification/operations lenses. |
+| `security-audit` | Cloudflare's source-first security audit: isolated hunting, independent verification, and coverage reports. |
 | `codebase-design` | Shared vocabulary for deep modules, interfaces, seams, adapters, and testability. |
 | `domain-model` | Maintain `CONTEXT.md` domain language and ADRs while design decisions crystallize. |
 | `grilling` | Stress-test decisions in dependency-aware question rounds, with context and recommendations. |
@@ -149,15 +150,21 @@ skills/
     prototype-build/
       SKILL.md
       references/
+    security-audit/
+      SKILL.md
+      LICENSE
+      references/
+      scripts/
 ```
 
 ### Upstream sync
 
-Fifteen skills are adapted from upstream repositories:
+Sixteen skills are adapted from upstream repositories:
 
 | Skill | Upstream |
 | ------- | ---------- |
 | code-review | [mattpocock/skills](https://github.com/mattpocock/skills) |
+| security-audit | [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) |
 | codebase-design | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | codebase-improve | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | diagnose | [mattpocock/skills](https://github.com/mattpocock/skills) |
@@ -173,7 +180,7 @@ Fifteen skills are adapted from upstream repositories:
 | to-tickets | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | wait-what | [mattpocock/skills](https://github.com/mattpocock/skills) |
 
-Run `almanac sync` to check for updates, including the tracked `wait-what` adaptation, or `almanac sync --diff` to inspect upstream changes. Local skills such as `branch-recap` and `explain` have no upstream tracking and are not checked by sync.
+Run `almanac sync` to check for updates, including the tracked `security-audit` and `wait-what` adaptations, or `almanac sync --diff` to inspect upstream changes. Sync checks `SKILL.md` hashes only; bundled references, validators, and schemas require comparison with the reviewed upstream revision. Local skills such as `branch-recap` and `explain` have no upstream tracking and are not checked by sync.
 
 ## Adding a skill
 

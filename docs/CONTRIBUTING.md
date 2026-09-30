@@ -64,7 +64,7 @@ esac
 
 ## Adapting an Upstream Skill
 
-When adapting from upstream sources (e.g. [mattpocock/skills](https://github.com/mattpocock/skills), [contember/agent-canvas](https://github.com/contember/agent-canvas), [theclaymethod/unslop](https://github.com/theclaymethod/unslop)):
+When adapting from upstream sources (e.g. [mattpocock/skills](https://github.com/mattpocock/skills), [contember/agent-canvas](https://github.com/contember/agent-canvas), [theclaymethod/unslop](https://github.com/theclaymethod/unslop), [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill)):
 
 1. Add upstream tracking metadata. The value is `owner/repo/path`; `sync` appends `/SKILL.md`. Note `mattpocock/skills` nests skills under a `skills/<category>/` dir, so the path repeats `skills/`:
 
@@ -81,7 +81,9 @@ metadata:
 
 3. When updating, compare the recorded upstream blob with the current `SKILL.md` and inspect changes to reachable bundled resources too. Adapt the delta rather than replacing local workflows. Keep provider-specific agent manifests out of shared skills. Record the reviewed blob in `metadata.upstream-sha` and the review date in `metadata.adapted-date`, even when the delta is already covered by the local adaptation. A matching SHA means the upstream change was reviewed, not that the local file is byte-identical.
 
-4. Run `bash tests/test-skills.sh` and `almanac sync` to verify format and tracking. Sync checks `SKILL.md` hashes only; it does not detect resource-only upstream changes.
+4. Retain upstream license notices alongside substantial vendored content. `security-audit`, for example, keeps Cloudflare's MIT notice in `skills/other/security-audit/LICENSE`, phase/domain docs in `references/`, and unchanged Node.js validators plus their schema in `scripts/`. Its provenance record names the reviewed upstream commit so resource-only changes can be compared too; upstream regression tests belong in `tests/security-audit/`, not the installed runtime bundle.
+
+5. Run `bash tests/test-skills.sh` and `almanac sync` to verify format and tracking. Sync checks `SKILL.md` hashes only; it does not detect resource-only upstream changes. For `security-audit` resource updates, also run `node --test tests/security-audit/*.test.cjs` (Node.js required).
 
 ## Adding Reference Material
 
@@ -92,4 +94,5 @@ Add reference docs as markdown files in `skills/<category>/<name>/references/`. 
 ```bash
 bash tests/test-structure.sh   # All files and directories exist
 bash tests/test-skills.sh      # All skills valid + negative test cases
+node --test tests/security-audit/*.test.cjs  # Audit validators + installed resource paths
 ```
