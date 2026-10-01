@@ -64,7 +64,7 @@ esac
 
 ## Adapting an Upstream Skill
 
-When adapting from upstream sources (e.g. [mattpocock/skills](https://github.com/mattpocock/skills), [contember/agent-canvas](https://github.com/contember/agent-canvas), [theclaymethod/unslop](https://github.com/theclaymethod/unslop), [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill)):
+When adapting from upstream sources (e.g. [mattpocock/skills](https://github.com/mattpocock/skills), [contember/agent-canvas](https://github.com/contember/agent-canvas), [theclaymethod/unslop](https://github.com/theclaymethod/unslop), [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill), [leonxlnx/taste-skill](https://github.com/leonxlnx/taste-skill)):
 
 1. Add upstream tracking metadata. The value is `owner/repo/path`; `sync` appends `/SKILL.md`. Note `mattpocock/skills` nests skills under a `skills/<category>/` dir, so the path repeats `skills/`:
 
@@ -84,6 +84,10 @@ metadata:
 4. Retain upstream license notices alongside substantial vendored content. `security-audit`, for example, keeps Cloudflare's MIT notice in `skills/other/security-audit/LICENSE`, phase/domain docs in `references/`, and unchanged Node.js validators plus their schema in `scripts/`. Its provenance record names the reviewed upstream commit so resource-only changes can be compared too; upstream regression tests belong in `tests/security-audit/`, not the installed runtime bundle.
 
 5. Run `bash tests/test-skills.sh` and `almanac sync` to verify format and tracking. Sync checks `SKILL.md` hashes only; it does not detect resource-only upstream changes. For `security-audit` resource updates, also run `node --test tests/security-audit/*.test.cjs` (Node.js required).
+
+### Taste adaptation
+
+`skills/other/taste/` adapts the upstream default v2 (experimental) file at `leonxlnx/taste-skill/skills/taste-skill`; upstream calls its install name `design-taste-frontend`, while Almanac uses the canonical name `taste`. Keep the entrypoint compact, longer rules/examples in linked references, and the MIT notice beside the skill. Record the reviewed commit in `references/upstream.md` as well as the main blob SHA in frontmatter. Do not import the repository's other skills or speculative block library. Updates must retain existing-stack/approved-dependency constraints, factual integrity, brand/accessibility overrides, and scope-proportional verification rather than restoring unconditional upstream defaults.
 
 ## Adding Reference Material
 
