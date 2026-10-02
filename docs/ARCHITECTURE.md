@@ -26,6 +26,8 @@ Reference material (templates, patterns, guardrails) lives in `skills/<category>
 
 `taste` adapts the default experimental Taste v2 frontend skill for landing pages, portfolios, marketing/editorial sites, and redesigns. Its entrypoint owns brief inference, the three design dials, existing-stack/approved-dependency constraints, redesign preservation, and scope-proportional verification. Detailed design rules, anti-slop patterns, motion examples, design-system sources, vocabulary, and pre-flight checks live in `references/`. Brand fidelity, factual integrity, accessibility, and approved scope override upstream aesthetic defaults. The MIT notice and reviewed revision are bundled; the speculative upstream block library and other repository skills are not. Sync tracks the upstream main skill blob for the whole adaptation.
 
+`macos-automate` is a local, provider-agnostic desktop-automation skill. Its bundled `scripts/macos_ui.py` offers read-only permission/host preflight and scoped AX inspection plus opt-in, importable guarded click/fill primitives. Task-specific adapters own accounts, dialogs, duplicate lookup across search/pagination, writes, logs, and verification; neither the CLI nor loading the skill mutates apps. It uses Python's standard library and macOS frameworks, not private app APIs or databases. Focus/lifetime guards and bounded read-only waits are exercised with GUI-free fixtures in `tests/macos-automate/`; real app behavior still requires an approved pilot. The Wispr case is evidence for the mechanics and limited-list gotcha, not a universal app contract.
+
 ## Layer 2: Adapters (provider-specific)
 
 ### `providers/claude-code/`
@@ -65,6 +67,7 @@ In-repo guidance follows the `agents-md-map` convention: `AGENTS.md` is the cano
 | `lib/loops/loop.sh` | Loop adapter contract. |
 | `lib/loops/converge.sh` | Converge loop control contract for hub stop/steer signals. |
 | `skills/productivity/branch-recap/` | Read-only current-branch recap: goal, changes, PR/CI status, and possible next steps. |
+| `skills/productivity/macos-automate/` | Generic macOS UI automation workflow, native AX helper, and task-adapter guidance. |
 | `skills/productivity/explain/` | Context-first, plain-language explanations with no implementation side effects. |
 | `skills/productivity/wait-what/` | Thin wrapper that selects the prior substantive response and follows `explain`. |
 | `skills/comms/unslop/` | Fact-preserving prose audit/rewrite flows, taught-voice tooling, scanners, presets, and calibration assets. |

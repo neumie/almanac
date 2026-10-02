@@ -2,7 +2,7 @@
 
 ## Adding a Skill
 
-1. Pick a category — `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (spec/tickets/implementation/loops — spec-create, to-tickets, implement, loop, converge-loop), `comms/` (client/team-facing comms), `productivity/` (for example, explain and wait-what), or `other/`. Add a new category freely if none fit. Create `skills/<category>/<name>/SKILL.md`:
+1. Pick a category — `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (spec/tickets/implementation/loops — spec-create, to-tickets, implement, loop, converge-loop), `comms/` (client/team-facing comms), `productivity/` (for example, explain, wait-what, and macos-automate), or `other/`. Add a new category freely if none fit. Create `skills/<category>/<name>/SKILL.md`:
 
 ```yaml
 ---
@@ -89,6 +89,10 @@ metadata:
 
 `skills/other/taste/` adapts the upstream default v2 (experimental) file at `leonxlnx/taste-skill/skills/taste-skill`; upstream calls its install name `design-taste-frontend`, while Almanac uses the canonical name `taste`. Keep the entrypoint compact, longer rules/examples in linked references, and the MIT notice beside the skill. Record the reviewed commit in `references/upstream.md` as well as the main blob SHA in frontmatter. Do not import the repository's other skills or speculative block library. Updates must retain existing-stack/approved-dependency constraints, factual integrity, brand/accessibility overrides, and scope-proportional verification rather than restoring unconditional upstream defaults.
 
+### Local native UI automation skill
+
+`skills/productivity/macos-automate/` is local, not upstream-tracked. Keep its task-independent AX primitives and read-only inspector under `scripts/`; app selectors, source data, and actual task macros belong to the task's own project. Detailed state-machine, permission, and search/pagination guidance lives in `references/native-ui.md`. Do not make the CLI mutate apps or require extra Python packages. Extend GUI-free tests in `tests/macos-automate/` for helper changes; native inspection and an approved single-item pilot establish different evidence from fixtures. Avoid committing personal app data or host-specific paths as generic defaults.
+
 ## Adding Reference Material
 
 Add reference docs as markdown files in `skills/<category>/<name>/references/`. These are loaded on demand when the skill needs them. Keep them focused and actionable.
@@ -99,4 +103,5 @@ Add reference docs as markdown files in `skills/<category>/<name>/references/`. 
 bash tests/test-structure.sh   # All files and directories exist
 bash tests/test-skills.sh      # All skills valid + negative test cases
 node --test tests/security-audit/*.test.cjs  # Audit validators + installed resource paths
+python3 -m unittest discover -s tests/macos-automate -p 'test_*.py'  # Native UI helper fixtures, no GUI writes
 ```

@@ -22,6 +22,7 @@ Skills are organized by category in the repo (`skills/git/`, `skills/productivit
 | `to-tickets` | Split a spec into blocked tracer-bullet tickets for GitHub or `docs/plans/`. |
 | `implement` | Implement one agent-ready ticket through TDD, review, queue update, and commit. |
 | `branch-recap` | Recap the current branch's goal, changes, PR/CI status, and possible next steps. |
+| `macos-automate` | Build checked macOS UI macros with permission preflight, native AX inspection, and a reusable dependency-free helper. |
 | `explain` | Explain code, concepts, systems, or supplied text in clear, context-appropriate technical language. |
 | `wait-what` | Re-explain the immediately preceding assistant response when the user did not understand it. |
 | `code-review` | Review changes through parallel behavior, architecture, security, and verification/operations lenses. |
@@ -117,6 +118,10 @@ skills/
   productivity/
     branch-recap/
       SKILL.md
+    macos-automate/
+      SKILL.md
+      references/
+      scripts/
     explain/
       SKILL.md
     wait-what/
@@ -186,7 +191,7 @@ Seventeen skills are adapted from upstream repositories:
 | to-tickets | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | wait-what | [mattpocock/skills](https://github.com/mattpocock/skills) |
 
-Run `almanac sync` to check for updates, including the tracked `taste`, `security-audit`, and `wait-what` adaptations, or `almanac sync --diff` to inspect upstream changes. Sync checks `SKILL.md` hashes only; bundled references, validators, and schemas require comparison with the reviewed upstream revision. Local skills such as `branch-recap` and `explain` have no upstream tracking and are not checked by sync.
+Run `almanac sync` to check for updates, including the tracked `taste`, `security-audit`, and `wait-what` adaptations, or `almanac sync --diff` to inspect upstream changes. Sync checks `SKILL.md` hashes only; bundled references, validators, and schemas require comparison with the reviewed upstream revision. Local skills such as `branch-recap`, `explain`, and `macos-automate` have no upstream tracking and are not checked by sync. Validate the native UI helper with `python3 -m unittest discover -s tests/macos-automate -p 'test_*.py'`; fixture tests do not automate the user's apps.
 
 ## Adding a skill
 
