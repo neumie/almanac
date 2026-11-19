@@ -4,6 +4,7 @@ description: "Use when waiting for CI checks on a PR. Watches status, auto-fixes
 metadata:
   dependencies:
     - ci-fix
+    - clickthrough
 ---
 
 # PR Watch
@@ -113,6 +114,7 @@ Needs manual investigation.
 - If ci-fix itself fails (can't identify the issue), stop and report immediately
 - Each fix attempt gets its own commit (never amend)
 - If the PR is closed or merged while watching, stop and report the new state
+- Every merge-ready result (first pass, after ci-fix, or no CI) ends with a handover: follow the `clickthrough` skill unless the change has no user-observable effect at all (docs, CI config, pure refactor, no app). Backend, perf and data changes still get its "where the effect shows" line. The CI status shrinks to one line in that handover.
 
 ## Merge Procedure
 

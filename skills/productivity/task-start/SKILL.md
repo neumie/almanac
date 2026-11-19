@@ -6,6 +6,7 @@ metadata:
   dependencies:
     - complexity-assess
     - branch-name
+    - clickthrough
 ---
 
 # Task Start
@@ -22,7 +23,7 @@ If on `main` or `master`, warn: "You're on main — consider creating a worktree
 
 ## Fast-path — Self-evidently trivial tasks
 
-If the task is unambiguously trivial — exact file, line, and change are specified with no exploration needed (e.g. "fix the typo on line 42 of foo.py") — skip the assessment and go straight to implementation. Note: "Skipping assessment — task is self-evidently trivial." Then implement, verify, and report. This fast-path is only for tasks where complexity assessment would add no information.
+If the task is unambiguously trivial — exact file, line, and change are specified with no exploration needed (e.g. "fix the typo on line 42 of foo.py") — skip the assessment and go straight to implementation. Note: "Skipping assessment — task is self-evidently trivial." Then implement, verify, and finish with Step 6 (hand over). This fast-path is only for tasks where complexity assessment would add no information.
 
 ## Step 1 — Understand the task
 
@@ -50,11 +51,15 @@ If the current branch doesn't already match `<type>/<description>` pattern (e.g.
 
 ## Step 5 — Execute
 
-Load and follow the reference file for the assessed tier:
+Load and follow the reference file for the assessed tier. Skip its Report step when the result is user-observable — Step 6 replaces it:
 
 - **Trivial (4-5):** `~/.claude/skills/almanac/task-start/references/trivial-execution.md`
 - **Moderate (6-8):** `~/.claude/skills/almanac/task-start/references/moderate-execution.md`
 - **Complex (9-12):** `~/.claude/skills/almanac/task-start/references/complex-execution.md`
+
+## Step 6 — Hand over
+
+If the result is anything the user can see or try (UI, data, generated files, behaviour), write the report as a handover: follow the `clickthrough` skill. Put deviations from the plan in its "Pozor" line. Otherwise give the tier reference's plain Report.
 
 ## Tier Upgrade
 

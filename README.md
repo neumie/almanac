@@ -23,6 +23,7 @@ Skills are organized by category in the repo (`skills/git/`, `skills/productivit
 | `implement` | Implement one agent-ready ticket through TDD, review, queue update, and commit. |
 | `branch-recap` | Recap the current branch's goal, changes, PR/CI status, and possible next steps. |
 | `call-signals` | Turn a Wispr Flow call transcript into approved Helm Signals for Jakub's follow-ups (signals only, no other actions). |
+| `clickthrough` | Hand work over for the user to click through: verified deep links, prepared data, what changed, decisions with links. |
 | `macos-automate` | Build checked macOS UI macros with permission preflight, native AX inspection, and a reusable dependency-free helper. |
 | `explain` | Explain code, concepts, systems, or supplied text in clear, context-appropriate technical language. |
 | `wait-what` | Re-explain the immediately preceding assistant response when the user did not understand it. |
@@ -121,6 +122,9 @@ skills/
       SKILL.md
     call-signals/
       SKILL.md
+    clickthrough/
+      SKILL.md
+      references/
     macos-automate/
       SKILL.md
       references/
@@ -194,7 +198,7 @@ Seventeen skills are adapted from upstream repositories:
 | to-tickets | [mattpocock/skills](https://github.com/mattpocock/skills) |
 | wait-what | [mattpocock/skills](https://github.com/mattpocock/skills) |
 
-Run `almanac sync` to check for updates, including the tracked `taste`, `security-audit`, and `wait-what` adaptations, or `almanac sync --diff` to inspect upstream changes. Sync checks `SKILL.md` hashes only; bundled references, validators, and schemas require comparison with the reviewed upstream revision. Local skills such as `branch-recap`, `call-signals`, `explain`, and `macos-automate` have no upstream tracking and are not checked by sync. Validate the native UI helper with `python3 -m unittest discover -s tests/macos-automate -p 'test_*.py'`; fixture tests do not automate the user's apps.
+Run `almanac sync` to check for updates, including the tracked `taste`, `security-audit`, and `wait-what` adaptations, or `almanac sync --diff` to inspect upstream changes. Sync checks `SKILL.md` hashes only; bundled references, validators, and schemas require comparison with the reviewed upstream revision. Local skills such as `branch-recap`, `call-signals`, `clickthrough`, `explain`, and `macos-automate` have no upstream tracking and are not checked by sync. Validate the native UI helper with `python3 -m unittest discover -s tests/macos-automate -p 'test_*.py'`; fixture tests do not automate the user's apps.
 
 ## Adding a skill
 

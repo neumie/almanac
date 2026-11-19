@@ -9,6 +9,7 @@ metadata:
     - push
     - pr-create
     - pr-watch
+    - clickthrough
 ---
 
 # Ship
@@ -90,4 +91,4 @@ Replace any skipped steps with their skip message (e.g., `Commit: nothing to com
 After the summary, use the workflow count from the pre-run:
 
 - If workflows exist (count > 0): invoke the `pr-watch` skill on the PR immediately — do not ask.
-- If no workflows (count is 0): ask **"Merge?"** — if yes, follow the `pr-watch` skill's Merge Procedure. It picks the method from repository settings (rebase when enabled); do not ask which method.
+- If no workflows (count is 0): follow the `clickthrough` skill first unless the change has no user-observable effect at all (docs, CI config, pure refactor, no app) — backend, perf and data changes still get its "where the effect shows" line; then ask **"Merge?"** — if yes, follow the `pr-watch` skill's Merge Procedure. It picks the method from repository settings (rebase when enabled); do not ask which method.

@@ -3,6 +3,8 @@ name: prototype-build
 description: Use when building throwaway logic or UI prototypes to answer design questions before production implementation; shareable HTML state demos or UI variants.
 metadata:
   upstream: mattpocock/skills/skills/engineering/prototype
+  dependencies:
+    - clickthrough
   upstream-sha: a0044501fe0d385b4d8575b610188ede9b236ccf
   adapted-date: "2026-09-07"
 ---
@@ -27,7 +29,8 @@ If ambiguous and user is unavailable, default to the branch matching surrounding
 3. **No persistence by default.** State lives in memory unless persistence is the question.
 4. **Skip polish.** No tests, no broad error handling, no abstractions beyond what makes it runnable.
 5. **Surface state.** After every logic action or UI variant switch, show the relevant state.
-6. **Delete or absorb when done.** Keep the decision, not the prototype shell. Do not preserve a prototype-only branch.
+6. **Hand over for the pick.** When variants or the demo are ready, follow the `clickthrough` skill: one verified link per variant, recommended pick.
+7. **Delete or absorb when done.** Keep the decision, not the prototype shell. Do not preserve a prototype-only branch.
 
 ## When Done
 
