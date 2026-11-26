@@ -67,6 +67,7 @@ In-repo guidance follows the `agents-md-map` convention: `AGENTS.md` is the cano
 | `lib/loops/loop.sh` | Loop adapter contract. |
 | `lib/loops/converge.sh` | Converge loop control contract for hub stop/steer signals. |
 | `skills/productivity/branch-recap/` | Read-only current-branch recap: goal, changes, PR/CI status, and possible next steps. |
+| `skills/productivity/call-signals/` | Wispr Flow meeting transcript → Jakub's follow-ups as Helm Signals (idempotent `--key`, approval gate, unbound from the Okena terminal). |
 | `skills/productivity/macos-automate/` | Generic macOS UI automation workflow, native AX helper, and task-adapter guidance. |
 | `skills/productivity/explain/` | Context-first, plain-language explanations with no implementation side effects. |
 | `skills/productivity/wait-what/` | Thin wrapper that selects the prior substantive response and follows `explain`. |

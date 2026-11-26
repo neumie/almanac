@@ -2,7 +2,7 @@
 
 ## Adding a Skill
 
-1. Pick a category — `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (spec/tickets/implementation/loops — spec-create, to-tickets, implement, loop, converge-loop), `comms/` (client/team-facing comms), `productivity/` (for example, explain, wait-what, and macos-automate), or `other/`. Add a new category freely if none fit. Create `skills/<category>/<name>/SKILL.md`:
+1. Pick a category — `git/` (git/`gh` ops), `agents-md/` (CLAUDE.md/AGENTS.md tooling), `loop/` (spec/tickets/implementation/loops — spec-create, to-tickets, implement, loop, converge-loop), `comms/` (client/team-facing comms), `productivity/` (for example, explain, wait-what, call-signals, and macos-automate), or `other/`. Add a new category freely if none fit. Create `skills/<category>/<name>/SKILL.md`:
 
 ```yaml
 ---
@@ -92,6 +92,10 @@ metadata:
 ### Local native UI automation skill
 
 `skills/productivity/macos-automate/` is local, not upstream-tracked. Keep its task-independent AX primitives and read-only inspector under `scripts/`; app selectors, source data, and actual task macros belong to the task's own project. Detailed state-machine, permission, and search/pagination guidance lives in `references/native-ui.md`. Do not make the CLI mutate apps or require extra Python packages. Extend GUI-free tests in `tests/macos-automate/` for helper changes; native inspection and an approved single-item pilot establish different evidence from fixtures. Avoid committing personal app data or host-specific paths as generic defaults.
+
+### Local call-to-signals skill
+
+`skills/productivity/call-signals/` is local, not upstream-tracked. It depends on the Wispr Flow MCP server and Jakub's Helm CLI (`helm signal`), so its Helm limits and flags mirror Helm's own contract (`src/signals/contract.ts` in the Helm repo); re-check them against `helm signal add --help` when Helm changes. Keep it signals-only: follow-up actions (mail, ClientCare, agents) belong to whoever picks up the signal, not to this skill. Do not commit real meeting content as examples.
 
 ## Adding Reference Material
 
