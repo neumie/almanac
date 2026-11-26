@@ -55,7 +55,7 @@ Not signals: other people's tasks, ideas nobody owns, general discussion, things
 
 **Split rule:** one signal per distinct next action. Same topic but a different next action or deadline → separate signals; the same action discussed in three places → one signal. Typical meeting → 3–10 signals. Do not pad.
 
-Other people's tasks go into at most **one** optional FYI signal (step 5).
+Other people's tasks are shown in the proposal only (step 6) — never filed unless Jakub explicitly asks for them.
 
 ## 5. Shape each signal
 
@@ -67,7 +67,7 @@ All signal text is Czech. Hard limits come from Helm (`helm signal add --help`);
 | `--body-file` | Write the body to a file in your scratchpad, pass its path. Hard cap 1000 characters and 12 lines. Layout below. |
 | `--link` | The meeting's `share_link`. None → omit and say in the proposal that the meeting has no notes page. |
 | `--choice` | 2–4 concrete next steps, ≤ 80 characters each, phrased as an instruction to an agent: `Napiš draft mailu`, `Založ ClientCare task`, `Spusť agenta v Okeně`, plus `Nedělat` where dropping it is realistic. Picking one stores its text as Jakub's reply on the thread; the agent that later picks up the signal acts on it — this skill does not. |
-| `--from` | Convention (Helm allows 120): `<krátký název callu> <D.M.>`, ≤ 30 characters, e.g. `Porada Contember 25.11.`. Same for every signal from one call. |
+| `--from` | Default (convention, Helm allows 120): `<krátký název callu> <D.M.>`, ≤ 30 characters, e.g. `Porada Contember 25.11.`. **Exception:** running in the dispatcher session (the session whose instructions have it file asks as `--from dispatcher`) → `--from dispatcher`, because the dispatcher's watcher processes replies only on `ref=dispatcher` threads. Jakub names another value → use that. Same for every signal from one call. |
 | `--key` | `call-<YYYY-MM-DD>-<téma>-<akce>`: meeting's local date, then 2–3 ASCII lowercase words (topic noun first, then action noun) joined by `-`, e.g. `call-2026-11-25-kabely-vazba`. Helm: starts with a letter or digit, ≤ 200 characters, only letters, digits and `. _ : / # @ + -`. Reuse an existing key for the same topic (step 6) instead of inventing a new slug. |
 
 Body layout (drop lines that would be empty; write `Atribuce` only when unsure):
@@ -81,16 +81,16 @@ Atribuce: nejisté – <why>
 Call: <title>, <D. M. YYYY H:MM start, local>
 ```
 
-Optional FYI signal for other people's tasks: title `Úkoly ostatních`, key `call-<date>-ukoly-ostatnich`, body = one line per person (`<jméno (?)>: <úkol> – <termín>`), one choice `Beru na vědomí`.
+Other people's tasks (`Úkoly ostatních`) appear only in the proposal. If Jakub explicitly asks to file them: title `Úkoly ostatních`, key `call-<date>-ukoly-ostatnich`, body = one line per person (`<jméno (?)>: <úkol> – <termín>`), one choice `Beru na vědomí`.
 
-## 6. Check duplicates, propose, wait
-
-Duplicates and the open-ask cap:
+## 6. Check duplicates and running work, propose, wait
 
 ```bash
 helm signal ls --json --all --source agent   # every agent thread, incl. done (newest 300 only)
-helm signal ls --json --source agent         # open ones (+ done in last 7 days)
+helm signal ls --json                        # open threads of all sources (+ done in last 7 days)
 ```
+
+- **Already running:** before proposing, scan the open threads of every source (agent asks, GitHub PRs/issues, mail, Slack) and agent threads done in the last 7 days for the same topic — match on topic words and names in `title`/`body`/`ref` (e.g. an open ask `Údržba: výměna dílu b/c?` or a PR about cables). A match → do not propose a new signal; list the item under `už běží: #<id> <title>`, and only if the call added something new (deadline, decision) say what, so Jakub can pass it on there. This is a heuristic: when unsure, propose it and note the possible overlap.
 
 - Collect every `threadKey` starting with `agent:call-<YYYY-MM-DD>-` for this meeting's date. If one covers the same topic as a proposed signal, reuse its key and mark the item `už existuje #<id> (<state>)` — **do not re-add it**: a changed title or body renews the ask (reopens a done one, wipes Jakub's reply). `--all` returns only the newest 300 threads; for an old meeting say the check may be incomplete.
 - Helm refuses new agent asks once 50 asks + answers are open (`state` ≠ `done`). Warn if the batch would cross that.
@@ -100,8 +100,9 @@ Then show Jakub, in **one** reply:
 
 1. Meeting: title, local date/time, share link; the `--from` all signals will use.
 2. Numbered proposed signals: title, key, body, choices (and existing ones marked as such).
-3. The optional `Úkoly ostatních` signal, clearly marked optional.
-4. Attribution doubts and anything you deliberately left out (and why).
+3. `Úkoly ostatních`: a short list of other people's tasks (owner → task → date), shown for context, not filed.
+4. `už běží`: items skipped because an open signal or recent work already covers them.
+5. Attribution doubts and anything you deliberately left out (and why).
 
 File nothing until Jakub approves ("jo", "ano", "pošli", a subset like "jen 1, 3, 5", or edits). If he said "rovnou" (or equivalent) when invoking the skill, skip the wait and file straight after the duplicate check — still list what you filed.
 
